@@ -1,0 +1,42 @@
+{
+  "name": "agent-pay",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bash scripts/dev.sh",
+    "test:scripts": "vitest run scripts/test/*.test.ts",
+    "test": "npm run test:scripts && npm run test --workspaces --if-present && cargo test --manifest-path contracts/agent-pay-registry/Cargo.toml",
+    "smoke": "bash scripts/smoke.sh",
+    "submission:check": "tsx scripts/submission-readiness.ts",
+    "submission:deploy-registry": "tsx scripts/submission-deploy-registry.ts",
+    "submission:evidence": "tsx scripts/submission-evidence.ts",
+    "submission:funding": "tsx scripts/casper-funding-status.ts",
+    "submission:proof": "node --import tsx scripts/submission-proof.ts",
+    "x402:buy": "tsx scripts/x402-buy.ts",
+    "submission:report": "tsx scripts/submission-readiness.ts --format markdown",
+    "lint": "npm run lint --workspaces --if-present",
+    "build:contract": "bash contracts/agent-pay-registry/scripts/build-contract.sh",
+    "build": "npm run build --workspaces --if-present && cargo build --manifest-path contracts/agent-pay-registry/Cargo.toml && npm run build:contract"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.0",
+    "playwright": "1.60.0",
+    "tsx": "^4.22.4",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  },
+  "dependencies": {
+    "@casper-ecosystem/casper-eip-712": "^1.2.1",
+    "@noble/curves": "^1.9.7",
+    "@noble/hashes": "^1.8.0"
+  }
+}

@@ -1,0 +1,22 @@
+[package]
+name = "agent-pay-registry"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+path = "src/lib.rs"
+
+[features]
+contract = ["dep:casper-contract", "dep:casper-types", "dep:wee_alloc"]
+
+[[bin]]
+name = "agent_pay_registry_contract"
+path = "src/contract.rs"
+required-features = ["contract"]
+test = false
+bench = false
+
+[dependencies]
+casper-contract = { version = "5.1.1", default-features = false, optional = true }
+casper-types = { version = "6.0.1", optional = true }
+wee_alloc = { version = "0.4.5", optional = true }

@@ -1,0 +1,66 @@
+/* App-wide living field — real footage washed to the signal-box palette.
+   Sits at z-index 0 behind all app content (which is lifted to z-index 1). */
+
+.living-field {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--bg);
+}
+
+.living-field .lf-media {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* light mode wash: pale champagne metal */
+  filter: saturate(0.85) contrast(1.04) brightness(1.04);
+  opacity: 0.32;
+  transition: opacity 0.6s var(--ease, ease);
+}
+
+.living-field .lf-tint {
+  position: absolute;
+  inset: 0;
+  mix-blend-mode: multiply;
+  opacity: 0.5;
+  background:
+    radial-gradient(120% 95% at 50% 26%, hsla(40, 60%, 72%, 0.26), transparent 58%),
+    linear-gradient(180deg, hsla(208, 30%, 100%, 0.32), hsla(208, 28%, 90%, 0.66));
+}
+
+.living-field .lf-vign {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(82% 72% at 50% 40%, transparent 52%, var(--bg));
+}
+
+/* dark mode wash: molten gold on ink */
+.dark .living-field .lf-media {
+  filter: saturate(0.78) contrast(1.12) brightness(0.5) hue-rotate(-4deg);
+  opacity: 0.4;
+}
+.dark .living-field .lf-tint {
+  mix-blend-mode: overlay;
+  opacity: 0.55;
+  background:
+    radial-gradient(120% 95% at 50% 26%, hsla(40, 50%, 58%, 0.3), transparent 58%),
+    linear-gradient(180deg, hsla(213, 40%, 8%, 0.1), hsla(213, 44%, 5%, 0.62));
+}
+
+/* the /agents page showcases the field more prominently */
+.route-agents .living-field .lf-media {
+  opacity: 0.6;
+}
+.dark.route-agents .living-field .lf-media {
+  opacity: 0.85;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .living-field .lf-media {
+    transition: none;
+  }
+}

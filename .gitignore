@@ -1,0 +1,15 @@
+.env
+.env.local
+.env.*.local
+.agentpay-testnet-key/
+node_modules/
+dist/
+coverage/
+.turbo/
+.vite/
+target/
+*.log
+
+# large local media kept out of the repo
+prototypes/
+videos/

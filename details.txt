@@ -1,0 +1,159 @@
+Casper Agentic Buildathon 2026 - Qualification Round
+Activity Introduction
+Welcome to the Casper Agentic Buildathon 2026 - Qualification Round, hosted by the Casper Association—a global online competition designed to attract, onboard, and empower the next generation of Web3/AI developers. Running from June 1 to June 30, 2026, with a hands-on developer workshop in Istanbul on June 2 during Istanbul Blockchain Week, this buildathon invites builders from all backgrounds to create production-ready applications at the convergence of Agentic AI, Decentralized Finance (DeFi), and Real-World Assets (RWA) on the Casper Network.
+
+Positioning
+The Casper Agentic Buildathon is open to everyone—solo hackers, seasoned teams, students, and entrepreneurs—who are passionate about building real, working applications powered by Agentic AI and deployed on Casper.
+
+Overall Goal
+Onboard developers to the Casper ecosystem at scale, accelerate the creation of usable, real-world dApps, position Casper at the intersection of DeFi, RWA, and AI innovation, demonstrate decentralized participation through community voting on the CSPR.fans app, and expand global awareness of Casper among builders, partners, and media.
+
+Prize Pool
+Category	Amount
+Total Prize Pool	$150,000 USD
+Cash Prizes	$30,000 USD
+x402 Ecosystem Credits	$100,000 USD
+In-kind Rewards from Co-Sponsors	$20,000 USD
+Beyond financial prizes, winning teams will receive recognition and ecosystem support, including technical mentorship, marketing and ecosystem amplification, and potential grant and incubation opportunities within Casper.
+
+Notable Features
+One unified track: Casper Innovation Track
+Two-phase structure: Qualification Round (community voting + prototype-based qualification) followed by Final Round (professional jury evaluation)
+Top 3 community-voted projects advance to finals without additional judging
+All other projects must meet technical eligibility criteria to advance
+In-person developer immersion during Istanbul Blockchain Week (June 2)
+Open-source, public submissions to drive transparency and collaboration
+Global participation with no team size restrictions
+Time Schedule
+Date	Event
+June 1, 2026	Online buildathon officially launches—Qualification Round begins!
+June 2, 2026	In-person developer workshop and networking at Istanbul Blockchain Week
+June 30, 2026	Qualification Round submission deadline
+July 1-5, 2026	Qualification Round evaluations and finalist selection
+July 6-19, 2026	Final Round (2 weeks)
+Late July 2026	Final judging, demo day presentations, and winner announcements
+Workshop Registration
+Register for workshop: https://luma.com/casper-bzn7
+Get your free IBW ticket: https://istanbulblockchainweek.com/tickets/
+Support and Partners
+Role	Organization
+Organizer	Casper Association
+Platform Partner	DoraHacks
+Event Partner	Istanbul Blockchain Week
+Mentors and Judges
+The professional jury panel comprises Casper Association leadership and technical experts, representatives from partner organizations, Web3 investors, ecosystem leaders, and media representatives.
+
+Casper and DoraHacks will provide technical resources, mentorship, and support channels to help teams build and deploy on Testnet with confidence.
+
+Submission Method and Rules
+Registration
+Sign up via DoraHacks with your team or as a solo participant. No pre-qualification materials required.
+
+Submission Requirements
+Each project must include:
+
+Working prototype deployed on Casper Testnet with a transaction-producing on-chain component
+Open-source GitHub repository (must include a README with documentation and usage instructions)
+Demo video (public video explaining the project, features, and a walkthrough)
+Qualification Round Selection Mechanism
+The Qualification Round uses a hybrid advancement mechanism:
+
+Community Voting Path: The top 3 projects receiving the most votes via the CSPR.fans app advance directly to the Final Round without additional judging.
+
+Builder Merit Path (Prototype-Based Qualification): All other projects must meet the technical eligibility criteria (working prototype on Casper Testnet with transaction-producing on-chain component) to advance to the Final Round for professional jury evaluation.
+
+Eligibility Criteria
+Teams of any size or solo builders welcome
+All code and content must be original and newly developed for the Buildathon
+Focus: Agentic AI applications, with particular emphasis on DeFi and/or real-world assets (RWA) on Casper
+Final Round Judging Criteria
+Projects advancing to the Final Round will be evaluated on:
+
+Criterion	Description
+Technical Execution	Code quality, architecture, and implementation completeness
+Innovation & Originality	Novelty of approach, technology, and ideas
+Use of AI / Agentic Systems	Meaningful integration of AI agents and autonomous systems
+Real-World Applicability	Usefulness and relevance, especially in DeFi & RWA contexts
+User Experience & Design	Quality of interface and user interactions
+Working Smart Contracts	Functional, deployed contracts on Casper Testnet
+Long-Term Launch Plans	Real project with socials in place and actual deployment plans
+Potential for Long-Term Impact	Contribution to Casper ecosystem growth and adoption
+Code of Conduct
+All participants must adhere to fair play, originality, and anti-plagiarism standards. All participants must adhere to the Casper Network Code of Conduct and treat other participants, organizers, and judges with respect. Projects breaching these standards may be disqualified from either round.
+
+Developer Enablement
+Hands-On Workshop at Istanbul Blockchain Week (June 2)
+The developer workshop will cover:
+
+Introduction to Casper architecture
+Smart contract development / Odra
+CSPR Tooling and SDKs
+Best practices for building scalable dApps
+Agentic workflows and solutions
+Quick look at the Casper AI Toolkit
+Working with AI for building onchain solutions
+Ongoing Support
+Documentation, tutorials, and ongoing ecosystem support
+Technical mentorship from Casper experts
+Marketing and ecosystem amplification for winning teams
+Potential grant and incubation opportunities within Casper
+AI Toolkit & Developer Resources
+Casper provides a comprehensive AI Toolkit designed specifically for agentic development. Access the full toolkit at https://www.casper.network/ai, featuring production-ready components including:
+
+•x402 Micropayments: HTTP-native payment protocol enabling agents to pay per API request with cryptographic proof
+
+•MCP Servers: Model Context Protocol servers (Casper MCP Server, CSPR.trade MCP) providing direct blockchain access for queries, trades, and portfolio management
+
+•CSPR.click AI Agent Skill: Installable coding skill for wallet creation, transaction signing, and CSPR.cloud API access
+
+•CSPR.cloud APIs: Enterprise-grade middleware with REST, Streaming, and Node API layers for blockchain interaction at scale
+
+•Odra Framework: Developer-friendly smart contract framework with llms.txt support, enabling AI agents to generate and deploy working Casper contracts autonomously
+
+Developers can also reference the Casper Manifest for the strategic vision of Casper as the trust layer for the agent economy.
+
+Vision and Call to Action
+The Casper Agentic Buildathon 2026 is more than a hackathon—it's a movement to empower developers to build practical, impactful AI agents for the decentralized world. We believe that the fusion of autonomous AI with DeFi and RWA will unlock new economic possibilities and help shape the next era of open, trustless innovation. Whether you're an AI enthusiast, blockchain developer, entrepreneur, or simply curious, your creativity and ambition are welcome here!
+
+Let's make Casper the home of the next generation of agentic, decentralized applications. Join us and leave your mark on Web3!
+
+Frequently Asked Questions
+How do I access the Casper Testnet?
+Full onboarding resources will be available within the first days of the Buildathon, including documentation, and live support.
+
+What is Agentic AI?
+Agentic AI refers to autonomous AI agents that can perceive their environment, make decisions, and take actions independently. In the context of this buildathon, participants will build agents that harness AI Agent Skills, Model Context Protocols (MCPs), and the X402 standard to enable autonomous agents to reliably connect wallets, sign transactions, manage assets, and interact with smart contracts on the Casper Network.
+
+Can I participate remotely?
+Yes! All core buildathon activities are online; the Istanbul Blockchain Week workshop (June 2) is optional but highly encouraged for those who can attend.
+
+Where will updates be posted?
+Official communications will be shared via DoraHacks, Casper Developer channels, and event partners. Join our Discord/Telegram for the latest announcements:
+
+Casper Developers group on Telegram
+Casper Discord Server
+What AI tools and frameworks does Casper provide for builders?
+Casper offers a complete AI Toolkit tailored for agentic development. Visit https://www.casper.network/ai to explore:
+
+•MCP Servers for blockchain queries and decentralized exchange operations
+
+•Agent Skills for wallet management, transaction signing, and event handling
+
+•x402 Protocol for automated micropayments between agents and services
+
+•Odra Framework with AI-discoverable documentation for smart contract generation
+
+•CSPR.cloud middleware for enterprise-grade blockchain interaction
+
+These tools enable builders to create autonomous DeFi agents, pay-per-request APIs, AI-powered dApps, and machine-to-machine commerce systems on Casper.
+
+What are the example build directions?
+Participants can build applications such as:
+
+1. Autonomous Yield-Routing Agents via MCP Build an autonomous agent that actively monitors yield opportunities across Casper DeFi protocols. The agent uses Model Context Protocol (MCP) servers to expose Casper smart contract states to an AI LLM. The AI Agent Skill naively signs transactions and reallocates funds when yield thresholds are met, transforming a passive wallet into an active, self-driving portfolio manager.
+
+2. RWA Oracle Agents with Verifiable On-Chain Identity Create an agent that scrapes off-chain data, runs a risk assessment model, and posts verified data on-chain via Casper's native X402 implementation (launching June 2026). The agent maintains a verifiable on-chain identity and reputation score based on historical accuracy, creating a trust-minimized RWA oracle.
+
+3. Multi-Agent DAO Governance & Execution Design a system where a swarm of specialized agents (Risk Agent, Treasury Agent, Legal Agent) deliberate on DAO proposals and use the Casper SDK to autonomously execute transactions. This demonstrates autonomous coordination on-chain.
+
+4. AI-Driven Compliance & KYC via Zero-Knowledge Build an agentic workflow handling KYC/AML compliance for DeFi protocols. The agent processes user documents off-chain, verifies them, and issues a compliance token. Using Casper's upgradable smart contracts, the agent can autonomously revoke or update compliance statuses based on continuous off-chain monitoring, without exposing underlying user data on-chain.
