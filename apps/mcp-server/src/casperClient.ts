@@ -110,13 +110,13 @@ export async function getRegistryStatus(): Promise<RegistryStatus> {
     checks.push({
       name: "record_script",
       status: "pass",
-      message: script
+      message: "record script configured and executable"
     });
   } catch {
     checks.push({
       name: "record_script",
       status: "missing",
-      message: `${script} must exist and be executable`
+      message: "record script must exist and be executable"
     });
   }
 
@@ -132,13 +132,13 @@ export async function getRegistryStatus(): Promise<RegistryStatus> {
       checks.push({
         name: "casper_secret_key",
         status: "pass",
-        message: process.env.CASPER_SECRET_KEY_PATH
+        message: "CASPER_SECRET_KEY_PATH is configured and readable"
       });
     } catch {
       checks.push({
         name: "casper_secret_key",
         status: "fail",
-        message: `CASPER_SECRET_KEY_PATH does not exist or is not readable: ${process.env.CASPER_SECRET_KEY_PATH}`
+        message: "CASPER_SECRET_KEY_PATH points to a missing or unreadable key file"
       });
     }
   }
