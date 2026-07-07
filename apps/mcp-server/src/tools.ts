@@ -10,6 +10,13 @@ import { buildX402PaymentSignature, loadSignerFromPem } from "./trust/x402Signer
 
 const DEFAULT_REPORT_API_URL = "http://127.0.0.1:4021";
 
+function resolveReportApiUrl(inputUrl?: string) {
+  if (inputUrl && process.env.AGENT_PAY_ALLOW_REPORT_API_URL_OVERRIDE !== "0") {
+    return inputUrl;
+  }
+  return process.env.REPORT_API_URL ?? DEFAULT_REPORT_API_URL;
+}
+
 export type ToolDefinition = {
   name: string;
   description: string;
@@ -121,11 +128,11 @@ export async function quoteReportTool(input: { reportApiUrl?: string; subject?: 
   if (!subject) {
     throw new ToolInputError("quote_report requires a subject (token package hash or Casper account)");
   }
-  return getQuote(input.reportApiUrl ?? process.env.REPORT_API_URL ?? DEFAULT_REPORT_API_URL, subject);
+  return getQuote(resolveReportApiUrl(input.reportApiUrl), subject);
 }
 
 export async function paymentStatusTool(input: { reportApiUrl?: string } = {}) {
-  return getPaymentStatus(input.reportApiUrl ?? process.env.REPORT_API_URL ?? DEFAULT_REPORT_API_URL);
+  return getPaymentStatus(resolveReportApiUrl(input.reportApiUrl));
 }
 
 export async function registryStatusTool() {
@@ -138,7 +145,7 @@ export async function buyReportTool(input: {
   paymentPayload?: unknown;
 }) {
   return buyReport({
-    reportApiUrl: input.reportApiUrl ?? process.env.REPORT_API_URL ?? DEFAULT_REPORT_API_URL,
+    reportApiUrl: resolveReportApiUrl(input.reportApiUrl),
     quoteId: input.quoteId,
     paymentPayload: input.paymentPayload
   });
@@ -151,7 +158,7 @@ export async function verifyReportTool(input: {
   datasetRoot: string;
 }) {
   return verifyReport({
-    reportApiUrl: input.reportApiUrl ?? process.env.REPORT_API_URL ?? DEFAULT_REPORT_API_URL,
+    reportApiUrl: resolveReportApiUrl(input.reportApiUrl),
     record: input.record,
     proof: input.proof,
     datasetRoot: input.datasetRoot
@@ -182,8 +189,7 @@ export async function assessSubjectTool(input: {
   subject: string;
   reportApiUrl?: string;
 }): Promise<Verdict> {
-  const reportApiUrl =
-    input.reportApiUrl ?? process.env.REPORT_API_URL ?? DEFAULT_REPORT_API_URL;
+  const reportApiUrl = resolveReportApiUrl(input.reportApiUrl);
 
   return assessSubject({ subject: input.subject, reportApiUrl }, {
     quote: async (subject: string) =>
