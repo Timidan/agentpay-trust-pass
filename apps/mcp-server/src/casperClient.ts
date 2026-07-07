@@ -147,14 +147,14 @@ export async function getRegistryStatus(): Promise<RegistryStatus> {
     checks.push({
       name: "casper_client",
       status: "missing",
-      message: `${process.env.CASPER_CLIENT_COMMAND ?? "casper-client"} must be available to submit registry decisions`
+      message: "configured Casper client must be available to submit registry decisions"
     });
   } else {
     checks.push({
       name: "casper_client",
       status: "pass",
       message: isDefaultRecordScript(script)
-        ? `${process.env.CASPER_CLIENT_COMMAND ?? "casper-client"} available`
+        ? "configured Casper client available"
         : "custom record script configured"
     });
   }
@@ -291,9 +291,13 @@ function registryStatus(
     checkedAt: new Date().toISOString(),
     checks,
     registryPackageHash,
-    recordScript,
+    recordScript: describeRecordScript(recordScript),
     rpc
   };
+}
+
+function describeRecordScript(script: string): string {
+  return isDefaultRecordScript(script) ? DEFAULT_RECORD_SCRIPT : "custom record script";
 }
 
 async function queryCasperRpcStatus(rpcUrl: string): Promise<NonNullable<RegistryStatus["rpc"]>> {
