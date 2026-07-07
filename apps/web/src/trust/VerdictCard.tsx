@@ -1,11 +1,18 @@
-import { useState } from "react";
-import { SealCheck, Warning, Flag, Eye, EyeSlash, ShareNetwork, ArrowSquareOut } from "@phosphor-icons/react";
+import { useEffect, useRef, useState } from "react";
+import { ArrowSquareOut, CheckCircle, ClipboardText, SealCheck, ShareNetwork } from "@phosphor-icons/react";
 import { Separator } from "@/components/ui/separator";
 import type { Verdict } from "../api";
 import { buildShareLink, shareVerdict, storeVerdictCard } from "../api";
+import { friendlyError } from "../lib/friendly-errors";
+import { AgentPayCheckList } from "../components/AgentPayCheckList";
+import { buildTrustPassReceipt, casperTransactionUrl, serializeTrustPassReceipt } from "./trust-pass-receipt";
 
 type VerdictCardProps = {
   verdict: Verdict;
+  /** Kicker noun for the subject line, e.g. "Token" or "Account". */
+  subjectLabel?: string;
+  /** Friendlier subject hint (e.g. a resolved symbol) for the kicker line. */
+  subjectHint?: string;
 };
 
 const ASPECT_LABEL: Record<Verdict["aspect"], string> = {
@@ -15,13 +22,20 @@ const ASPECT_LABEL: Record<Verdict["aspect"], string> = {
 };
 
 type ShareState = "idle" | "sharing" | "shared" | "error";
+type CopyState = "idle" | "copied" | "error";
 
-export function VerdictCard({ verdict }: VerdictCardProps) {
+export function VerdictCard({ verdict, subjectLabel = "Token", subjectHint }: VerdictCardProps) {
   const shortHash = verdict.subject.packageHash.slice(0, 8);
+  const kickerSubject = subjectHint ?? shortHash;
   const shortTx = verdict.explorerUrl.split("/").pop()?.slice(0, 18) ?? "";
   const [shareState, setShareState] = useState<ShareState>("idle");
   const [shareError, setShareError] = useState<string | null>(null);
-  const [notCheckedExpanded, setNotCheckedExpanded] = useState(false);
+  const [copyState, setCopyState] = useState<CopyState>("idle");
+
+  const cardRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    cardRef.current?.focus();
+  }, []);
 
   async function handleShare() {
     setShareState("sharing");
@@ -50,8 +64,19 @@ export function VerdictCard({ verdict }: VerdictCardProps) {
       }
       setShareState("shared");
     } catch (err) {
-      setShareError(err instanceof Error ? err.message : "Share failed");
+      setShareError(friendlyError(err).headline);
       setShareState("error");
+    }
+  }
+
+  async function handleCopyReceipt() {
+    setCopyState("idle");
+    try {
+      await navigator.clipboard.writeText(serializeTrustPassReceipt(buildTrustPassReceipt(verdict)));
+      setCopyState("copied");
+      window.setTimeout(() => setCopyState("idle"), 1800);
+    } catch {
+      setCopyState("error");
     }
   }
 
@@ -60,11 +85,12 @@ export function VerdictCard({ verdict }: VerdictCardProps) {
 
   return (
     <article
+      ref={cardRef}
+      tabIndex={-1}
       className={`glass-card verdict-card verdict-card--${aspectClass}`}
       style={{ "--vc-aspect": aspectVar } as React.CSSProperties}
       aria-label={`Verdict: ${ASPECT_LABEL[verdict.aspect]}`}
     >
-      {/* Lamp + aspect word hero row */}
       <div className="verdict-lamp-row">
         <div
           className="lamp-lens verdict-lamp"
@@ -72,62 +98,17 @@ export function VerdictCard({ verdict }: VerdictCardProps) {
           aria-hidden="true"
         />
         <div className="verdict-aspect-block">
-          <p className="mono-label verdict-kicker">Token 0x{shortHash}</p>
-          <div
-            className="verdict-aspect-word"
-            style={{ color: aspectVar }}
-            aria-label={`Verdict: ${ASPECT_LABEL[verdict.aspect]}`}
-          >
+          <p className="mono-label verdict-kicker">{subjectLabel} {kickerSubject}</p>
+          <h2 className="verdict-aspect-word" style={{ color: aspectVar }}>
             {ASPECT_LABEL[verdict.aspect]}
-          </div>
+          </h2>
         </div>
       </div>
 
-      {/* Rationale */}
       <p className="verdict-rationale">{verdict.rationale}</p>
 
-      {/* Flags */}
-      {verdict.flags.length > 0 ? (
-        <ul className="verdict-flags" aria-label="Evidence flags">
-          {verdict.flags.map((flag) => (
-            <li key={flag.code} className="verdict-flag aspect-chip">
-              {flag.severity === "high" ? (
-                <Warning size={13} weight="bold" aria-hidden="true" />
-              ) : (
-                <Flag size={13} weight="bold" aria-hidden="true" />
-              )}
-              <code className="verdict-flag-code">{flag.code}</code>
-              <span className="verdict-flag-message">{flag.message}</span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
+      <AgentPayCheckList flags={verdict.flags} notChecked={verdict.notChecked} passed={verdict.passed} />
 
-      {/* Not checked */}
-      {verdict.notCheckedNote || verdict.notChecked.length > 0 ? (
-        <div className="verdict-not-checked">
-          <button
-            className="verdict-not-checked-toggle"
-            type="button"
-            onClick={() => setNotCheckedExpanded((v) => !v)}
-            aria-expanded={notCheckedExpanded}
-          >
-            {notCheckedExpanded ? (
-              <EyeSlash size={13} weight="bold" aria-hidden="true" />
-            ) : (
-              <Eye size={13} weight="bold" aria-hidden="true" />
-            )}
-            Not checked yet:
-          </button>
-          {notCheckedExpanded ? (
-            <p className="verdict-not-checked-detail">
-              {verdict.notCheckedNote || verdict.notChecked.join(", ")}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
-
-      {/* Proof block */}
       <Separator style={{ background: "var(--box-line)", margin: "4px 0" }} />
 
       <div className="verdict-proof">
@@ -151,7 +132,41 @@ export function VerdictCard({ verdict }: VerdictCardProps) {
         </div>
       </div>
 
-      {/* Share */}
+      <section className="verdict-receipt" aria-label="Trust Pass receipt">
+        <div className="verdict-receipt-head">
+          <div>
+            <span className="mono-label verdict-receipt-kicker">Trust Pass</span>
+            <h3>Copyable proof receipt</h3>
+          </div>
+          <button
+            className="verdict-receipt-copy"
+            type="button"
+            onClick={handleCopyReceipt}
+            aria-label="Copy Trust Pass receipt"
+          >
+            {copyState === "copied" ? (
+              <CheckCircle size={15} weight="bold" aria-hidden="true" />
+            ) : (
+              <ClipboardText size={15} weight="bold" aria-hidden="true" />
+            )}
+            {copyState === "copied" ? "Copied" : "Copy"}
+          </button>
+        </div>
+        <dl className="verdict-receipt-rows">
+          <ReceiptRow label="Evidence root" value={verdict.datasetRoot} />
+          <ReceiptRow label="x402 receipt" value={verdict.paymentReceiptHash} />
+          <ReceiptRow
+            href={casperTransactionUrl(verdict.settlementTxHash)}
+            label="Settlement tx"
+            value={verdict.settlementTxHash}
+          />
+          <ReceiptRow href={verdict.explorerUrl} label="Casper record" value={verdict.decisionTxHash} />
+        </dl>
+        {copyState === "error" ? (
+          <p className="verdict-receipt-error" role="alert">Clipboard access is unavailable in this browser.</p>
+        ) : null}
+      </section>
+
       <div className="verdict-share">
         <button
           className="btn-pill-primary verdict-share-button"
@@ -164,17 +179,40 @@ export function VerdictCard({ verdict }: VerdictCardProps) {
             ? "Sharing..."
             : shareState === "shared"
               ? "Shared / link copied"
-              : "SHARE"}
+              : "Share"}
         </button>
         {shareState === "error" && shareError ? (
           <p className="verdict-share-error" role="alert">{shareError}</p>
         ) : null}
       </div>
 
-      {/* Footer */}
       <footer className="verdict-footer">
         automated evidence flags, not financial advice
       </footer>
     </article>
   );
+}
+
+function ReceiptRow({ href, label, value }: { href?: string; label: string; value: string }) {
+  return (
+    <div className="verdict-receipt-row">
+      <dt>{label}</dt>
+      <dd>
+        {href ? (
+          <a href={href} target="_blank" rel="noreferrer">
+            <code>{compactHash(value)}</code>
+            <ArrowSquareOut size={12} weight="bold" aria-hidden="true" />
+          </a>
+        ) : (
+          <code>{compactHash(value)}</code>
+        )}
+      </dd>
+    </div>
+  );
+}
+
+function compactHash(value: string): string {
+  const bare = value.replace(/^hash-/, "");
+  if (bare.length <= 22) return value;
+  return `${bare.slice(0, 10)}...${bare.slice(-8)}`;
 }

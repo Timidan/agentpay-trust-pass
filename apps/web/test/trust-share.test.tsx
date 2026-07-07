@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Verdict } from "../src/api";
 import { buildShareLink, voteUrl } from "../src/api";
 import { VerdictCard } from "../src/trust/VerdictCard";
+import { buildTrustPassReceipt, serializeTrustPassReceipt } from "../src/trust/trust-pass-receipt";
 
 vi.mock("../src/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/api")>();
@@ -19,11 +20,12 @@ const dangerVerdict: Verdict = {
   flags: [
     {
       code: "mint_authority_open",
-      severity: "high",
-      message: "Mint authority is not renounced — unlimited supply risk"
+      severity: "danger",
+      message: "Mint authority is not renounced, so supply is unlimited"
     }
   ],
   notChecked: ["liquidity_lock", "team_vesting"],
+  passed: [],
   rationale: "Token failed automated checks: mint authority remains open.",
   notCheckedNote: "Liquidity lock and team vesting were not evaluated in this run.",
   subject: {
@@ -54,13 +56,12 @@ describe("VerdictCard SHARE button", () => {
   it("SHARE button is initially labelled SHARE (not sharing or shared)", () => {
     render(<VerdictCard verdict={dangerVerdict} />);
     const shareBtn = screen.getByRole("button", { name: /share/i });
-    expect(shareBtn.textContent).toBe("SHARE");
+    expect(shareBtn.textContent).toBe("Share");
   });
 
   it("calls storeVerdictCard and shareVerdict when SHARE is clicked", async () => {
     const { storeVerdictCard, shareVerdict } = await import("../src/api");
 
-    // Provide clipboard mock
     Object.defineProperty(navigator, "clipboard", {
       value: { writeText: vi.fn().mockResolvedValue(undefined) },
       writable: true,
@@ -90,6 +91,34 @@ describe("VerdictCard SHARE button", () => {
       expect(screen.getByRole("button", { name: /shared/i })).toBeTruthy();
     });
   });
+
+  it("renders and copies the Trust Pass receipt packet", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      writable: true,
+      configurable: true
+    });
+
+    render(<VerdictCard verdict={dangerVerdict} />);
+
+    expect(screen.getByRole("region", { name: "Trust Pass receipt" })).toBeTruthy();
+    expect(screen.getByText("Evidence root")).toBeTruthy();
+    expect(screen.getByText("x402 receipt")).toBeTruthy();
+    expect(screen.getByText("Settlement tx")).toBeTruthy();
+    expect(screen.getByText("Casper record")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /copy trust pass receipt/i }));
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(expect.stringContaining('"product": "AgentPay Trust Pass"'));
+    });
+    expect(writeText.mock.calls[0][0]).toContain(dangerVerdict.datasetRoot);
+    expect(writeText.mock.calls[0][0]).toContain(dangerVerdict.paymentReceiptHash);
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /copy trust pass receipt/i }).textContent).toBe("Copied");
+    });
+  });
 });
 
 describe("buildShareLink deep-link helper", () => {
@@ -103,5 +132,36 @@ describe("buildShareLink deep-link helper", () => {
     const link = buildShareLink("card-xyz");
     const url = new URL(link, "http://test");
     expect(url.searchParams.get("card")).toContain("card-xyz.png");
+  });
+});
+
+describe("Trust Pass receipt builder", () => {
+  it("keeps the receipt schema in one pure module", () => {
+    const receipt = buildTrustPassReceipt(dangerVerdict);
+
+    expect(receipt).toMatchObject({
+      product: "AgentPay Trust Pass",
+      aspect: "DANGER",
+      decision: "rejected",
+      subject: {
+        kind: "cep18_token",
+        id: dangerVerdict.subject.raw,
+        fingerprint: dangerVerdict.subject.packageHash
+      },
+      evidence: {
+        datasetRoot: dangerVerdict.datasetRoot,
+        policyHash: dangerVerdict.policyHash
+      },
+      payment: {
+        scheme: "x402",
+        receiptHash: dangerVerdict.paymentReceiptHash,
+        settlementTxHash: dangerVerdict.settlementTxHash
+      },
+      casperRecord: {
+        decisionTxHash: dangerVerdict.decisionTxHash,
+        explorerUrl: dangerVerdict.explorerUrl
+      }
+    });
+    expect(serializeTrustPassReceipt(receipt)).toContain('"product": "AgentPay Trust Pass"');
   });
 });

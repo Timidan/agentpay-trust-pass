@@ -19,9 +19,10 @@ import {
   verdictCardId,
   type VerdictCardData
 } from "./card.js";
-import { buildLiveEvidenceDataset, type LiveEvidenceDataset } from "./liveEvidence.js";
+import { resolveTokenBySymbol, type LiveEvidenceDataset } from "./liveEvidence.js";
 import { getHeroTokenList } from "./csprCloud.js";
 import { buildSubjectEvidence } from "./subjectEvidence.js";
+import { buildAccountEvidence } from "./accountEvidence.js";
 import {
   buildPaymentRequirement,
   buildPaymentRequired,
@@ -127,17 +128,17 @@ export function createReportApp(): Express {
   app.get("/reports/quote", async (request, response, next) => {
     try {
       pruneExpiredQuotes(quotes);
-      const rawSubject = typeof request.query.subject === "string" ? request.query.subject : undefined;
-      let parsedSubject: SubjectRef | undefined;
-      if (rawSubject !== undefined) {
-        const parsed = parseSubject(rawSubject);
-        if (!parsed.ok) {
-          response.status(400).json({ error: "invalid_subject", reason: parsed.error });
-          return;
-        }
-        parsedSubject = parsed.subject;
+      const rawSubject = typeof request.query.subject === "string" ? request.query.subject.trim() : "";
+      if (!rawSubject) {
+        response.status(400).json({ error: "subject_required" });
+        return;
       }
-      const snapshot = await createQuoteSnapshot(reportResourceBaseUrl(request), parsedSubject);
+      const parsed = parseSubject(rawSubject);
+      if (!parsed.ok) {
+        response.status(400).json({ error: "invalid_subject", reason: parsed.error });
+        return;
+      }
+      const snapshot = await createQuoteSnapshot(reportResourceBaseUrl(request), parsed.subject);
       quotes.set(snapshot.quoteId, snapshot);
       response.json(quoteResponse(snapshot));
     } catch (error) {
@@ -356,6 +357,26 @@ export function createReportApp(): Express {
   //  Token discovery (landing hero) — live CSPR.cloud, best-effort    //
   // ---------------------------------------------------------------- //
 
+  // Resolves a token symbol to its package hash within cspr.trade's pair set.
+  app.get("/resolve", async (request, response) => {
+    const symbol = typeof request.query.symbol === "string" ? request.query.symbol.trim() : "";
+    if (!symbol || symbol.length > 24) {
+      response.status(400).json({ error: "invalid_symbol" });
+      return;
+    }
+    try {
+      const resolved = await resolveTokenBySymbol(symbol);
+      if (!resolved) {
+        response.status(404).json({ error: "not_listed", symbol });
+        return;
+      }
+      response.json(resolved);
+    } catch (error) {
+      console.error("/resolve failed:", error instanceof Error ? error.message : error);
+      response.status(502).json({ error: "resolver_unavailable", symbol });
+    }
+  });
+
   app.get("/tokens", async (_request, response) => {
     // Never break the landing: any failure (incl. no CSPR.cloud key) returns [].
     try {
@@ -373,8 +394,11 @@ export function createReportApp(): Express {
   return app;
 }
 
-async function createQuoteSnapshot(resourceBaseUrl: string, subject?: SubjectRef): Promise<QuoteSnapshot> {
-  const dataset = subject ? await buildSubjectEvidence(subject) : await buildLiveEvidenceDataset();
+async function createQuoteSnapshot(resourceBaseUrl: string, subject: SubjectRef): Promise<QuoteSnapshot> {
+  const dataset =
+    subject.kind === "account"
+      ? await buildAccountEvidence(subject)
+      : await buildSubjectEvidence(subject);
   const report = chooseReport(dataset);
   const expiresAt = Date.now() + quoteTtlSeconds() * 1000;
   const quoteId = `${dataset.datasetId}-${report.reportHash.slice(0, 16)}`;

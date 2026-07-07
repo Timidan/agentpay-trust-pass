@@ -24,7 +24,7 @@
     "build": "npm run build --workspaces --if-present && cargo build --manifest-path contracts/agent-pay-registry/Cargo.toml && npm run build:contract"
   },
   "engines": {
-    "node": ">=20.0.0",
+    "node": ">=22.12.0",
     "npm": ">=10.0.0"
   },
   "devDependencies": {

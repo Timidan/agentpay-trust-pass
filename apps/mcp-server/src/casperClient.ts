@@ -4,6 +4,7 @@ import { access } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { ToolConfigError } from "./errors.js";
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_RECORD_SCRIPT = "contracts/agent-pay-registry/scripts/record-decision-testnet.sh";
@@ -187,16 +188,21 @@ export async function getRegistryStatus(): Promise<RegistryStatus> {
 export async function recordAgentPayDecision(input: RecordDecisionInput): Promise<RecordDecisionResult> {
   const registryPackageHash = process.env.AGENT_PAY_REGISTRY_PACKAGE_HASH;
   if (!registryPackageHash) {
-    throw new Error("AGENT_PAY_REGISTRY_PACKAGE_HASH is required to record an AgentPay decision");
+    throw new ToolConfigError("AGENT_PAY_REGISTRY_PACKAGE_HASH is required to record an AgentPay decision");
   }
   if (!isCasperPackageHash(registryPackageHash)) {
-    throw new Error("AGENT_PAY_REGISTRY_PACKAGE_HASH must be hash-<64 hex chars> or 64 hex chars");
+    throw new ToolConfigError("AGENT_PAY_REGISTRY_PACKAGE_HASH must be hash-<64 hex chars> or 64 hex chars");
   }
   if (!process.env.CASPER_RPC_URL) {
-    throw new Error("CASPER_RPC_URL is required to confirm a Casper decision submission");
+    throw new ToolConfigError("CASPER_RPC_URL is required to confirm a Casper decision submission");
   }
   if (!process.env.CASPER_SECRET_KEY_PATH) {
-    throw new Error("CASPER_SECRET_KEY_PATH is required to submit an AgentPay registry decision");
+    throw new ToolConfigError("CASPER_SECRET_KEY_PATH is required to submit an AgentPay registry decision");
+  }
+  try {
+    await access(process.env.CASPER_SECRET_KEY_PATH, constants.R_OK);
+  } catch {
+    throw new ToolConfigError("CASPER_SECRET_KEY_PATH points to a missing or unreadable key file");
   }
 
   const submittedHash = await submitRecordDecisionDeploy(input);
@@ -342,7 +348,7 @@ function parseSubmittedHash(stdout: string): SubmittedHash | null {
 async function confirmAgentPaySubmission(submittedHash: SubmittedHash): Promise<AgentPayRegistryConfirmation> {
   const rpcUrl = process.env.CASPER_RPC_URL;
   if (!rpcUrl) {
-    throw new Error("CASPER_RPC_URL is required to confirm a Casper decision submission");
+    throw new ToolConfigError("CASPER_RPC_URL is required to confirm a Casper decision submission");
   }
 
   const attempts = readPositiveInteger("CASPER_CONFIRMATION_ATTEMPTS", 5);

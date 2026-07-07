@@ -33,8 +33,8 @@ describe("Landing integration", () => {
     // Desk-unique copy proves LandingDesk (not the old hero) is mounted.
     expect(screen.getByText("One rail, four stops, always in order.")).toBeTruthy();
     // Launch opens the console workspace.
-    fireEvent.click(screen.getAllByRole("button", { name: /launch agentpay/i })[0]);
-    expect(screen.getByText("Token check console")).toBeTruthy();
+    fireEvent.click(screen.getAllByRole("button", { name: /open the console/i })[0]);
+    expect(screen.getByText("Evidence desk")).toBeTruthy();
   });
 });
 
@@ -132,10 +132,35 @@ describe("Ask/Feed entry points", () => {
     expect(screen.getAllByRole("button", { name: "Recent checks" }).length).toBeGreaterThan(0);
     // "Check a token" opens the Ask page (AskPage-unique copy).
     fireEvent.click(screen.getAllByRole("button", { name: "Check a token" })[0]);
-    expect(screen.getByText(/paste a casper token address/i)).toBeTruthy();
+    expect(screen.getByText(/buy a Trust Pass before you buy the token/i)).toBeTruthy();
     // "Overview" returns to the landing.
     fireEvent.click(screen.getByText("Overview"));
     expect(screen.getByText("One rail, four stops, always in order.")).toBeTruthy();
+  });
+});
+
+describe("Trust Pass positioning", () => {
+  const noop = () => {};
+
+  it("frames AgentPay as a consumer Trust Pass with a receipt", () => {
+    render(
+      <Provider>
+        <LandingDesk
+          theme="light"
+          onToggleTheme={noop}
+          onOpenApp={noop}
+          onOpenTrust={noop}
+          onOpenFeed={noop}
+          onOpenAgents={noop}
+          onOpenCounterparty={noop}
+        />
+      </Provider>
+    );
+
+    expect(screen.getByRole("heading", { name: /a verdict people can carry/i })).toBeTruthy();
+    expect(screen.getByLabelText(/example AgentPay Trust Pass receipt/i)).toBeTruthy();
+    expect(screen.getByText("Before a swap")).toBeTruthy();
+    expect(screen.getByText("Before a deal")).toBeTruthy();
   });
 });
 
@@ -146,7 +171,7 @@ describe("Agent integration entry point", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Agent docs" })[0]);
 
     expect(screen.getByRole("heading", { name: "How agents talk to AgentPay" })).toBeTruthy();
-    expect(screen.getByText("curl $AGENT_PAY_BASE_URL/skill.md")).toBeTruthy();
+    expect(screen.getByText("curl http://127.0.0.1:4021/skill.md")).toBeTruthy();
     expect(screen.getByText("skill://agentpay")).toBeTruthy();
   });
 

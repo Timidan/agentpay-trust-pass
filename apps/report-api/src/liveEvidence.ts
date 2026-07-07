@@ -353,3 +353,133 @@ function tokenPairLabel(pair: Record<string, unknown>): string | null {
   const symbol1 = asString(token1?.symbol);
   return symbol0 && symbol1 ? `${symbol0}/${symbol1}` : null;
 }
+
+/* ----- Symbol resolution over the CSPR.trade pair set ----------------- */
+
+export type ResolvedToken = {
+  symbol: string;
+  packageHash: string;
+  name: string | null;
+  network: "casper-mainnet";
+};
+
+type SymbolMapEntry = {
+  packageHash: string;
+  name: string | null;
+  symbol: string;
+  /** Same symbol seen with a different package hash — refuse to resolve it. */
+  ambiguous: boolean;
+};
+
+const SYMBOL_CACHE_TTL_MS = 10 * 60 * 1000;
+const SYMBOL_PAGE_SIZE = 50;
+const SYMBOL_MAX_PAGES = 10;
+const SYMBOL_FETCH_DEADLINE_MS = 12_000;
+
+let symbolCache: { at: number; map: Map<string, SymbolMapEntry> } | null = null;
+let symbolCacheFill: Promise<Map<string, SymbolMapEntry>> | null = null;
+
+/**
+ * Builds a symbol -> token map from cspr.trade pair objects. Scoping the
+ * lookup to cspr.trade's own pair set sidesteps global symbol ambiguity.
+ * A symbol that appears with two different package hashes (a spoofed pair
+ * reusing a real ticker, or a genuine duplicate) is marked ambiguous and
+ * never resolved — the caller is told to paste the exact hash instead.
+ */
+export function buildSymbolMap(pairs: Array<Record<string, unknown>>): Map<string, SymbolMapEntry> {
+  const map = new Map<string, SymbolMapEntry>();
+  for (const pair of pairs) {
+    for (const side of ["token0", "token1"] as const) {
+      const token = asRecord(pair[side]);
+      const symbol = asString(token?.symbol);
+      const packageHash = asString(token?.packageHash);
+      if (!symbol || !packageHash || !/^[0-9a-f]{64}$/i.test(packageHash)) {
+        continue;
+      }
+      const key = symbol.toUpperCase();
+      const normalized = packageHash.toLowerCase();
+      const existing = map.get(key);
+      if (!existing) {
+        map.set(key, { symbol, packageHash: normalized, name: asString(token?.name), ambiguous: false });
+      } else if (existing.packageHash !== normalized) {
+        existing.ambiguous = true;
+      }
+    }
+  }
+  return map;
+}
+
+async function fetchAllTradePairs(mcpUrl: string): Promise<Array<Record<string, unknown>>> {
+  const mcp = await createMcpSession(mcpUrl);
+  await mcpNotify(mcpUrl, mcp.sessionId, "notifications/initialized", {});
+  const all: Array<Record<string, unknown>> = [];
+  for (let page = 1; page <= SYMBOL_MAX_PAGES; page += 1) {
+    const response = await mcpCallTool(mcpUrl, mcp.sessionId, "get_pairs", {
+      page,
+      page_size: SYMBOL_PAGE_SIZE,
+      currency: "USD"
+    });
+    const data = asRecord(response) ?? {};
+    const pairs = Array.isArray(data.data)
+      ? data.data.map((item) => asRecord(item)).filter((item): item is Record<string, unknown> => item !== null)
+      : [];
+    all.push(...pairs);
+    const pageCount = asNumber(data.pageCount) ?? 1;
+    if (page >= pageCount || pairs.length === 0) {
+      break;
+    }
+  }
+  return all;
+}
+
+/** Resolves a token symbol to its package hash within cspr.trade's pair set. */
+export async function resolveTokenBySymbol(symbol: string): Promise<ResolvedToken | null> {
+  const key = symbol.trim().toUpperCase();
+  if (!key) {
+    return null;
+  }
+  const now = Date.now();
+  if (!symbolCache || now - symbolCache.at > SYMBOL_CACHE_TTL_MS) {
+    // Single-flight: concurrent cold-cache resolves share one pair scan.
+    if (!symbolCacheFill) {
+      const mcpUrl = process.env.CSPR_TRADE_MCP_URL ?? DEFAULT_CSPR_TRADE_MCP_URL;
+      symbolCacheFill = withDeadline(fetchAllTradePairs(mcpUrl), SYMBOL_FETCH_DEADLINE_MS)
+        .then((pairs) => buildSymbolMap(pairs))
+        .finally(() => {
+          symbolCacheFill = null;
+        });
+    }
+    const map = await symbolCacheFill;
+    if (map.size === 0) {
+      // An empty pair set means the upstream shape drifted or the DEX is
+      // unreachable — that is an outage, not "every symbol is unlisted",
+      // so it must not be cached as authoritative.
+      throw new Error("cspr.trade pair set came back empty");
+    }
+    symbolCache = { at: now, map };
+  }
+  const entry = symbolCache.map.get(key);
+  if (!entry || entry.ambiguous) {
+    return null;
+  }
+  return {
+    symbol: entry.symbol,
+    packageHash: `hash-${entry.packageHash}`,
+    name: entry.name,
+    network: "casper-mainnet"
+  };
+}
+
+async function withDeadline<T>(work: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      work,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`cspr.trade pair scan exceeded ${ms}ms`)), ms);
+      })
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}

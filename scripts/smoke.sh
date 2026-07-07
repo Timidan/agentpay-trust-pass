@@ -52,12 +52,16 @@ async function callTool(tool, payload) {
   return body;
 }
 
-const quote = await callTool("quote_report", {});
-if (!quote.quoteId.startsWith("agent-pay-live-")) {
+// Smoke fixture: a well-formed but nonexistent package hash. Every quote is
+// subject-scoped now; token-state degrades to "not checked" with no network
+// dependency, so this only exercises the quote/x402-gate shape.
+const SMOKE_SUBJECT = "a".repeat(64);
+const quote = await callTool("quote_report", { subject: SMOKE_SUBJECT });
+if (!quote.quoteId.startsWith("trust-")) {
   throw new Error(`Unexpected quote id: ${quote.quoteId}`);
 }
 if (!Array.isArray(quote.sourceSummary) || quote.sourceSummary.length < 2) {
-  throw new Error("Expected live Casper source summaries");
+  throw new Error("Expected subject-scoped Casper source summaries");
 }
 if (quote.paymentReadiness?.status === "ready") {
   if (!Array.isArray(quote.paymentRequirements) || quote.paymentRequirements.length === 0) {

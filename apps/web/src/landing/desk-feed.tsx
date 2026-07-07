@@ -43,11 +43,10 @@ export function DeskFeed() {
       const view = root.querySelector<HTMLElement>(".lv-desk-feedview");
       const stream = root.querySelector<HTMLElement>(".lv-desk-feedstream");
       const word = root.querySelector<HTMLElement>(".lv-desk-stateword");
-      const blip = root.querySelector<HTMLElement>(".lv-desk-stateblip");
       const check = root.querySelector<HTMLElement>(".lv-desk-statecheck");
       const ring = root.querySelector<HTMLElement>(".lv-desk-feedring");
       const runEl = root.querySelector<HTMLElement>(".lv-desk-feedrun");
-      if (!view || !stream || !word || !blip || !check || !ring || !runEl) return;
+      if (!view || !stream || !word || !check || !ring || !runEl) return;
 
       const block = (name: string) =>
         root.querySelector<HTMLElement>(`[data-fb="${name}"]`) as HTMLElement;
@@ -77,12 +76,6 @@ export function DeskFeed() {
           { y: 7, autoAlpha: 0 },
           { y: 0, autoAlpha: 1, duration: 0.28, ease: "power2.out" },
         );
-        gsap.fromTo(
-          blip,
-          { autoAlpha: 1, scale: 0 },
-          { scale: 1, duration: 0.2, ease: "power2.out" },
-        );
-        gsap.to(blip, { autoAlpha: 0, duration: 0.45, delay: 0.55 });
       };
 
       const follow = (el: HTMLElement, position?: string) =>
@@ -220,11 +213,9 @@ export function DeskFeed() {
         receipt on the AgentPayRegistry contract on Casper testnet.
       </p>
       <div className="lv-desk-feedbar" aria-hidden="true">
-        <span className="lv-desk-pulse" />
         <span className="lv-desk-feedtitle">Example · settlement desk</span>
         <span className="lv-desk-feedrun">run 0x2f41</span>
         <span className="lv-desk-feedstate">
-          <span className="lv-desk-stateblip" />
           <span className="lv-desk-stateword">recorded</span>
           <svg
             className="lv-desk-statecheck"

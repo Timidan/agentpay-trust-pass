@@ -15,19 +15,29 @@
   --d-line: var(--border);
   --d-line-strong: color-mix(in oklab, var(--border) 60%, var(--foreground));
   --d-orange: var(--primary);
-  /* Feed panel is intentionally a fixed dark surface in both themes — do NOT bridge. */
-  --d-panel: oklch(17% 0 0);
-  --d-panel-line: oklch(29% 0 0);
-  --d-panel-ink: oklch(92.5% 0 0);
-  --d-panel-mut: oklch(69% 0 0);
-  --d-font: "Bricolage Grotesque", system-ui, sans-serif;
-  --d-mono: "JetBrains Mono", ui-monospace, monospace;
+  /* Feed panel is a fixed dark stage in both themes. Tinted to the same
+     hsl(213…) navy family the console/verdict glass uses, so every dark
+     surface in the product shares one hue (not a second grayscale system). */
+  --d-panel: hsl(213 42% 9%);
+  --d-panel-line: hsl(213 24% 20%);
+  --d-panel-ink: hsl(206 34% 93%);
+  --d-panel-mut: hsl(208 18% 66%);
+  /* One type system across the product: the app's loaded Archivo + Spline Sans Mono. */
+  --d-font: var(--font-body);
+  --d-mono: var(--font-data);
   /* Light defaults for spots that must flip in dark mode. */
   --d-shadow-strong: rgb(0 0 0 / 0.35);
   --d-shadow-soft: rgb(0 0 0 / 0.07);
   --d-mask-color: #000;
 
-  background: var(--d-bg);
+  /* Translucent over the app-wide living field: the hero breathes with the
+     footage, then the page settles onto solid bg for the reading sections. */
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--d-bg) 42%, transparent) 0%,
+    color-mix(in oklab, var(--d-bg) 78%, transparent) 420px,
+    var(--d-bg) 760px
+  );
   color: var(--d-ink);
   font-family: var(--d-font);
   font-optical-sizing: auto;
@@ -100,7 +110,7 @@
   font-size: 1rem;
   font-weight: 640;
   line-height: 1;
-  border-radius: 10px;
+  border-radius: 8px;
   transition: transform 0.18s ease;
 }
 
@@ -111,23 +121,11 @@
 .lv-desk-btn-primary {
   background: var(--d-orange);
   color: oklch(14% 0 0);
-  padding: 0.95rem 1.55rem;
+  padding: 0.78rem 1.3rem;
 }
 
 .lv-desk-btn-primary:hover {
   transform: translateY(-1px);
-}
-
-.lv-desk-btn-quiet {
-  background: transparent;
-  color: var(--d-ink);
-  border: 1px solid var(--d-line-strong);
-  padding: 0.62rem 1.05rem;
-  font-size: 0.94rem;
-}
-
-.lv-desk-btn-quiet:hover {
-  border-color: var(--d-ink);
 }
 
 /* ----- nav --------------------------------------------------------- */
@@ -136,15 +134,101 @@
   position: sticky;
   top: 0;
   z-index: 40;
-  background: var(--d-bg);
+  background: color-mix(in oklab, var(--d-bg) 78%, transparent);
+  backdrop-filter: blur(14px) saturate(1.05);
+  -webkit-backdrop-filter: blur(14px) saturate(1.05);
   border-bottom: 1px solid var(--d-line);
 }
 
 .lv-desk-navrow {
   display: flex;
   align-items: center;
-  gap: 8px;
-  height: 68px;
+  gap: 14px;
+  min-height: 64px;
+}
+
+/* Section links are quiet text, not pills: one CTA carries the weight. */
+.lv-desk-navlinks {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: clamp(14px, 2.2vw, 30px);
+}
+
+.lv-desk-navlink {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 10px 2px;
+  cursor: pointer;
+  font-family: var(--d-font);
+  font-size: 0.94rem;
+  font-weight: 560;
+  line-height: 1;
+  color: var(--d-ink-soft);
+  text-decoration: underline transparent;
+  text-underline-offset: 7px;
+  text-decoration-thickness: 2px;
+  transition: color 0.16s ease, text-decoration-color 0.16s ease;
+}
+
+.lv-desk-navlink:hover {
+  color: var(--d-ink);
+  text-decoration-color: var(--d-orange);
+}
+
+.lv-desk-navrule {
+  width: 1px;
+  height: 20px;
+  background: var(--d-line-strong);
+}
+
+.lv-desk .lv-desk-nav-cta {
+  background: var(--d-ink);
+  color: var(--d-bg);
+  border: 0;
+  padding: 0.58rem 1.05rem;
+  font-size: 0.92rem;
+}
+
+.lv-desk .lv-desk-nav-cta:hover {
+  background: color-mix(in oklab, var(--d-ink) 88%, var(--d-bg));
+  transform: translateY(-1px);
+}
+
+/* Links wrap to a second row on narrow screens instead of pushing the
+   page into horizontal scroll. */
+@media (max-width: 680px) {
+  .lv-desk-navrow {
+    flex-wrap: wrap;
+    padding-block: 10px;
+    row-gap: 2px;
+  }
+
+  .lv-desk-brand {
+    flex-basis: 100%;
+  }
+
+  .lv-desk-navlinks {
+    gap: 16px;
+  }
+
+  .lv-desk-navlink {
+    font-size: 0.88rem;
+  }
+
+  .lv-desk-navrule {
+    display: none;
+  }
+
+  .lv-desk-nav-cta {
+    margin-left: auto;
+  }
+
+  /* The wrapped sticky nav is ~2 rows tall; keep anchor targets clear of it. */
+  .lv-desk-railsec {
+    scroll-margin-top: 130px;
+  }
 }
 
 .lv-desk-brand {
@@ -201,6 +285,53 @@
   margin-bottom: 24px;
 }
 
+/* Hero manifesto: the three verdicts as giant, clickable rows. Each lights to
+   its aspect on hover; the whole stack is the headline and the primary way in. */
+.lv-desk-manifesto {
+  display: flex;
+  flex-direction: column;
+  margin: 6px 0 24px;
+  border-top: 1px solid var(--d-line);
+}
+.lv-desk-verdict {
+  --v: var(--d-ink);
+  appearance: none;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--d-line);
+  padding: clamp(10px, 1.4vw, 16px) 4px clamp(10px, 1.4vw, 16px) 0;
+  transition: padding-left 0.22s ease, background-color 0.22s ease;
+}
+.lv-desk-verdict--clear { --v: var(--aspect-clear-ink); }
+.lv-desk-verdict--caution { --v: var(--aspect-caution-ink); }
+.lv-desk-verdict--danger { --v: var(--aspect-danger-ink); }
+.lv-desk-verdict:hover {
+  padding-left: 16px;
+  background: linear-gradient(90deg, color-mix(in oklab, var(--v) 12%, transparent), transparent 70%);
+}
+.lv-desk-verdict-word {
+  font-family: var(--d-font);
+  font-size: clamp(2.4rem, 1rem + 6vw, 5rem);
+  font-weight: 850;
+  line-height: 0.94;
+  letter-spacing: -0.04em;
+  color: var(--d-ink);
+  transition: color 0.22s ease;
+}
+.lv-desk-verdict:hover .lv-desk-verdict-word,
+.lv-desk-verdict:focus-visible .lv-desk-verdict-word { color: var(--v); }
+.lv-desk-verdict-line {
+  font-size: clamp(0.86rem, 1.2vw, 1rem);
+  color: var(--d-ink-soft);
+  max-width: 42ch;
+}
+
 .lv-desk-lede {
   font-size: 1.05rem;
   line-height: 1.62;
@@ -218,6 +349,12 @@
 }
 
 .lv-desk-herolink {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  font-family: var(--d-font);
   color: var(--d-ink);
   font-weight: 560;
   font-size: 0.98rem;
@@ -237,16 +374,172 @@
   color: var(--d-mut);
 }
 
+/* ----- consumer Trust Pass ---------------------------------------- */
+
+.lv-desk-passsec {
+  border-top: 1px solid var(--d-line);
+  padding-block: clamp(56px, 8vh, 96px);
+}
+
+.lv-desk-passgrid {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(320px, 5fr);
+  gap: clamp(34px, 5vw, 76px);
+  align-items: center;
+}
+
+.lv-desk-eyebrow {
+  margin: 0 0 12px;
+  color: var(--d-orange);
+  font-family: var(--d-mono);
+  font-size: 0.68rem;
+  font-weight: 720;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.lv-desk-passcopy .lv-desk-sub {
+  max-width: 64ch;
+}
+
+.lv-desk-passactions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 22px;
+  margin-top: 28px;
+}
+
+.lv-desk-passpanel {
+  border: 1px solid var(--d-line);
+  border-radius: 10px;
+  background: var(--d-surface);
+  box-shadow:
+    0 12px 32px -18px var(--d-shadow-strong),
+    0 1px 4px var(--d-shadow-soft);
+  overflow: hidden;
+}
+
+.lv-desk-passpanel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--d-line);
+  border-left: 3px solid var(--d-orange);
+  font-family: var(--d-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--d-ink);
+}
+
+.lv-desk-passpanel-head span:last-child {
+  color: var(--d-mut);
+  font-weight: 520;
+}
+
+.lv-desk-passverdict {
+  display: grid;
+  gap: 8px;
+  padding: clamp(18px, 2.4vw, 24px) 16px;
+  border-bottom: 1px solid var(--d-line);
+}
+
+.lv-desk-passverdict span {
+  color: var(--aspect-caution-ink);
+  font-size: clamp(2.2rem, 5vw, 3.8rem);
+  font-weight: 850;
+  letter-spacing: -0.04em;
+  line-height: 0.96;
+}
+
+.lv-desk-passverdict p {
+  max-width: 42ch;
+  color: var(--d-ink-soft);
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+.lv-desk-passcases {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-bottom: 1px solid var(--d-line);
+}
+
+.lv-desk-passcases li {
+  display: grid;
+  gap: 3px;
+  padding: 14px 16px;
+  border-top: 1px solid var(--d-line);
+}
+
+.lv-desk-passcases li:first-child {
+  border-top: 0;
+}
+
+.lv-desk-passcases span {
+  color: var(--d-mut);
+  font-family: var(--d-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.lv-desk-passcases strong {
+  color: var(--d-ink);
+  font-size: 1rem;
+}
+
+.lv-desk-passcases p {
+  color: var(--d-mut);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.lv-desk-passreceipt {
+  margin: 0;
+  padding: 4px 16px 14px;
+}
+
+.lv-desk-passreceipt div {
+  display: grid;
+  grid-template-columns: minmax(94px, 0.45fr) minmax(0, 1fr);
+  gap: 12px;
+  padding-top: 10px;
+}
+
+.lv-desk-passreceipt dt,
+.lv-desk-passreceipt dd {
+  margin: 0;
+  font-family: var(--d-mono);
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+
+.lv-desk-passreceipt dt {
+  color: var(--d-mut);
+}
+
+.lv-desk-passreceipt dd {
+  color: var(--d-ink);
+  overflow-wrap: anywhere;
+}
+
 /* ----- the feed panel ---------------------------------------------- */
 
 .lv-desk-feed {
   position: relative;
   background: var(--d-panel);
   border: 1px solid var(--d-panel-line);
-  border-radius: 14px;
+  border-radius: 10px;
   box-shadow:
-    0 28px 56px -28px var(--d-shadow-strong),
-    0 2px 10px var(--d-shadow-soft);
+    0 12px 32px -18px var(--d-shadow-strong),
+    0 1px 4px var(--d-shadow-soft);
   overflow: hidden;
 }
 
@@ -254,51 +547,19 @@
   position: absolute;
   inset: 0;
   border: 1px solid var(--d-orange);
-  border-radius: 14px;
+  border-radius: 10px;
   opacity: 0;
   pointer-events: none;
 }
 
+/* Live-state signal rides the bar's left edge — no status dots (house rule). */
 .lv-desk-feedbar {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 13px 16px;
   border-bottom: 1px solid var(--d-panel-line);
-}
-
-.lv-desk-pulse {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--d-orange);
-  position: relative;
-}
-
-.lv-desk-pulse::after {
-  content: "";
-  position: absolute;
-  inset: -5px;
-  border-radius: 50%;
-  border: 1px solid var(--d-orange);
-  opacity: 0;
-  animation: lv-desk-ping 2.4s cubic-bezier(0.2, 0.6, 0.3, 1) infinite;
-}
-
-@keyframes lv-desk-ping {
-  0% {
-    transform: scale(0.35);
-    opacity: 0.9;
-  }
-  70% {
-    transform: scale(1.1);
-    opacity: 0;
-  }
-  100% {
-    transform: scale(1.1);
-    opacity: 0;
-  }
+  border-left: 3px solid var(--d-orange);
 }
 
 .lv-desk-feedtitle {
@@ -321,13 +582,6 @@
   font-family: var(--d-mono);
   font-size: 11px;
   color: var(--d-panel-ink);
-}
-
-.lv-desk-stateblip {
-  width: 6px;
-  height: 6px;
-  background: var(--d-orange);
-  opacity: 0;
 }
 
 .lv-desk-statecheck {
@@ -477,6 +731,8 @@
 .lv-desk-railsec {
   border-top: 1px solid var(--d-line);
   padding-block: clamp(64px, 9vh, 110px);
+  /* Anchor scrolls stop below the sticky nav. */
+  scroll-margin-top: 80px;
 }
 
 .lv-desk-railhead {
@@ -507,19 +763,17 @@
   position: relative;
 }
 
-.lv-desk-stopdot {
+/* Station markers are ticks crossing the rail, not dots (house rule). */
+.lv-desk-stoptick {
   position: absolute;
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  background: var(--d-bg);
-  border: 2px solid var(--d-ink);
+  background: var(--d-ink);
+  border-radius: 1px;
   z-index: 2;
-  transition: transform 0.25s ease;
+  transition: transform 0.25s ease, background-color 0.25s ease;
 }
 
-.lv-desk-stop.is-on .lv-desk-stopdot,
-.lv-desk-rail:not(.is-armed) .lv-desk-stopdot {
+.lv-desk-stop.is-on .lv-desk-stoptick,
+.lv-desk-rail:not(.is-armed) .lv-desk-stoptick {
   background: var(--d-orange);
   transform: scale(1.18);
 }
@@ -585,33 +839,37 @@
     min-height: 380px;
   }
 
-  .lv-desk-stopdot {
+  .lv-desk-stoptick {
+    width: 3px;
+    height: 18px;
     left: 0;
     top: 50%;
     transform: translate(-2px, -50%);
   }
 
-  .lv-desk-stop.is-on .lv-desk-stopdot,
-  .lv-desk-rail:not(.is-armed) .lv-desk-stopdot {
-    transform: translate(-2px, -50%) scale(1.18);
+  .lv-desk-stop.is-on .lv-desk-stoptick,
+  .lv-desk-rail:not(.is-armed) .lv-desk-stoptick {
+    transform: translate(-2px, -50%) scaleY(1.2);
   }
 
+  /* Label connector, centered on the 3px tick (tick spans x -2..1). */
   .lv-desk-stop::before {
     content: "";
     position: absolute;
-    left: 3px;
+    left: -1px;
     width: 1px;
     background: var(--d-line-strong);
   }
 
+  /* The tick is 18px tall, so the stub starts past its half-height. */
   .lv-desk-stop.is-above::before {
-    bottom: calc(50% + 7px);
-    height: 26px;
+    bottom: calc(50% + 12px);
+    height: 21px;
   }
 
   .lv-desk-stop.is-below::before {
-    top: calc(50% + 7px);
-    height: 26px;
+    top: calc(50% + 12px);
+    height: 21px;
   }
 
   .lv-desk-stopbody {
@@ -630,6 +888,14 @@
 }
 
 @media (max-width: 999px) {
+  .lv-desk-passgrid {
+    grid-template-columns: 1fr;
+  }
+
+  .lv-desk-passpanel {
+    max-width: 560px;
+  }
+
   .lv-desk-railline {
     left: 5px;
     top: 4px;
@@ -651,15 +917,17 @@
     padding-left: 42px;
   }
 
-  .lv-desk-stopdot {
+  .lv-desk-stoptick {
+    width: 16px;
+    height: 3px;
     left: 6px;
-    top: 5px;
+    top: 8px;
     transform: translateX(-50%);
   }
 
-  .lv-desk-stop.is-on .lv-desk-stopdot,
-  .lv-desk-rail:not(.is-armed) .lv-desk-stopdot {
-    transform: translateX(-50%) scale(1.18);
+  .lv-desk-stop.is-on .lv-desk-stoptick,
+  .lv-desk-rail:not(.is-armed) .lv-desk-stoptick {
+    transform: translateX(-50%) scaleX(1.2);
   }
 }
 
@@ -849,12 +1117,8 @@
 /* ----- reduced motion -------------------------------------------------- */
 
 @media (prefers-reduced-motion: reduce) {
-  .lv-desk-pulse::after {
-    animation: none;
-  }
-
   .lv-desk-btn,
-  .lv-desk-stopdot,
+  .lv-desk-stoptick,
   .lv-desk-rail.is-armed .lv-desk-stop {
     transition: none;
   }

@@ -169,6 +169,32 @@ export type RegistryStatus = {
 const MCP_URL = import.meta.env.VITE_MCP_SERVER_URL ?? "http://127.0.0.1:3001";
 const reportApiBase = import.meta.env.VITE_REPORT_API_URL ?? "http://127.0.0.1:4021";
 export const voteUrl = import.meta.env.VITE_CSPR_FANS_VOTE_URL ?? "https://cspr.fans";
+export const bridgeUrl = MCP_URL;
+
+export type BridgeActivityEntry = {
+  tool: string;
+  status: number;
+  ms: number;
+  at: string;
+};
+
+/** Real agent traffic seen by the MCP HTTP bridge, newest first. */
+export async function getBridgeActivity(): Promise<{ entries: BridgeActivityEntry[] }> {
+  const response = await fetch(`${MCP_URL}/activity`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch bridge activity: ${response.status}`);
+  }
+  return response.json() as Promise<{ entries: BridgeActivityEntry[] }>;
+}
+
+export async function getBridgeHealth(): Promise<boolean> {
+  try {
+    const response = await fetch(`${MCP_URL}/health`);
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
 
 export type FeedEntry = {
   id: string;
@@ -216,37 +242,71 @@ export async function getFeed(): Promise<{ entries: FeedEntry[] }> {
   return response.json() as Promise<{ entries: FeedEntry[] }>;
 }
 
-export type TokenListEntry = {
+export type ResolvedToken = {
   symbol: string;
-  shortHash: string;
-  aspect: string;
-  holders: number;
+  packageHash: string;
+  name: string | null;
+  network: string;
 };
 
-/** Live discovery list from the backend (CSPR.cloud-backed). Empty when the key/backend is absent. */
-export async function getTokenList(): Promise<{ tokens: TokenListEntry[] }> {
-  const response = await fetch(`${reportApiBase}/tokens`);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch tokens: ${response.status}`);
+/** Resolves a token symbol to its package hash within cspr.trade's pair set. */
+export async function resolveToken(symbol: string): Promise<ResolvedToken | null> {
+  const response = await fetch(`${reportApiBase}/resolve?symbol=${encodeURIComponent(symbol)}`);
+  if (response.status === 404) {
+    return null;
   }
-  return response.json() as Promise<{ tokens: TokenListEntry[] }>;
+  if (!response.ok) {
+    throw new Error(`Symbol lookup failed: ${response.status}`);
+  }
+  return response.json() as Promise<ResolvedToken>;
 }
 
 export function buildShareLink(cardId: string): string {
   return `${voteUrl}?card=${encodeURIComponent(`${reportApiBase}/card/${cardId}.png`)}`;
 }
 
+// The full rail (quote → x402 → verify → record) legitimately takes ~10-20s,
+// so the ceiling is generous — but bounded, so a hung backend surfaces a real
+// error instead of an infinite spinner.
+const TOOL_TIMEOUT_MS = 45_000;
+
 export async function callTool<T>(tool: string, payload: unknown): Promise<T> {
-  const response = await fetch(`${MCP_URL}/tools/${tool}`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(payload)
-  });
-  const body = await response.json();
-  if (!response.ok) {
-    throw new ToolCallError(body.message ?? body.reason ?? `Tool ${tool} failed`, response.status, body);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TOOL_TIMEOUT_MS);
+  try {
+    // The timeout must cover the body read too: a server can send headers then
+    // stall the JSON stream, so clearing the timer before .json() would hang.
+    const response = await fetch(`${MCP_URL}/tools/${tool}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+    // Read as text first: a non-JSON body (proxy HTML, 502, empty) would make
+    // .json() throw a raw SyntaxError that leaks to the user. Parse defensively.
+    const raw = await response.text();
+    let body: { message?: string; reason?: string } | null = null;
+    try {
+      body = raw ? JSON.parse(raw) : null;
+    } catch {
+      throw new ToolCallError(
+        "The trust desk returned an unexpected response. Check that the AgentPay services are running, then try again.",
+        response.status,
+        null
+      );
+    }
+    if (!response.ok) {
+      throw new ToolCallError(body?.message ?? body?.reason ?? `Tool ${tool} failed`, response.status, body);
+    }
+    return body as T;
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new ToolCallError("The check timed out before Casper responded. Try again.", 504, null);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
-  return body as T;
 }
 
 export class ToolCallError extends Error {
@@ -263,8 +323,9 @@ export class ToolCallError extends Error {
 export type Verdict = {
   aspect: "CLEAR" | "CAUTION" | "DANGER";
   decision: "approved" | "needs_review" | "rejected";
-  flags: { code: string; severity: string; message: string }[];
+  flags: { code: string; severity: "danger" | "caution"; message: string }[];
   notChecked: string[];
+  passed: string[];
   rationale: string;
   notCheckedNote: string;
   subject: { kind: string; packageHash: string; raw: string };
@@ -278,4 +339,9 @@ export type Verdict = {
 
 export async function assessSubject(subject: string): Promise<Verdict> {
   return callTool<Verdict>("assess_subject", { subject });
+}
+
+/** Counterparty check — the rail scoped to a Casper account (hash or public key). */
+export async function assessAccount(account: string): Promise<Verdict> {
+  return callTool<Verdict>("assess_account", { account });
 }

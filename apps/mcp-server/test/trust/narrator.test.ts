@@ -100,6 +100,6 @@ describe("narrateVerdict", () => {
       { aspect: "CLEAR", flags: [], notChecked: [], signals: {} },
       { complete: async () => "   " }
     );
-    expect(result.rationale).toBe("All checked signals are clear — no issues detected.");
+    expect(result.rationale).toBe("All checked signals are clear. No issues detected.");
   });
 });

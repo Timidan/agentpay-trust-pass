@@ -95,10 +95,8 @@ export type PaidReportResult = {
   };
 };
 
-export async function getQuote(reportApiUrl: string, subject?: string): Promise<QuoteReportResult> {
-  const url = subject
-    ? `${reportApiUrl}/reports/quote?subject=${encodeURIComponent(subject)}`
-    : `${reportApiUrl}/reports/quote`;
+export async function getQuote(reportApiUrl: string, subject: string): Promise<QuoteReportResult> {
+  const url = `${reportApiUrl}/reports/quote?subject=${encodeURIComponent(subject)}`;
   const response = await fetch(url);
   return parseJsonResponse<QuoteReportResult>(response, "Quote failed");
 }

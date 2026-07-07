@@ -18,6 +18,8 @@ export type TokenState = {
   topHolderPct: number | null;
   installBlock: number | null;
   latestBlock: number | null;
+  /** Verbatim package creation timestamp (ISO) when the indexer exposes it. */
+  packageCreatedAt?: string | null;
 };
 
 export type EvidenceDeps = {
@@ -42,10 +44,12 @@ async function defaultFetchTokenState(subject: SubjectRef): Promise<TokenState> 
   // Real holders + concentration from CSPR.cloud (best-effort; nulls stay "not checked").
   let holderCount: number | null = null;
   let topHolderPct: number | null = null;
+  let packageCreatedAt: string | null = null;
   try {
     const live = await fetchSubjectTokenState(subject.packageHash);
     holderCount = live.holderCount;
     topHolderPct = live.topHolderPct;
+    packageCreatedAt = live.packageCreatedAt;
   } catch {
     // leave as "not checked"
   }
@@ -58,7 +62,8 @@ async function defaultFetchTokenState(subject: SubjectRef): Promise<TokenState> 
     holderCount,
     topHolderPct,
     installBlock: null,
-    latestBlock
+    latestBlock,
+    packageCreatedAt
   };
 }
 
@@ -111,9 +116,12 @@ export async function buildSubjectEvidence(
     rawHash: hashJson({ subject: subject.packageHash, ...holderFacts })
   };
 
-  // token_age record: contractAgeBlocks
+  // token_age record: contractAgeBlocks plus the verbatim creation timestamp.
+  // The timestamp is shown as evidence even while block-height age (the
+  // scoreable signal) still needs a deploys-height source.
   const ageFacts: Record<string, EvidenceFactValue> = {};
   if (contractAgeBlocks != null) ageFacts.contractAgeBlocks = contractAgeBlocks;
+  if (state.packageCreatedAt) ageFacts.packageCreatedAt = state.packageCreatedAt;
 
   const ageRecord: EvidenceRecord = {
     id: `token-age-${subject.packageHash.slice(0, 16)}`,

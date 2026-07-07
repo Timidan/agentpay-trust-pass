@@ -1,35 +1,102 @@
-import { ArrowSquareOut, SealCheck } from "@phosphor-icons/react";
+import { useRef, useState } from "react";
+import { ArrowSquareOut, Check, Copy } from "@phosphor-icons/react";
 import type { DecisionReceipt as DecisionReceiptData } from "../api";
-import { AgentPayButton, AgentPayCodeBlock, AgentPaySurface } from "./AgentPayUi";
 
-export function AgentPayDecisionReceipt({ receipt }: { receipt: DecisionReceiptData | null }) {
-  if (!receipt) {
-    return <p className="muted">AgentPay decision receipt appears after verification succeeds.</p>;
+const DECISION_ASPECT: Record<DecisionReceiptData["input"]["decision"], string> = {
+  approved: "CLEAR",
+  needs_review: "CAUTION",
+  rejected: "DANGER"
+};
+
+function middle(hash: string, head = 10, tail = 8): string {
+  if (hash.length <= head + tail + 1) return hash;
+  return `${hash.slice(0, head)}…${hash.slice(-tail)}`;
+}
+
+function HashValue({ value, label }: { value: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+  const timer = useRef<number | null>(null);
+
+  function copy() {
+    if (!navigator.clipboard) return;
+    void navigator.clipboard.writeText(value).then(() => {
+      setCopied(true);
+      if (timer.current) window.clearTimeout(timer.current);
+      timer.current = window.setTimeout(() => setCopied(false), 1500);
+    });
   }
 
-  const explorer = `https://testnet.cspr.live/transaction/${receipt.txHash}`;
-  const confirmationLabel =
-    receipt.confirmation.executionState === "executed"
-      ? "confirmed"
-      : receipt.confirmation.executionState;
+  return (
+    <span className="hash-value">
+      <code>{middle(value)}</code>
+      <button
+        type="button"
+        className={`hash-copy${copied ? " is-copied" : ""}`}
+        aria-label={copied ? `Copied ${label}` : `Copy ${label}`}
+        onClick={copy}
+      >
+        {copied ? <Check size={13} weight="bold" aria-hidden="true" /> : <Copy size={13} weight="bold" aria-hidden="true" />}
+      </button>
+    </span>
+  );
+}
+
+export function AgentPayDecisionReceipt({
+  receipt,
+  proofDepth
+}: {
+  receipt: DecisionReceiptData | null;
+  proofDepth?: number;
+}) {
+  if (!receipt) {
+    return (
+      <p className="muted">The registry receipt appears here once a live run records its decision on Casper.</p>
+    );
+  }
+
+  const explorer = `https://testnet.cspr.live/${receipt.hashKind}/${receipt.txHash}`;
+  const aspect = DECISION_ASPECT[receipt.input.decision];
 
   return (
-    <AgentPaySurface variant="receipt">
-      <div className="receipt-heading">
-        <SealCheck size={18} aria-hidden="true" />
-        <span>AgentPay registry {confirmationLabel}</span>
-      </div>
-      <AgentPayCodeBlock>{receipt.txHash}</AgentPayCodeBlock>
-      <p className="muted">
-        {receipt.hashKind} checked by {receipt.confirmation.method}
-        {receipt.confirmation.blockHash ? ` in block ${receipt.confirmation.blockHash.slice(0, 12)}...` : ""}
-      </p>
-      <AgentPayButton asChild variant="explorer">
-        <a href={explorer} target="_blank" rel="noreferrer">
-          <ArrowSquareOut size={16} aria-hidden="true" />
-          View transaction
-        </a>
-      </AgentPayButton>
-    </AgentPaySurface>
+    <div className="decision-receipt">
+      <dl className="receipt-dl">
+        <div>
+          <dt>Verdict</dt>
+          <dd className={`receipt-verdict is-${aspect.toLowerCase()}`}>{aspect}</dd>
+        </div>
+        <div>
+          <dt>Dataset</dt>
+          <dd><code>{receipt.input.datasetId}</code></dd>
+        </div>
+        <div>
+          <dt>Dataset root</dt>
+          <dd><HashValue value={receipt.input.datasetRoot} label="dataset root" /></dd>
+        </div>
+        {typeof proofDepth === "number" && proofDepth > 0 ? (
+          <div>
+            <dt>Proof path</dt>
+            <dd>{proofDepth} {proofDepth === 1 ? "step" : "steps"}</dd>
+          </div>
+        ) : null}
+        <div>
+          <dt>Receipt hash</dt>
+          <dd><HashValue value={receipt.input.paymentReceiptHash} label="receipt hash" /></dd>
+        </div>
+        <div>
+          <dt>Transaction</dt>
+          <dd><HashValue value={receipt.txHash} label="transaction hash" /></dd>
+        </div>
+        {receipt.confirmation.blockHash ? (
+          <div>
+            <dt>Block</dt>
+            <dd><span className="receipt-block-tag">recorded in block {middle(receipt.confirmation.blockHash, 8, 6)}</span></dd>
+          </div>
+        ) : null}
+      </dl>
+      <a className="receipt-explorer-link" href={explorer} target="_blank" rel="noreferrer">
+        View on cspr.live
+        <ArrowSquareOut size={14} weight="bold" aria-hidden="true" />
+      </a>
+    </div>
   );
 }

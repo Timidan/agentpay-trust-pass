@@ -28,7 +28,7 @@ export type ProofEdge = {
 export const PROOF_EDGES: ProofEdge[] = [
   {
     label: "x402 settlement",
-    detail: "The agent paid for evidence — confirmed on Casper",
+    detail: "The agent paid for evidence, confirmed on Casper",
     hash: SETTLEMENT_TX,
     href: `${EXPLORER_BASE}/transaction/${SETTLEMENT_TX}`
   },

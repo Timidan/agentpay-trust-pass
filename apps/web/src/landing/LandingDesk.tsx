@@ -18,6 +18,12 @@ import "./desk.css";
 
 gsap.registerPlugin(useGSAP, ScrollTrigger);
 
+const HERO_VERDICTS = [
+  { aspect: "clear", label: "CLEAR", line: "The basics check out. Proceed on your own judgment." },
+  { aspect: "caution", label: "CAUTION", line: "Not proven either way. Look closer first." },
+  { aspect: "danger", label: "DANGER", line: "Something here can cost you. The lamp stays red." }
+] as const;
+
 const STAGES = [
   {
     name: "Quote",
@@ -35,6 +41,26 @@ const STAGES = [
     name: "Record",
     body: "The decision, report hash, and payment receipt hash are written to the AgentPayRegistry contract on Casper testnet.",
   },
+] as const;
+
+const TRUST_PASS_USE_CASES = [
+  {
+    label: "Before a swap",
+    title: "Check the token",
+    body: "Look up a symbol or package hash, then buy a verdict backed by the evidence root it was quoted with.",
+  },
+  {
+    label: "Before a deal",
+    title: "Check the wallet",
+    body: "Paste a Casper account or public key and get an account-control read before sending funds or API access.",
+  },
+] as const;
+
+const TRUST_PASS_RECEIPT = [
+  { label: "Decision", value: "CAUTION" },
+  { label: "Dataset root", value: short(RUN.datasetRoot, 10, 8) },
+  { label: "x402 receipt", value: short(RUN.receiptHash, 10, 8) },
+  { label: "Casper record", value: short(RUN.deployHash, 10, 8) },
 ] as const;
 
 const QUOTE_ARTIFACT = `{
@@ -86,6 +112,7 @@ export default function LandingDesk({
   onOpenTrust,
   onOpenFeed,
   onOpenAgents,
+  onOpenCounterparty,
   theme,
   onToggleTheme
 }: LandingVariantProps) {
@@ -95,7 +122,6 @@ export default function LandingDesk({
     () => {
       const mm = gsap.matchMedia();
 
-      // Entrance and scroll reveals: motion-gated, content visible by default.
       mm.add("(prefers-reduced-motion: no-preference)", () => {
         gsap.from("[data-rise]", {
           autoAlpha: 0,
@@ -118,7 +144,6 @@ export default function LandingDesk({
         });
       });
 
-      // The rail: one flow line, highlighted stage by stage on scroll.
       mm.add(
         {
           motion: "(prefers-reduced-motion: no-preference)",
@@ -187,6 +212,23 @@ export default function LandingDesk({
             <AgentPayLogo className="lv-desk-logo" decorative />
             <span className="lv-desk-brandword">AgentPay</span>
           </span>
+          <nav className="lv-desk-navlinks" aria-label="AgentPay sections">
+            <button type="button" className="lv-desk-navlink" onClick={onOpenTrust}>
+              Check a token
+            </button>
+            {onOpenCounterparty ? (
+              <button type="button" className="lv-desk-navlink" onClick={onOpenCounterparty}>
+                Check a wallet
+              </button>
+            ) : null}
+            <button type="button" className="lv-desk-navlink" onClick={onOpenAgents}>
+              Agent docs
+            </button>
+            <button type="button" className="lv-desk-navlink" onClick={onOpenFeed}>
+              Recent checks
+            </button>
+          </nav>
+          <span className="lv-desk-navrule" aria-hidden="true" />
           <AgentPayIconAction
             label={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
             onClick={onToggleTheme}
@@ -199,35 +241,11 @@ export default function LandingDesk({
           </AgentPayIconAction>
           <AgentPayButton
             type="button"
-            variant="ghost"
-            className="lv-desk-btn lv-desk-btn-quiet"
-            onClick={onOpenTrust}
-          >
-            Check a token
-          </AgentPayButton>
-          <AgentPayButton
-            type="button"
-            variant="ghost"
-            className="lv-desk-btn lv-desk-btn-quiet"
-            onClick={onOpenAgents}
-          >
-            Agent docs
-          </AgentPayButton>
-          <AgentPayButton
-            type="button"
-            variant="ghost"
-            className="lv-desk-btn lv-desk-btn-quiet"
-            onClick={onOpenFeed}
-          >
-            Recent checks
-          </AgentPayButton>
-          <AgentPayButton
-            type="button"
             variant="secondary"
-            className="lv-desk-btn lv-desk-btn-quiet"
+            className="lv-desk-btn lv-desk-nav-cta"
             onClick={onOpenApp}
           >
-            Open app
+            Open the console
           </AgentPayButton>
         </div>
       </header>
@@ -236,31 +254,41 @@ export default function LandingDesk({
         <div className="lv-desk-shell lv-desk-herogrid">
           <div className="lv-desk-herocopy">
             <p className="lv-desk-name" data-rise>
-              AgentPay <span className="dim">· an evidence desk for autonomous agents</span>
+              AgentPay Trust Pass <span className="dim">· check a token or wallet before you trust it</span>
             </p>
-            <h1 className="lv-desk-display" data-rise>
-              Only proven evidence clears onto Casper.
+            <h1 className="agentpay-sr-only">
+              AgentPay Trust Pass: buy a proven CLEAR, CAUTION or DANGER verdict on any Casper token or wallet
             </h1>
+            <div className="lv-desk-manifesto" aria-hidden="false">
+              {HERO_VERDICTS.map((v) => (
+                <button
+                  key={v.aspect}
+                  type="button"
+                  className={`lv-desk-verdict lv-desk-verdict--${v.aspect}`}
+                  onClick={onOpenTrust}
+                  data-rise
+                >
+                  <span className="lv-desk-verdict-word">{v.label}</span>
+                  <span className="lv-desk-verdict-line">{v.line}</span>
+                </button>
+              ))}
+            </div>
             <p className="lv-desk-lede" data-rise>
-              AgentPay is an x402-paid evidence desk on Casper: it assembles
-              reports from live Casper RPC and CSPR.trade observations, and
-              quotes each one in CSPR with an expiry and a committed dataset
-              root.
-            </p>
-            <p className="lv-desk-lede" data-rise>
-              The report stays behind HTTP 402 until a signed x402 payment
-              settles it, and every released proof must land on that exact root
-              before the decision is recorded on Casper testnet.
+              AgentPay sells evidence, not trust by assertion. It buys live Casper observations over x402,
+              folds every proof onto the root it quoted, and returns a Trust Pass anyone can re-check later.
             </p>
             <div className="lv-desk-ctarow" data-rise>
               <AgentPayButton
                 type="button"
                 variant="primary"
                 className="lv-desk-btn lv-desk-btn-primary"
-                onClick={onOpenApp}
+                onClick={onOpenTrust}
               >
-                Launch AgentPay
+                Check a token
               </AgentPayButton>
+              <button type="button" className="lv-desk-herolink" onClick={onOpenApp}>
+                Open the console
+              </button>
               <a
                 className="lv-desk-herolink"
                 href="#lv-desk-rail-sec"
@@ -273,8 +301,66 @@ export default function LandingDesk({
           <div className="lv-desk-heropanel" data-rise>
             <DeskFeed />
             <p className="lv-desk-panelnote">
-              A full settlement run, replayed exactly as the desk executes it.
+              An example run, in the exact order the desk executes it.
             </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="lv-desk-passsec" aria-labelledby="lv-desk-pass-title">
+        <div className="lv-desk-shell lv-desk-passgrid">
+          <div className="lv-desk-passcopy">
+            <p className="lv-desk-eyebrow">Consumer Trust Pass</p>
+            <h2 className="lv-desk-h2" id="lv-desk-pass-title">
+              A verdict people can carry, not a log agents forget.
+            </h2>
+            <p className="lv-desk-sub">
+              The consumer product is simple: check the thing you are about to trust, get CLEAR,
+              CAUTION, or DANGER, and keep the proof packet that explains what was paid for and
+              what landed on Casper.
+            </p>
+            <div className="lv-desk-passactions">
+              <AgentPayButton
+                type="button"
+                variant="primary"
+                className="lv-desk-btn lv-desk-btn-primary"
+                onClick={onOpenTrust}
+              >
+                Check a token
+              </AgentPayButton>
+              {onOpenCounterparty ? (
+                <button type="button" className="lv-desk-herolink" onClick={onOpenCounterparty}>
+                  Check a wallet
+                </button>
+              ) : null}
+            </div>
+          </div>
+          <div className="lv-desk-passpanel" aria-label="Example AgentPay Trust Pass receipt">
+            <div className="lv-desk-passpanel-head">
+              <span>AgentPay Trust Pass</span>
+              <span>re-checkable</span>
+            </div>
+            <div className="lv-desk-passverdict">
+              <span>CAUTION</span>
+              <p>Evidence passed, but one signal was unavailable. The missing field stays explicit.</p>
+            </div>
+            <ol className="lv-desk-passcases">
+              {TRUST_PASS_USE_CASES.map((item) => (
+                <li key={item.title}>
+                  <span>{item.label}</span>
+                  <strong>{item.title}</strong>
+                  <p>{item.body}</p>
+                </li>
+              ))}
+            </ol>
+            <dl className="lv-desk-passreceipt">
+              {TRUST_PASS_RECEIPT.map((row) => (
+                <div key={row.label}>
+                  <dt>{row.label}</dt>
+                  <dd>{row.value}</dd>
+                </div>
+              ))}
+            </dl>
           </div>
         </div>
       </section>
@@ -298,7 +384,7 @@ export default function LandingDesk({
                   className={`lv-desk-stop ${i % 2 === 0 ? "is-above" : "is-below"}`}
                   key={stage.name}
                 >
-                  <span className="lv-desk-stopdot" aria-hidden="true" />
+                  <span className="lv-desk-stoptick" aria-hidden="true" />
                   <div className="lv-desk-stopbody">
                     <h3 className="lv-desk-stopname">
                       <span className="lv-desk-stopnum">{i + 1}</span>
@@ -340,7 +426,7 @@ export default function LandingDesk({
 
           <div className="lv-desk-verify" data-reveal>
             <p className="lv-desk-verifylead">
-              The walkthrough above is illustrative &mdash; but a real run is on Casper Testnet. Re-check it yourself.
+              The walkthrough above is illustrative. A real run lands on Casper Testnet, and you can re-check it yourself.
             </p>
             <ul className="lv-desk-verifylist">
               {PROOF_EDGES.map((edge) => (
@@ -371,7 +457,7 @@ export default function LandingDesk({
             className="lv-desk-btn lv-desk-btn-primary"
             onClick={onOpenApp}
           >
-            Launch AgentPay
+            Open the console
           </AgentPayButton>
         </div>
       </section>

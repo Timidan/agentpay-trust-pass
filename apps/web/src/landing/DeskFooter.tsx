@@ -1,8 +1,7 @@
 import type { ReactNode } from "react";
 import { ArrowUpRight } from "@phosphor-icons/react";
 import { AgentPayLogo } from "../components/AgentPayLogo";
-import { PROOF_EDGES } from "../trust/proof-evidence";
-import { RUN } from "./desk-data";
+import { PROOF_EDGES, PROOF_NETWORK } from "../trust/proof-evidence";
 import casperLogo from "../assets/brand-logos/casper.png";
 import x402Logo from "../assets/brand-logos/x402.svg";
 
@@ -51,7 +50,7 @@ export function DeskFooter({ onOpenApp, onOpenTrust, onOpenFeed, onOpenAgents }:
             <span className="lv-desk-brandword">AgentPay</span>
           </span>
           <p className="lv-desk-foottag">
-            An x402-paid evidence desk on Casper. Quote, settle, verify, record &mdash; pay only
+            An x402-paid evidence desk on Casper. Quote, settle, verify, record. You pay only
             after live Casper proof.
           </p>
         </div>
@@ -109,7 +108,7 @@ export function DeskFooter({ onOpenApp, onOpenTrust, onOpenFeed, onOpenAgents }:
 
       <div className="lv-desk-shell lv-desk-footbottom">
         <span>&copy; 2026 AgentPay</span>
-        <span className="lv-desk-footnet">AgentPayRegistry &middot; {RUN.network}</span>
+        <span className="lv-desk-footnet">AgentPayRegistry &middot; {PROOF_NETWORK}</span>
       </div>
     </footer>
   );

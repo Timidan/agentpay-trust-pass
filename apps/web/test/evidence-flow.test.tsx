@@ -144,51 +144,49 @@ describe("AgentPay console", () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
+    // Routes live in the real history now — reset it between tests.
+    window.history.pushState({}, "", "/");
   });
 
-  it("starts locked until a local agent identifier is connected", async () => {
-    vi.stubGlobal("fetch", vi.fn());
+  it("opens ungated and observes the live agent bridge", async () => {
+    const fetchSpy = vi.fn(async (url: string) => {
+      if (String(url).endsWith("/health")) return jsonResponse({ ok: true, service: "mcp-server" });
+      if (String(url).endsWith("/activity")) {
+        return jsonResponse({
+          entries: [
+            { tool: "quote_report", status: 200, ms: 1240, at: "2026-07-02T12:00:00.000Z" },
+            { tool: "buy_report", status: 402, ms: 88, at: "2026-07-02T12:00:05.000Z" }
+          ]
+        });
+      }
+      if (String(url).endsWith("/feed")) return jsonResponse({ entries: [] });
+      throw new Error(`Unexpected URL ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchSpy);
 
     render(<App />);
 
-    expect(screen.queryByRole("heading", { name: "Connect agent" })).toBeNull();
-    expect(screen.queryByRole("button", { name: /quote live evidence/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /run it live/i })).toBeNull();
     expect(screen.getByText("One rail, four stops, always in order.")).toBeTruthy();
 
     await launchAgentPay();
 
-    expect(screen.getByRole("heading", { name: "Connect agent" })).toBeTruthy();
-    expect(screen.getAllByText("Local session only. Backend auth is not configured.").length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: /quote live evidence/i }).hasAttribute("disabled")).toBe(true);
+    // No simulated in-browser connection: agents connect over MCP/HTTP and
+    // the console observes that real traffic.
+    expect(screen.queryByRole("heading", { name: "Connect agent" })).toBeNull();
+    expect(screen.queryByText(/local session only/i)).toBeNull();
+    expect(screen.getByRole("heading", { name: /agents connect over mcp or http/i })).toBeTruthy();
+    // The run button is gated: disabled until a subject is entered, then enabled.
+    const runButton = screen.getByRole("button", { name: /run it live/i });
+    expect(runButton.hasAttribute("disabled")).toBe(true);
+    await userEvent.type(screen.getByLabelText(/token package hash or casper account/i), "a".repeat(64));
+    expect(runButton.hasAttribute("disabled")).toBe(false);
 
-    await userEvent.type(screen.getByLabelText(/agent identifier/i), "desk-agent-alpha");
-    await userEvent.click(screen.getByRole("button", { name: /^connect agent$/i }));
-
-    expect(screen.getByText("desk-agent-alpha")).toBeTruthy();
-    expect(screen.getByRole("button", { name: /quote live evidence/i }).hasAttribute("disabled")).toBe(false);
-  });
-
-  it("rejects empty, oversized, and secret-looking agent identifiers", async () => {
-    vi.stubGlobal("fetch", vi.fn());
-
-    render(<App />);
-    await launchAgentPay();
-
-    await userEvent.click(screen.getByRole("button", { name: /^connect agent$/i }));
-    expect(screen.getByText("Enter a non-secret agent identifier.")).toBeTruthy();
-    expect(screen.getByRole("button", { name: /quote live evidence/i }).hasAttribute("disabled")).toBe(true);
-
-    const input = screen.getByLabelText(/agent identifier/i);
-    await userEvent.clear(input);
-    await userEvent.type(input, "a".repeat(65));
-    await userEvent.click(screen.getByRole("button", { name: /^connect agent$/i }));
-    expect(screen.getByText("Agent identifier must be 64 characters or less.")).toBeTruthy();
-
-    fireEvent.change(input, {
-      target: { value: '{"x402Version":2}' }
+    await waitFor(() => {
+      expect(screen.getByText("bridge live")).toBeTruthy();
     });
-    await userEvent.click(screen.getByRole("button", { name: /^connect agent$/i }));
-    expect(screen.getByText("Use the x402 payment payload field for payment data, not the agent identifier.")).toBeTruthy();
+    expect(screen.getByText("quote_report")).toBeTruthy();
+    expect(screen.getByText("402")).toBeTruthy();
   });
 
   it("quotes live source evidence and stops at the x402 payment gate", async () => {
@@ -206,31 +204,33 @@ describe("AgentPay console", () => {
           402
         );
       }
+      if (isBridgePanelUrl(url)) return bridgePanelResponse(url);
       if (String(url).endsWith("/feed")) return jsonResponse({ entries: [] });
       throw new Error(`Unexpected URL ${url}`);
     });
     vi.stubGlobal("fetch", fetchSpy);
 
     render(<App />);
-    expect(screen.getByText("Only proven evidence clears onto Casper.")).toBeTruthy();
-    expect(screen.getAllByRole("button", { name: /launch agentpay/i }).length).toBeGreaterThan(0);
-    expect(screen.queryByRole("heading", { name: "Connect agent" })).toBeNull();
+    // Hero manifesto: the three verdict words are the headline.
+    expect(screen.getByText("CLEAR")).toBeTruthy();
+    expect(screen.getByText("DANGER")).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: /open the console/i }).length).toBeGreaterThan(0);
     expect(screen.queryByLabelText("AgentPay settlement animation")).toBeNull();
 
     await launchAgentPay();
-    await connectAgent();
-    await userEvent.click(screen.getByRole("button", { name: /quote live evidence/i }));
+    await runLive();
 
     await waitFor(() => {
-      expect(screen.getAllByText("requires x402").length).toBeGreaterThan(0);
+      expect(screen.getByText(/paused at the x402 wall/i)).toBeTruthy();
     });
 
     expect(screen.getByText("Casper Node RPC")).toBeTruthy();
     expect(screen.getByText("CSPR.trade MCP")).toBeTruthy();
     expect(screen.getByText("WCSPR/sCSPR")).toBeTruthy();
-    expect(screen.getByText("agent pay registry package hash required")).toBeTruthy();
-    // Count only the console's tool calls; the hero also loads /feed (recent checks).
-    expect(fetchSpy.mock.calls.filter(([u]) => !String(u).endsWith("/feed")).length).toBe(3);
+    // Raw config codes map to consumer copy via friendly-errors.
+    expect(screen.getByText(/registry contract isn't configured/)).toBeTruthy();
+    // Count only the console's tool calls; the shell also polls /feed + bridge endpoints.
+    expect(fetchSpy.mock.calls.filter(([u]) => isConsoleToolCall(u)).length).toBe(3);
   });
 
   it("continues a gated quote with a runtime x402 payment payload", async () => {
@@ -307,6 +307,7 @@ describe("AgentPay console", () => {
           }
         });
       }
+      if (isBridgePanelUrl(url)) return bridgePanelResponse(url);
       if (String(url).endsWith("/feed")) return jsonResponse({ entries: [] });
       throw new Error(`Unexpected URL ${url}`);
     });
@@ -315,10 +316,9 @@ describe("AgentPay console", () => {
     render(<App />);
 
     await launchAgentPay();
-    await connectAgent();
-    await userEvent.click(screen.getByRole("button", { name: /quote live evidence/i }));
+    await runLive();
     await waitFor(() => {
-      expect(screen.getAllByText("requires x402").length).toBeGreaterThan(0);
+      expect(screen.getByText(/paused at the x402 wall/i)).toBeTruthy();
     });
 
     fireEvent.change(screen.getByLabelText(/x402 payment payload/i), {
@@ -327,118 +327,55 @@ describe("AgentPay console", () => {
     await userEvent.click(screen.getByRole("button", { name: /continue settlement/i }));
 
     await waitFor(() => {
-      expect(screen.getByText("4".repeat(64))).toBeTruthy();
+      // The registry receipt shows the tx hash middle-truncated beside a copy control.
+      expect(screen.getByText("4444444444…44444444")).toBeTruthy();
     });
     expect(screen.getByText("2".repeat(64))).toBeTruthy();
     expect(screen.getByText("info get transaction")).toBeTruthy();
-    // Count only the console's tool calls; the hero also loads /feed (recent checks).
-    expect(fetchSpy.mock.calls.filter(([u]) => !String(u).endsWith("/feed")).length).toBe(6);
+    // Count only the console's tool calls; the shell also polls /feed + bridge endpoints.
+    expect(fetchSpy.mock.calls.filter(([u]) => isConsoleToolCall(u)).length).toBe(6);
   });
 
-  it("locks settlement actions after disconnect and clears the payment payload text", async () => {
-    let buyAttempts = 0;
-    const fetchSpy = vi.fn(async (url: string) => {
-      if (url.endsWith("/quote_report")) return jsonResponse(quote);
-      if (url.endsWith("/registry_status")) return jsonResponse(registryStatus);
-      if (url.endsWith("/buy_report")) {
-        buyAttempts += 1;
-        return jsonResponse(
-          {
-            error: "payment_required",
-            reason: "PAYMENT-SIGNATURE header is required",
-            quote,
-            accepts: quote.paymentRequirements
-          },
-          402
-        );
-      }
-      if (String(url).endsWith("/feed")) return jsonResponse({ entries: [] });
-      throw new Error(`Unexpected URL ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchSpy);
-
-    render(<App />);
-
-    await launchAgentPay();
-    await connectAgent("desk-agent-alpha");
-    await userEvent.click(screen.getByRole("button", { name: /quote live evidence/i }));
-    await waitFor(() => {
-      expect(screen.getAllByText("requires x402").length).toBeGreaterThan(0);
-    });
-
-    const payloadField = screen.getByLabelText(/x402 payment payload/i);
-    fireEvent.change(payloadField, {
-      target: { value: JSON.stringify({ scheme: "x402", proof: "runtime-payload" }) }
-    });
-
-    await userEvent.click(screen.getByRole("button", { name: /^disconnect$/i }));
-
-    expect(screen.getByRole("button", { name: /quote live evidence/i }).hasAttribute("disabled")).toBe(true);
-    expect(screen.getByRole("button", { name: /continue settlement/i }).hasAttribute("disabled")).toBe(true);
-    expect((screen.getByLabelText(/x402 payment payload/i) as HTMLTextAreaElement).value).toBe("");
-    expect(buyAttempts).toBe(1);
-  });
-
-  it("clears prior flow state when a different agent connects", async () => {
-    const fetchSpy = vi.fn(async (url: string) => {
-      if (url.endsWith("/quote_report")) return jsonResponse(quote);
-      if (url.endsWith("/registry_status")) return jsonResponse(registryStatus);
-      if (url.endsWith("/buy_report")) {
-        return jsonResponse(
-          {
-            error: "payment_required",
-            reason: "PAYMENT-SIGNATURE header is required",
-            quote,
-            accepts: quote.paymentRequirements
-          },
-          402
-        );
-      }
-      if (String(url).endsWith("/feed")) return jsonResponse({ entries: [] });
-      throw new Error(`Unexpected URL ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchSpy);
-
-    render(<App />);
-
-    await launchAgentPay();
-    await connectAgent("desk-agent-alpha");
-    await userEvent.click(screen.getByRole("button", { name: /quote live evidence/i }));
-    await waitFor(() => {
-      expect(screen.getAllByText("requires x402").length).toBeGreaterThan(0);
-    });
-
-    await userEvent.click(screen.getByRole("button", { name: /^disconnect$/i }));
-    await connectAgent("desk-agent-beta");
-
-    expect(screen.queryByText("Casper Node RPC")).toBeNull();
-    expect(screen.queryByText("requires x402")).toBeNull();
-    expect(screen.getByText("desk-agent-beta")).toBeTruthy();
-  });
-
-  it("switches AgentPay between light and dark modes", async () => {
+  it("follows one theme across landing and console, with toggles in both", async () => {
     vi.stubGlobal("fetch", vi.fn());
 
     const { container } = render(<App />);
     expect(container.querySelector(".agent-pay-app")?.getAttribute("data-theme")).toBe("light");
 
-    // Theme toggle lives in the console header; open the console first.
-    await launchAgentPay();
-
     await userEvent.click(screen.getByRole("button", { name: /switch to dark mode/i }));
-
     expect(container.querySelector(".agent-pay-app")?.getAttribute("data-theme")).toBe("dark");
-    expect(screen.getByRole("button", { name: /switch to light mode/i })).toBeTruthy();
+
+    // The console inherits the same theme state and offers the same toggle.
+    await launchAgentPay();
+    expect(container.querySelector(".agent-pay-app")?.getAttribute("data-theme")).toBe("dark");
+    await userEvent.click(screen.getByRole("button", { name: /switch to light mode/i }));
+    expect(container.querySelector(".agent-pay-app")?.getAttribute("data-theme")).toBe("light");
   });
 });
 
 async function launchAgentPay() {
-  await userEvent.click(screen.getAllByRole("button", { name: /launch agentpay/i })[0]);
+  await userEvent.click(screen.getAllByRole("button", { name: /open the console/i })[0]);
 }
 
-async function connectAgent(label = "desk-agent-alpha") {
-  await userEvent.type(screen.getByLabelText(/agent identifier/i), label);
-  await userEvent.click(screen.getByRole("button", { name: /^connect agent$/i }));
+// The console's "Run it live" button is gated on a non-empty subject. Type a
+// well-formed package hash (skips symbol resolution) before running the rail.
+async function runLive(subject = "a".repeat(64)) {
+  await userEvent.type(screen.getByLabelText(/token package hash or casper account/i), subject);
+  await userEvent.click(screen.getByRole("button", { name: /run it live/i }));
+}
+
+function isBridgePanelUrl(url: string) {
+  return /\/(health|activity)$/.test(String(url));
+}
+
+function bridgePanelResponse(url: string) {
+  return String(url).endsWith("/health")
+    ? jsonResponse({ ok: true, service: "mcp-server" })
+    : jsonResponse({ entries: [] });
+}
+
+function isConsoleToolCall(url: unknown) {
+  return !/\/(feed|health|activity)$/.test(String(url));
 }
 
 function jsonResponse(body: unknown, status = 200) {

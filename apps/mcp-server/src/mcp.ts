@@ -43,8 +43,12 @@ export function createAgentPayMcpServer() {
     "quote_report",
     {
       title: "Quote report",
-      description: "Quote an x402 price for a live AgentPay evidence report.",
-      inputSchema: { reportApiUrl }
+      description:
+        "Quote an x402 price for a live AgentPay evidence report scoped to a subject (token package hash or Casper account).",
+      inputSchema: {
+        subject: z.string().describe("Token package hash (64 hex / hash-<64 hex>) or account (account-hash-<64 hex> / public key)"),
+        reportApiUrl
+      }
     },
     async (input) => textResult(await quoteReportTool(input))
   );

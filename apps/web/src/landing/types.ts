@@ -7,4 +7,5 @@ export type LandingVariantProps = {
   onOpenTrust: () => void;
   onOpenFeed: () => void;
   onOpenAgents: () => void;
+  onOpenCounterparty?: () => void;
 };

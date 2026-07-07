@@ -3,6 +3,13 @@ import request from "supertest";
 import { afterEach, describe, expect, it } from "vitest";
 import { createReportApp } from "../src/app";
 
+// Every quote is subject-scoped now. These are well-formed but nonexistent
+// package hashes: token-state degrades to "not checked", so the quote/x402
+// flow is exercised without depending on a specific live token. Two distinct
+// subjects are needed where a test creates two separate quotes at once.
+const QUOTE_SUBJECT = "a".repeat(64);
+const QUOTE_SUBJECT_B = "b".repeat(64);
+
 const envSnapshot = { ...process.env };
 
 afterEach(() => {
@@ -41,18 +48,18 @@ describe("report API", () => {
     expect(response.body).not.toContain("$AGENT_PAY_BASE_URL");
   });
 
-  it("quotes live Casper product evidence", async () => {
+  it("quotes subject-scoped Casper evidence", async () => {
     await withSupportedFacilitator(async (facilitatorUrl) => {
       configureX402Payment(facilitatorUrl);
       const app = createReportApp();
 
-      const response = await request(app).get("/reports/quote").expect(200);
+      const response = await request(app).get(`/reports/quote?subject=${QUOTE_SUBJECT}`).expect(200);
 
-      expect(response.body.quoteId).toMatch(/^agent-pay-live-/);
+      expect(response.body.quoteId).toMatch(/^trust-/);
       expect(response.body.datasetRoot).toMatch(/^[0-9a-f]{64}$/);
       expect(response.body.sourceSummary.length).toBeGreaterThanOrEqual(2);
       expect(response.body.sourceSummary.map((source: { product: string }) => source.product)).toContain(
-        "Casper Node RPC"
+        "Casper Token Authority"
       );
       expect(response.body.paymentRequirements[0]).toMatchObject({
         scheme: "exact",
@@ -83,7 +90,7 @@ describe("report API", () => {
     await withSupportedFacilitator(async (facilitatorUrl) => {
       configureX402Payment(facilitatorUrl);
       const app = createReportApp();
-      const quote = await request(app).get("/reports/quote").expect(200);
+      const quote = await request(app).get(`/reports/quote?subject=${QUOTE_SUBJECT}`).expect(200);
 
       const response = await request(app).post(`/reports/buy/${quote.body.quoteId}`).send({}).expect(402);
 
@@ -100,7 +107,7 @@ describe("report API", () => {
     await withSettlementFacilitator({ settleBody: { success: true } }, async (facilitatorUrl) => {
       configureX402Payment(facilitatorUrl);
       const app = createReportApp();
-      const quote = await request(app).get("/reports/quote").expect(200);
+      const quote = await request(app).get(`/reports/quote?subject=${QUOTE_SUBJECT}`).expect(200);
       const paymentPayload = boundPaymentPayload(quote.body);
 
       const response = await request(app)
@@ -126,7 +133,7 @@ describe("report API", () => {
     await withSettlementFacilitator({ settleBody: { success: true, transaction: "not-a-casper-hash" } }, async (facilitatorUrl) => {
       configureX402Payment(facilitatorUrl);
       const app = createReportApp();
-      const quote = await request(app).get("/reports/quote").expect(200);
+      const quote = await request(app).get(`/reports/quote?subject=${QUOTE_SUBJECT}`).expect(200);
       const paymentPayload = boundPaymentPayload(quote.body);
 
       const response = await request(app)
@@ -147,7 +154,7 @@ describe("report API", () => {
     await withSettlementFacilitator({ settleBody: { success: true } }, async (facilitatorUrl) => {
       configureX402Payment(facilitatorUrl);
       const app = createReportApp();
-      const quote = await request(app).get("/reports/quote").expect(200);
+      const quote = await request(app).get(`/reports/quote?subject=${QUOTE_SUBJECT}`).expect(200);
       const paymentPayload = {
         ...boundPaymentPayload(quote.body),
         x402Version: 1
@@ -171,7 +178,7 @@ describe("report API", () => {
     await withSettlementFacilitator({ settleBody: { success: true } }, async (facilitatorUrl) => {
       configureX402Payment(facilitatorUrl);
       const app = createReportApp();
-      const quote = await request(app).get("/reports/quote").expect(200);
+      const quote = await request(app).get(`/reports/quote?subject=${QUOTE_SUBJECT}`).expect(200);
       const paymentPayload = {
         ...boundPaymentPayload(quote.body),
         accepted: {
@@ -198,7 +205,7 @@ describe("report API", () => {
     await withSettlementFacilitator({ settleBody: { success: true } }, async (facilitatorUrl) => {
       configureX402Payment(facilitatorUrl);
       const app = createReportApp();
-      const quote = await request(app).get("/reports/quote").expect(200);
+      const quote = await request(app).get(`/reports/quote?subject=${QUOTE_SUBJECT}`).expect(200);
       const paymentPayload = {
         ...boundPaymentPayload(quote.body),
         resource: {
@@ -296,7 +303,7 @@ describe("report API", () => {
         process.env.CASPER_CONFIRMATION_ATTEMPTS = "1";
         process.env.CASPER_CONFIRMATION_DELAY_MS = "0";
         const app = createReportApp();
-        const quote = await request(app).get("/reports/quote").expect(200);
+        const quote = await request(app).get(`/reports/quote?subject=${QUOTE_SUBJECT}`).expect(200);
         const paymentPayload = boundPaymentPayload(quote.body);
 
         const response = await request(app)
@@ -350,7 +357,7 @@ describe("report API", () => {
           process.env.CASPER_CONFIRMATION_ATTEMPTS = "1";
           process.env.CASPER_CONFIRMATION_DELAY_MS = "0";
           const app = createReportApp();
-          const quote = await request(app).get("/reports/quote").expect(200);
+          const quote = await request(app).get(`/reports/quote?subject=${QUOTE_SUBJECT}`).expect(200);
           const paymentPayload = boundPaymentPayload(quote.body);
 
           const first = await request(app)
@@ -391,8 +398,8 @@ describe("report API", () => {
         process.env.CASPER_CONFIRMATION_ATTEMPTS = "1";
         process.env.CASPER_CONFIRMATION_DELAY_MS = "0";
         const app = createReportApp();
-        const firstQuote = await request(app).get("/reports/quote").expect(200);
-        const secondQuote = await request(app).get("/reports/quote").expect(200);
+        const firstQuote = await request(app).get(`/reports/quote?subject=${QUOTE_SUBJECT}`).expect(200);
+        const secondQuote = await request(app).get(`/reports/quote?subject=${QUOTE_SUBJECT_B}`).expect(200);
 
         await request(app)
           .post(`/reports/buy/${firstQuote.body.quoteId}`)
@@ -477,7 +484,7 @@ describe("report API", () => {
         process.env.CASPER_CONFIRMATION_ATTEMPTS = "1";
         process.env.CASPER_CONFIRMATION_DELAY_MS = "0";
         const app = createReportApp();
-        const quote = await request(app).get("/reports/quote").expect(200);
+        const quote = await request(app).get(`/reports/quote?subject=${QUOTE_SUBJECT}`).expect(200);
         const paymentPayload = boundPaymentPayload(quote.body);
 
         const response = await request(app)
@@ -504,7 +511,7 @@ describe("report API", () => {
       clearX402Payment();
       process.env.CASPER_RPC_URL = rpc.url;
       const app = createReportApp();
-      const quote = await request(app).get("/reports/quote").expect(200);
+      const quote = await request(app).get(`/reports/quote?subject=${QUOTE_SUBJECT}`).expect(200);
 
       expect(quote.body.paymentRequirements).toEqual([]);
       expect(quote.body.paymentConfigurationRequired).toBe(true);
@@ -541,7 +548,7 @@ describe("report API", () => {
       process.env.PAYEE_ADDRESS = "not-a-casper-account-hash";
       const app = createReportApp();
 
-      const quote = await request(app).get("/reports/quote").expect(200);
+      const quote = await request(app).get(`/reports/quote?subject=${QUOTE_SUBJECT}`).expect(200);
 
       expect(quote.body.paymentRequirements).toEqual([]);
       expect(quote.body.paymentConfigurationRequired).toBe(true);
@@ -647,6 +654,14 @@ describe("report API", () => {
     expect(response.body).toMatchObject({
       error: "invalid_subject"
     });
+  });
+
+  it("returns 400 subject_required when no subject is supplied", async () => {
+    const app = createReportApp();
+
+    const response = await request(app).get("/reports/quote").expect(400);
+
+    expect(response.body).toMatchObject({ error: "subject_required" });
   });
 });
 

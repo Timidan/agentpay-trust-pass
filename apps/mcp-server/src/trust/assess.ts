@@ -7,21 +7,28 @@
  */
 
 import {
+  accountPolicyHash,
+  ACCOUNT_POLICY_VERSION,
   buildVerdictReport,
+  extractAccountSignals,
   extractSignals,
   hashJson,
   parseSubject,
   policyHash,
+  POLICY_VERSION,
+  scoreAccount,
   scoreSubject,
   type ReportProof,
   type SubjectRef,
 } from "@agent-pay/core";
+import { ToolInputError } from "../errors.js";
 
 export type Verdict = {
   aspect: string;
   decision: "approved" | "needs_review" | "rejected";
   flags: { code: string; severity: string; message: string }[];
   notChecked: string[];
+  passed: string[];
   rationale: string;
   notCheckedNote: string;
   subject: SubjectRef;
@@ -64,12 +71,15 @@ export async function assessSubject(
   // 1. Parse and validate the subject
   const parsed = parseSubject(input.subject);
   if (!parsed.ok) {
-    throw new Error(`Invalid subject: ${parsed.error}`);
+    throw new ToolInputError(`Invalid subject: ${parsed.error}`);
   }
   const subject: SubjectRef = parsed.subject;
 
-  // 2. Quote (fetches price + datasetRoot + quoteId)
-  const quoteResult = await deps.quote(subject.packageHash);
+  // 2. Quote (fetches price + datasetRoot + quoteId).
+  //    Forward the raw identifier, not the bare packageHash: report-api
+  //    re-parses this string, and a stripped account hash would be re-read as
+  //    a token — buying token evidence while we score with the account policy.
+  const quoteResult = await deps.quote(subject.raw);
 
   // 3. Settle (sign x402 + buy → paid result with evidence[])
   const paidResult = await deps.settle({ quote: quoteResult });
@@ -89,17 +99,23 @@ export async function assessSubject(
     });
     if (!result.verified) {
       throw new Error(
-        `Evidence verification failed for record ${leaf.record?.id ?? "(unknown)"} — refusing to stamp unverified evidence`
+        `Evidence verification failed for record ${leaf.record?.id ?? "(unknown)"}: refusing to stamp unverified evidence`
       );
     }
   }
 
   // 5. Extract signals from all evidence records
   const records = evidence.map((e) => e.record);
-  const signals = extractSignals(records);
+  const isAccount = subject.kind === "account";
+  const signals = isAccount ? extractAccountSignals(records) : extractSignals(records);
 
-  // 6. Score — this is the authoritative decision; narrator cannot override it
-  const rule = scoreSubject(signals);
+  // 6. Score — this is the authoritative decision; narrator cannot override it.
+  //    Accounts and tokens have separate deterministic policies.
+  const rule = isAccount
+    ? scoreAccount(signals as ReturnType<typeof extractAccountSignals>)
+    : scoreSubject(signals as ReturnType<typeof extractSignals>);
+  const activePolicyHash = isAccount ? accountPolicyHash() : policyHash();
+  const activePolicyVersion = isAccount ? ACCOUNT_POLICY_VERSION : POLICY_VERSION;
 
   // 7. Narrate (may call LLM or use deterministic fallback; cannot change aspect/decision)
   const { rationale, notCheckedNote } = await deps.narrate({
@@ -116,6 +132,8 @@ export async function assessSubject(
     rule,
     rationale,
     notCheckedNote,
+    policyVersion: activePolicyVersion,
+    policyHash: activePolicyHash,
   });
   const reportHash = hashJson(verdictReport);
 
@@ -141,6 +159,7 @@ export async function assessSubject(
     decision: rule.decision,
     flags: rule.flags,
     notChecked: rule.notChecked,
+    passed: rule.passed,
     rationale,
     notCheckedNote,
     subject,
@@ -148,7 +167,7 @@ export async function assessSubject(
     settlementTxHash,
     decisionTxHash,
     datasetRoot,
-    policyHash: policyHash(),
+    policyHash: activePolicyHash,
     explorerUrl,
   };
 }

@@ -34,8 +34,8 @@ describe("MCP tool layer", () => {
   it("quotes live evidence and preserves the x402 payment gate", async () => {
     clearPaymentEnv();
     await withReportApi(async (reportApiUrl) => {
-      const quote = await quoteReportTool({ reportApiUrl });
-      expect(quote.quoteId).toMatch(/^agent-pay-live-/);
+      const quote = await quoteReportTool({ reportApiUrl, subject: "a".repeat(64) });
+      expect(quote.quoteId).toMatch(/^trust-/);
       expect(quote.sourceSummary.length).toBeGreaterThanOrEqual(2);
       expect(quote.paymentReadiness.status).toBe("configuration_required");
 
@@ -61,6 +61,13 @@ describe("MCP tool layer", () => {
       } satisfies Partial<ApiResponseError>);
     });
   }, 20_000);
+
+  it("rejects quote_report when no subject is supplied", async () => {
+    await withReportApi(async (reportApiUrl) => {
+      await expect(quoteReportTool({ reportApiUrl })).rejects.toThrow(/subject/i);
+      await expect(quoteReportTool({ reportApiUrl, subject: "   " })).rejects.toThrow(/subject/i);
+    });
+  });
 
   it("does not emit an AgentPay registry transaction when submitter configuration is absent", async () => {
     clearPaymentEnv();

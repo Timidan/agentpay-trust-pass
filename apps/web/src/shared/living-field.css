@@ -59,6 +59,23 @@
   opacity: 0.85;
 }
 
+/* the landing hero breathes with the field through its scrim */
+.route-landing .living-field .lf-media {
+  opacity: 0.5;
+}
+.dark.route-landing .living-field .lf-media {
+  opacity: 0.62;
+}
+
+/* trust pages: a faint field so the frosted glass surfaces have something to
+   refract, without competing with the content */
+.route-trust .living-field .lf-media {
+  opacity: 0.28;
+}
+.dark.route-trust .living-field .lf-media {
+  opacity: 0.4;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .living-field .lf-media {
     transition: none;

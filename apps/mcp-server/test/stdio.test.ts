@@ -103,14 +103,14 @@ describe("MCP stdio server", () => {
 
         const quote = await client.callTool({
           name: "quote_report",
-          arguments: { reportApiUrl }
+          arguments: { reportApiUrl, subject: "a".repeat(64) }
         });
 
         expect(JSON.parse(quote.content[0].type === "text" ? quote.content[0].text : "{}")).toMatchObject({
           asset: "CSPR"
         });
         expect(JSON.parse(quote.content[0].type === "text" ? quote.content[0].text : "{}").quoteId).toMatch(
-          /^agent-pay-live-/
+          /^trust-/
         );
       } finally {
         await client.close();

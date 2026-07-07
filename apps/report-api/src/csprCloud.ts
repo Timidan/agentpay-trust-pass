@@ -131,11 +131,16 @@ async function getPackageMeta(hash: string, base: string = REST_BASE): Promise<C
  * "check a token" flow. Defaults to the testnet CSPR.cloud (where the demo
  * tokens live); best-effort — returns nulls (→ "not checked") on any failure.
  */
-export type SubjectTokenState = { holderCount: number | null; topHolderPct: number | null };
+export type SubjectTokenState = {
+  holderCount: number | null;
+  topHolderPct: number | null;
+  /** Verbatim CSPR.cloud contract-package creation timestamp (ISO), when known. */
+  packageCreatedAt: string | null;
+};
 
 export async function fetchSubjectTokenState(packageHash: string): Promise<SubjectTokenState> {
   if (!csprCloudConfigured()) {
-    return { holderCount: null, topHolderPct: null };
+    return { holderCount: null, topHolderPct: null, packageCreatedAt: null };
   }
   const hash = packageHash.replace(/^hash-/, "");
   try {
@@ -146,9 +151,13 @@ export async function fetchSubjectTokenState(packageHash: string): Promise<Subje
     if (supply && supply > 0n && topBalance != null) {
       topHolderPct = Number((topBalance * 10000n) / supply) / 100;
     }
-    return { holderCount: holderCount > 0 ? holderCount : null, topHolderPct };
+    return {
+      holderCount: holderCount > 0 ? holderCount : null,
+      topHolderPct,
+      packageCreatedAt: meta?.timestamp ?? null
+    };
   } catch {
-    return { holderCount: null, topHolderPct: null };
+    return { holderCount: null, topHolderPct: null, packageCreatedAt: null };
   }
 }
 

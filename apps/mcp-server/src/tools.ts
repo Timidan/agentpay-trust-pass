@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import type { EvidenceRecord, ProofStep } from "@agent-pay/core";
 import { buyReport, getPaymentStatus, getQuote, verifyReport } from "./apiClient.js";
 import { getRegistryStatus, recordAgentPayDecision } from "./casperClient.js";
+import { ToolConfigError, ToolInputError } from "./errors.js";
 import { assessSubject, type Verdict } from "./trust/assess.js";
 import { narrateVerdict } from "./trust/narrator.js";
 import { buildX402PaymentSignature, loadSignerFromPem } from "./trust/x402Signer.js";
@@ -18,8 +19,19 @@ export type ToolDefinition = {
 export const toolDefinitions: ToolDefinition[] = [
   {
     name: "quote_report",
-    description: "Quote an x402 price for an AgentPay report built from live Casper product evidence.",
-    inputSchema: { type: "object", properties: { reportApiUrl: { type: "string" } } }
+    description:
+      "Quote an x402 price for an AgentPay report scoped to a subject: a token package hash (64 hex / hash-<64 hex>) or a Casper account (account-hash-<64 hex> / public key). Returns price, expiry, dataset root, payment resource, and x402 requirements for that subject's live evidence.",
+    inputSchema: {
+      type: "object",
+      required: ["subject"],
+      properties: {
+        subject: {
+          type: "string",
+          description: "Token package hash (64 hex / hash-<64 hex>) or account (account-hash-<64 hex> or public key 01…/02…)"
+        },
+        reportApiUrl: { type: "string" }
+      }
+    }
   },
   {
     name: "payment_status",
@@ -76,20 +88,40 @@ export const toolDefinitions: ToolDefinition[] = [
   {
     name: "assess_subject",
     description:
-      "Full Trust Signal rail: quotes evidence, pays x402, verifies Merkle proofs, scores deterministically, narrates, and stamps the verdict on Casper. Returns a Verdict.",
+      "Full Trust Signal rail: quotes evidence, pays x402, verifies Merkle proofs, scores deterministically, narrates, and stamps the verdict on Casper. Accepts a token package hash OR a Casper account (account-hash-<64 hex> / public key) and routes to the matching policy. Returns a Verdict.",
     inputSchema: {
       type: "object",
       required: ["subject"],
       properties: {
-        subject: { type: "string", description: "Casper package hash (64 hex chars or hash-<64 hex>)" },
+        subject: {
+          type: "string",
+          description: "Token package hash (64 hex / hash-<64 hex>) or account (account-hash-<64 hex> or public key 01…/02…)"
+        },
+        reportApiUrl: { type: "string" }
+      }
+    }
+  },
+  {
+    name: "assess_account",
+    description:
+      "Counterparty check: the full rail scoped to a Casper account (existence, CSPR balance, multisig control and age), scored against the account policy and stamped on Casper. Returns a Verdict.",
+    inputSchema: {
+      type: "object",
+      required: ["account"],
+      properties: {
+        account: { type: "string", description: "account-hash-<64 hex> or a public key (01…/02…)" },
         reportApiUrl: { type: "string" }
       }
     }
   }
 ];
 
-export async function quoteReportTool(input: { reportApiUrl?: string } = {}) {
-  return getQuote(input.reportApiUrl ?? process.env.REPORT_API_URL ?? DEFAULT_REPORT_API_URL);
+export async function quoteReportTool(input: { reportApiUrl?: string; subject?: string } = {}) {
+  const subject = input.subject?.trim();
+  if (!subject) {
+    throw new ToolInputError("quote_report requires a subject (token package hash or Casper account)");
+  }
+  return getQuote(input.reportApiUrl ?? process.env.REPORT_API_URL ?? DEFAULT_REPORT_API_URL, subject);
 }
 
 export async function paymentStatusTool(input: { reportApiUrl?: string } = {}) {
@@ -126,6 +158,8 @@ export async function verifyReportTool(input: {
   });
 }
 
+const RECORD_DECISIONS = new Set(["approved", "rejected", "needs_review"]);
+
 export async function recordDecisionTool(input: {
   datasetId: string;
   datasetRoot: string;
@@ -133,6 +167,14 @@ export async function recordDecisionTool(input: {
   paymentReceiptHash: string;
   decision: "approved" | "rejected" | "needs_review";
 }) {
+  for (const field of ["datasetId", "datasetRoot", "reportHash", "paymentReceiptHash"] as const) {
+    if (typeof input?.[field] !== "string" || input[field].length === 0) {
+      throw new ToolInputError(`record_decision requires a non-empty string ${field}`);
+    }
+  }
+  if (!RECORD_DECISIONS.has(input?.decision)) {
+    throw new ToolInputError("record_decision decision must be approved, rejected, or needs_review");
+  }
   return recordAgentPayDecision(input);
 }
 
@@ -150,10 +192,20 @@ export async function assessSubjectTool(input: {
     settle: async ({ quote }: { quote: any }) => {
       const secretKeyPath = process.env.CASPER_SECRET_KEY_PATH;
       if (!secretKeyPath) {
-        throw new Error("CASPER_SECRET_KEY_PATH is required for assess_subject");
+        throw new ToolConfigError("CASPER_SECRET_KEY_PATH is required for assess_subject");
       }
-      const pem = await readFile(resolve(process.cwd(), secretKeyPath), "utf8");
-      const signer = loadSignerFromPem(pem);
+      let pem: string;
+      try {
+        pem = await readFile(resolve(process.cwd(), secretKeyPath), "utf8");
+      } catch {
+        throw new ToolConfigError("CASPER_SECRET_KEY_PATH points to a missing or unreadable key file");
+      }
+      let signer: ReturnType<typeof loadSignerFromPem>;
+      try {
+        signer = loadSignerFromPem(pem);
+      } catch {
+        throw new ToolConfigError("CASPER_SECRET_KEY_PATH does not contain a valid Casper secret key");
+      }
       const requirement = quote.paymentRequirements?.[0];
       if (!requirement) {
         throw new Error(`No x402 payment requirement in quote: ${JSON.stringify(quote)}`);
@@ -195,4 +247,23 @@ export async function assessSubjectTool(input: {
       signals: Record<string, unknown>;
     }) => narrateVerdict(args)
   });
+}
+
+/** Counterparty check — the same rail, entered with an account identifier. */
+export async function assessAccountTool(input: {
+  account: string;
+  reportApiUrl?: string;
+}): Promise<Verdict> {
+  return assessSubjectTool({ subject: normalizeAccountInput(input.account), reportApiUrl: input.reportApiUrl });
+}
+
+/**
+ * assess_account is contractually "this IS an account", so a bare 64-hex (the
+ * common explorer/CLI form of an account hash) must not fall through to the
+ * token rail. Coerce it to the account-hash form; leave prefixed hashes and
+ * public keys untouched.
+ */
+function normalizeAccountInput(account: string): string {
+  const raw = (account ?? "").trim();
+  return /^[0-9a-f]{64}$/i.test(raw) ? `account-hash-${raw.toLowerCase()}` : raw;
 }

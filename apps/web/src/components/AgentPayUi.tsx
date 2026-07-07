@@ -5,7 +5,6 @@ import { forwardRef, type ComponentPropsWithoutRef, type ElementRef, type ReactN
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -15,7 +14,6 @@ import {
   SheetHeader,
   SheetTitle
 } from "@/components/ui/sheet";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -23,7 +21,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { cn as agentPayCn } from "@/lib/utils";
 
 const agentPayButtonVariants = cva(
-  "agent-pay-button rounded-full font-semibold shadow-sm transition-[background-color,border-color,box-shadow,color,transform] duration-300 ease-out",
+  "agent-pay-button rounded-lg font-semibold shadow-sm transition-[background-color,border-color,box-shadow,color,transform] duration-300 ease-out",
   {
     variants: {
       variant: {
@@ -34,15 +32,15 @@ const agentPayButtonVariants = cva(
         ghost:
           "ghost-action bg-transparent text-foreground hover:bg-accent hover:text-accent-foreground",
         icon:
-          "icon-action size-10 rounded-full border border-border bg-card text-card-foreground hover:bg-secondary",
+          "icon-action size-9 rounded-lg border border-border bg-card text-card-foreground hover:bg-secondary",
         explorer:
           "explorer-link rounded-md bg-transparent px-0 text-primary shadow-none hover:text-primary/80 hover:underline",
         nav:
-          "hero-nav-link-control rounded-full bg-card/85 text-card-foreground shadow-sm backdrop-blur-md hover:bg-card"
+          "hero-nav-link-control rounded-lg bg-card/85 text-card-foreground shadow-sm backdrop-blur-md hover:bg-card"
       },
       size: {
-        default: "h-10 px-4 py-2",
-        hero: "hero-cta h-12 px-6 text-base",
+        default: "h-9 px-3.5 py-2",
+        hero: "hero-cta h-11 px-5 text-base",
         compact: "agent-pay-button-compact h-8 px-3 text-xs"
       }
     },
@@ -105,24 +103,6 @@ export const AgentPayCardHeader = forwardRef<ElementRef<typeof CardHeader>, Comp
   )
 );
 AgentPayCardHeader.displayName = "AgentPayCardHeader";
-
-export const AgentPayCardIcon = forwardRef<HTMLSpanElement, ComponentPropsWithoutRef<"span">>(
-  ({ className, ...props }, ref) => (
-    <span
-      className={agentPayCn("agent-pay-card-icon panel-icon border-border bg-secondary text-secondary-foreground", className)}
-      ref={ref}
-      {...props}
-    />
-  )
-);
-AgentPayCardIcon.displayName = "AgentPayCardIcon";
-
-export const AgentPayInput = forwardRef<ElementRef<typeof Input>, ComponentPropsWithoutRef<typeof Input>>(
-  ({ className, ...props }, ref) => (
-    <Input className={agentPayCn("agent-pay-input bg-background", className)} ref={ref} {...props} />
-  )
-);
-AgentPayInput.displayName = "AgentPayInput";
 
 export const AgentPayTextarea = forwardRef<ElementRef<typeof Textarea>, ComponentPropsWithoutRef<typeof Textarea>>(
   ({ className, ...props }, ref) => (
@@ -239,20 +219,6 @@ export const AgentPayInlineCode = forwardRef<HTMLElement, ComponentPropsWithoutR
 );
 AgentPayInlineCode.displayName = "AgentPayInlineCode";
 
-export const AgentPayDataList = forwardRef<HTMLDListElement, ComponentPropsWithoutRef<"dl">>(
-  ({ className, ...props }, ref) => (
-    <dl className={agentPayCn("agent-pay-data-list", className)} ref={ref} {...props} />
-  )
-);
-AgentPayDataList.displayName = "AgentPayDataList";
-
-export const AgentPayDataRow = forwardRef<HTMLDivElement, ComponentPropsWithoutRef<"div">>(
-  ({ className, ...props }, ref) => (
-    <div className={agentPayCn("agent-pay-data-row border-border", className)} ref={ref} {...props} />
-  )
-);
-AgentPayDataRow.displayName = "AgentPayDataRow";
-
 export const AgentPaySeparator = forwardRef<ElementRef<typeof Separator>, ComponentPropsWithoutRef<typeof Separator>>(
   ({ className, ...props }, ref) => (
     <Separator className={agentPayCn("agent-pay-separator", className)} ref={ref} {...props} />
@@ -260,9 +226,6 @@ export const AgentPaySeparator = forwardRef<ElementRef<typeof Separator>, Compon
 );
 AgentPaySeparator.displayName = "AgentPaySeparator";
 
-export const AgentPaySkeleton = ({ className, ...props }: ComponentPropsWithoutRef<typeof Skeleton>) => (
-  <Skeleton className={agentPayCn("agent-pay-skeleton", className)} {...props} />
-);
 
 export const AgentPayTabs = Tabs;
 
@@ -344,31 +307,3 @@ export function AgentPayIconAction({
     </AgentPayTooltip>
   );
 }
-
-export const AgentPayTimeline = forwardRef<HTMLOListElement, ComponentPropsWithoutRef<"ol">>(
-  ({ className, ...props }, ref) => (
-    <ol className={agentPayCn("agent-pay-timeline timeline", className)} ref={ref} {...props} />
-  )
-);
-AgentPayTimeline.displayName = "AgentPayTimeline";
-
-const agentPayTimelineItemVariants = cva("agent-pay-timeline-item timeline-step", {
-  variants: {
-    state: {
-      pending: "pending",
-      done: "done"
-    }
-  },
-  defaultVariants: {
-    state: "pending"
-  }
-});
-
-type AgentPayTimelineItemProps = ComponentPropsWithoutRef<"li"> & VariantProps<typeof agentPayTimelineItemVariants>;
-
-export const AgentPayTimelineItem = forwardRef<HTMLLIElement, AgentPayTimelineItemProps>(
-  ({ className, state, ...props }, ref) => (
-    <li className={agentPayCn(agentPayTimelineItemVariants({ state }), className)} ref={ref} {...props} />
-  )
-);
-AgentPayTimelineItem.displayName = "AgentPayTimelineItem";

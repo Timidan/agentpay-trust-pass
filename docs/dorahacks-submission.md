@@ -4,13 +4,13 @@ This draft is for the Casper Agentic Buildathon Qualification Round. Do not past
 
 Use [live-capabilities.md](live-capabilities.md) as the boundary for live claims while editing this draft.
 
-> **Product is now Trust Signal** (the consumer-facing evolution of our buildathon project): paste a Casper token, the agent buys live evidence over x402, scores observed facts deterministically against a published policy, and stamps a shareable **CLEAR / CAUTION / DANGER** verdict on Casper. The stamp is proof of *what the agent checked and decided*, not a claim the answer is universally true — "automated evidence flags, not financial advice." The runtime does not ship canned token-risk fixtures; unavailable signals are surfaced as not checked.
+> **Product is now AgentPay Trust Pass** (the consumer-facing evolution of the buildathon project): paste a Casper token or wallet, the agent buys live evidence over x402, verifies the paid evidence against the quoted dataset root, scores observed facts deterministically against a published policy, and returns a copyable **CLEAR / CAUTION / DANGER** receipt. The receipt is proof of *what the agent checked, paid for, verified, and recorded on Casper*, not a claim the answer is universally true — "automated evidence flags, not financial advice." The runtime does not ship canned token-risk fixtures; unavailable signals are surfaced as not checked.
 
 ## Project
 
 Name: AgentPay
 
-One-line summary: AgentPay lets autonomous agents quote live Casper evidence, settle through x402 to release the report, verify the proof root, and record the decision on Casper. Only a matching root clears the decision.
+One-line summary: AgentPay Trust Pass lets a user or autonomous agent pay for Casper evidence, verify the proof root, and leave with a copyable on-chain receipt for the resulting trust decision.
 
 Category fit:
 
@@ -22,7 +22,7 @@ Category fit:
 
 ## Problem
 
-Autonomous agents can call APIs and move funds, but most payment flows still ask them to trust an off-chain service response. AgentPay turns a paid API response into a verifiable workflow: quote live Casper evidence, require x402 payment, release the report only after settlement, verify the returned proof, then record the decision on Casper.
+Autonomous agents and consumers can call APIs and move funds, but most payment flows still ask them to trust an off-chain service response. AgentPay turns a paid API response into a consumer-readable Trust Pass: quote live Casper evidence, require x402 payment, release the report only after settlement, verify the returned proof, then record the decision on Casper.
 
 ## What It Does
 
@@ -33,6 +33,8 @@ Autonomous agents can call APIs and move funds, but most payment flows still ask
 - Verifies the released report against its Merkle dataset root.
 - Records the verified decision through the AgentPayRegistry contract on Casper Testnet.
 - Exposes the flow through the web UI and MCP tools so an agent can inspect readiness before paying or writing on-chain.
+- Produces a copyable Trust Pass receipt with dataset root, x402 receipt hash, settlement transaction, Casper decision record, and policy hash.
+- Supports consumer token checks and counterparty wallet checks from the first screen.
 
 ## Casper Usage
 
@@ -61,13 +63,14 @@ Show these steps only with real environment values configured:
 1. Run `npm run submission:report` to show the evidence gate.
 2. Run `npm run submission:funding` to show the funded Casper Testnet account.
 3. Open the AgentPay web app.
-4. Connect a local agent identifier.
+4. Show the AgentPay Trust Pass landing: token check, wallet check, and receipt packet.
 5. Quote live Casper evidence.
 6. Show the x402 payment requirement.
 7. Continue the same quote with a real x402 payment payload.
 8. Show paid report release, source hashes, settlement hash, and proof verification.
 9. Record the verified decision through AgentPayRegistry.
-10. Run `npm run submission:check` and show every gate passing.
+10. Open the result card and copy the Trust Pass receipt packet.
+11. Run `npm run submission:check` and show every gate passing.
 
 ## Evidence Required Before Final Submission
 
@@ -81,18 +84,19 @@ Deploying Casper Testnet account: `account-hash-731349cf6f3c4756e74066db530e56ae
 | AgentPayRegistry package hash | `hash-73ce206e78b8bc6d5c4ada857c629cd0b9c0dda320d091cd6bdd7c3fa7651d97` | Installed on Testnet |
 | Registry install hash | `c399eca336b515aaeda96c7b567f7dd61cb16d63c0cea7416923b5346db10b86` ([cspr.live](https://testnet.cspr.live/deploy/c399eca336b515aaeda96c7b567f7dd61cb16d63c0cea7416923b5346db10b86)) | Confirmed executed |
 | CEP-18 x402 asset package hash | `a7888ddfbc31455396f3c57583547962a28bcb3b20e60d6be2dea3a8f2991d4d` | Installed on Testnet (EIP-712 authorized-transfer token) |
-| x402 settlement hash | `36cec4739b3576b86c694cc710f54b7d00eb7403779e593b927ead053e939236` ([cspr.live](https://testnet.cspr.live/transaction/36cec4739b3576b86c694cc710f54b7d00eb7403779e593b927ead053e939236)) | Confirmed executed — real CEP-18 `transfer_with_authorization` settled via the x402 facilitator |
-| Decision record hash | `da99d2cd3f23fbd9e9369c57d9a7442219ea746812a143e29fdbd28b7b43216b` ([cspr.live](https://testnet.cspr.live/deploy/da99d2cd3f23fbd9e9369c57d9a7442219ea746812a143e29fdbd28b7b43216b)) | Confirmed executed — paid-flow decision carrying the real settlement `payment_receipt_hash` |
+| x402 settlement hash | `18139485f3546d29d543ffb89c4472ac8f59cd989b8e32df51e9b5a27b3300e1` ([cspr.live](https://testnet.cspr.live/transaction/18139485f3546d29d543ffb89c4472ac8f59cd989b8e32df51e9b5a27b3300e1)) | Confirmed executed — real CEP-18 `transfer_with_authorization` settled via the x402 facilitator |
+| Decision record hash | `dd53186c084d8da08b2a48388fbfc6363cda4794f35b75ccd4c5cc2d9b4ebcfd` ([cspr.live](https://testnet.cspr.live/deploy/dd53186c084d8da08b2a48388fbfc6363cda4794f35b75ccd4c5cc2d9b4ebcfd)) | Confirmed executed — paid-flow decision carrying the real settlement `payment_receipt_hash` |
 | Public GitHub repository URL | `SUBMISSION_GITHUB_URL` | Pending — publish repo |
 | Public demo video URL | `SUBMISSION_DEMO_VIDEO_URL` | Pending — record walkthrough |
 
-The settlement + decision above came from one live paid run on quote
-`agent-pay-live-8174134-c1129a92d1394e32` (Casper Testnet block 8,174,134 + live CSPR.trade DEX
-pairs): the buyer signed an EIP-712 `TransferWithAuthorization`, the report API forwarded it to the
+The settlement + decision above came from one live paid UI run on quote
+`trust-aaaaaaaaaaaaaaaa-8410848-64a999eb73bad243` (dataset root
+`3d22813499fc421e219aec35d6ce38f4344cd688dd74062485da07a1febc989b`, report hash
+`64a999eb73bad2437bc2b6fcc12734cc92f6ee9f9658442a31fbc28590fc7e16`): the buyer signed an EIP-712 `TransferWithAuthorization`, the report API forwarded it to the
 x402 facilitator (`/verify` then `/settle`), the facilitator settled a real CEP-18 transfer on
 Testnet (tx above), AgentPay confirmed it executed via `info_get_transaction`, released the report,
 and the decision was recorded with that settlement's `payment_receipt_hash`
-(`7aac92ce5ab310a7e5373c6b5696305afd8ac342c3480a5719fde011df3dfcd9`).
+(`91616bd4bcf93edbd12bc5682851c7e042b1dafa8bfeccd8954391606b3f0aca`).
 
 The settlement used the **self-hosted open-source casper-x402 facilitator** (fee-payer = the
 deploying account). The hosted CSPR.cloud path is a drop-in swap: set

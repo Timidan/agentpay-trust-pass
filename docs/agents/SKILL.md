@@ -69,7 +69,7 @@ Call a tool:
 ```sh
 curl -X POST "$AGENT_PAY_BASE_URL/tools/quote_report" \
   -H "Content-Type: application/json" \
-  -d '{"reportApiUrl":"$AGENT_PAY_BASE_URL"}'
+  -d '{"subject":"hash-<64 hex package hash>","reportApiUrl":"$AGENT_PAY_BASE_URL"}'
 ```
 
 If your deployment runs the bridge and seller API on separate origins, use the
@@ -81,13 +81,14 @@ rewritten safely for one public origin.
 
 ### `quote_report`
 
-Quotes an x402 price for an AgentPay report built from live Casper product
-evidence.
+Quotes an x402 price for an AgentPay report scoped to a subject: a token package
+hash or a Casper account. A subject is required.
 
 Input:
 
 ```json
 {
+  "subject": "hash-<64 hex package hash> or account-hash-<64 hex> or public key",
   "reportApiUrl": "$AGENT_PAY_BASE_URL"
 }
 ```
@@ -396,7 +397,7 @@ Use the manual flow when your agent has its own payment/signing path.
 ```sh
 curl -X POST "$AGENT_PAY_BASE_URL/tools/quote_report" \
   -H "Content-Type: application/json" \
-  -d '{"reportApiUrl":"$AGENT_PAY_BASE_URL"}'
+  -d '{"subject":"hash-<64 hex package hash>","reportApiUrl":"$AGENT_PAY_BASE_URL"}'
 ```
 
 2. Sign the x402 requirement with your own Casper key. The accepted requirement

@@ -36,9 +36,9 @@ const ASPECT_KEYWORDS = ["CLEAR", "CAUTION", "DANGER"] as const;
 function buildRationale(aspect: string, flags: Flag[]): string {
   if (flags.length === 0) {
     if (aspect === "CLEAR") {
-      return "All checked signals are clear — no issues detected.";
+      return "All checked signals are clear. No issues detected.";
     }
-    return `Verdict is ${aspect} — no specific flags were recorded.`;
+    return `Verdict is ${aspect}. No specific flags were recorded.`;
   }
   const messages = flags.map((f) => f.message).join("; ");
   return `This address raises concerns: ${messages}.`;

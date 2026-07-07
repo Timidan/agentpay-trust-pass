@@ -3,8 +3,8 @@ import { AgentPayLogo } from "../components/AgentPayLogo";
 import "./integrate-page.css";
 
 const PRIMARY_TOOLS = [
-  { name: "quote_report", body: "Returns price, expiry, dataset root, payment resource, and x402 requirements." },
-  { name: "assess_subject", body: "Runs the full rail in one call: quote, sign/pay, verify, score, narrate, record." },
+  { name: "quote_report", body: "Returns price, expiry, dataset root, payment resource, and x402 requirements for a subject (token package hash or Casper account)." },
+  { name: "assess_subject", body: "Runs the full rail in one call: quote, sign/pay, verify, score, narrate, record. Accepts a token package hash or a Casper account and routes to the matching policy." },
   { name: "buy_report", body: "Replays the quote with a signed PAYMENT-SIGNATURE payload and unlocks the report." },
   { name: "verify_report", body: "Checks the released report + Merkle proof against the quoted dataset root." },
   { name: "record_decision", body: "Writes approved / needs_review / rejected to the Casper registry." }
@@ -16,18 +16,19 @@ const MCP_CONFIG = `{
       "command": "pnpm",
       "args": ["--filter", "@agent-pay/mcp-server", "stdio"],
       "env": {
-        "REPORT_API_URL": "$AGENT_PAY_BASE_URL",
-        "AGENT_PAY_PUBLIC_ORIGIN": "$AGENT_PAY_BASE_URL"
+        "REPORT_API_URL": "http://127.0.0.1:4021",
+        "AGENT_PAY_PUBLIC_ORIGIN": "http://127.0.0.1:4021"
       }
     }
   }
 }`;
 
-const MCP_TOOL_CALL = `{ "name": "quote_report", "arguments": { "reportApiUrl": "$AGENT_PAY_BASE_URL" } }`;
+const MCP_TOOL_CALL = `{ "name": "quote_report", "arguments": { "subject": "hash-<64 hex package hash>" } }`;
 
-const HTTP_CALL = `curl -X POST "$AGENT_PAY_BASE_URL/tools/quote_report" \\
+const HTTP_CALL = `export AGENT_PAY_BASE_URL=http://127.0.0.1:4021
+curl -X POST "$AGENT_PAY_BASE_URL/tools/quote_report" \\
   -H "Content-Type: application/json" \\
-  -d '{"reportApiUrl":"$AGENT_PAY_BASE_URL"}'`;
+  -d '{ "subject": "hash-<64 hex package hash>" }'`;
 
 type IntegratePageProps = {
   onBack: () => void;
@@ -56,7 +57,7 @@ export default function IntegratePage({ onBack, onOpenAsk }: IntegratePageProps)
           <h1>How agents talk to AgentPay</h1>
           <p className="ag-lede">
             AgentPay publishes a self-describing skill and the same evidence rail over MCP tools
-            (with an HTTP bridge). Agents act with their own Casper keys — the web UI only observes.
+            (with an HTTP bridge). Agents act with their own Casper keys, and the web UI only observes.
           </p>
         </header>
 
@@ -69,7 +70,11 @@ export default function IntegratePage({ onBack, onOpenAsk }: IntegratePageProps)
             <code>{MCP_CONFIG}</code>
           </pre>
           <p className="ag-note">
-            Or fetch the skill directly: <code>curl $AGENT_PAY_BASE_URL/skill.md</code>
+            These env values are literal strings, not shell variables. Use{" "}
+            <code>http://127.0.0.1:4021</code> locally, or your deployed report-API origin.
+          </p>
+          <p className="ag-note">
+            Or fetch the skill directly: <code>curl http://127.0.0.1:4021/skill.md</code>
           </p>
         </section>
 
@@ -84,8 +89,8 @@ export default function IntegratePage({ onBack, onOpenAsk }: IntegratePageProps)
             ))}
           </dl>
           <p className="ag-note">
-            HTTP bridge: <code>POST $AGENT_PAY_BASE_URL/tools/&lt;name&gt;</code>
-            <span className="ag-dot">·</span> support: <code>payment_status</code>, <code>registry_status</code>
+            HTTP bridge: <code>POST http://127.0.0.1:4021/tools/&lt;name&gt;</code>
+            <span className="ag-sep">·</span> support: <code>payment_status</code>, <code>registry_status</code>
           </p>
         </section>
 
@@ -93,10 +98,10 @@ export default function IntegratePage({ onBack, onOpenAsk }: IntegratePageProps)
           <h2>The flow</h2>
           <p className="ag-flow">
             <b>Connect → Quote → Pay → Verify → Record.</b> The buyer signs x402 with its own Casper
-            key; AgentPay never holds one. A deterministic rule engine owns the verdict —{" "}
+            key; AgentPay never holds one. A deterministic rule engine owns the verdict:{" "}
             <span className="ag-chip ag-chip--clear">CLEAR</span>
             <span className="ag-chip ag-chip--caution">CAUTION</span>
-            <span className="ag-chip ag-chip--danger">DANGER</span> — and narration can explain it, not override it.
+            <span className="ag-chip ag-chip--danger">DANGER</span>. Narration can explain it but never override it.
           </p>
         </section>
 

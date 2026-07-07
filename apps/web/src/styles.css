@@ -62,6 +62,9 @@
   --brand-soft: hsl(36 86% 92%);
   --brand-glow: transparent;
   --on-brand: hsl(28 42% 11%);
+  /* Focus ring: brand amber is ~2:1 on the light page (fails WCAG 1.4.11),
+     so light mode uses the darker brand-ink (~4.25:1). Dark mode passes. */
+  --focus-ring: var(--brand-ink);
 
   /* Signal aspects — one meaning each. */
   --danger: hsl(353 74% 44%);
@@ -86,6 +89,11 @@
   --aspect-danger: hsl(353 86% 60%);
   --aspect-caution: hsl(36 96% 57%);
   --aspect-clear: hsl(150 70% 52%);
+  /* Readable aspect *text* on the light theme; the bright --aspect-* above are
+     for fills, edges and dots only (they fail WCAG AA as small text on light). */
+  --aspect-clear-ink: hsl(154 64% 26%);
+  --aspect-caution-ink: hsl(28 82% 34%);
+  --aspect-danger-ink: hsl(353 72% 43%);
 
   --success-bg: var(--clear-soft);
   --success-fg: hsl(156 72% 24%);
@@ -94,15 +102,26 @@
   --error-bg: var(--danger-soft);
   --error-fg: hsl(353 72% 40%);
 
-  --radius-s: 6px;
-  --radius-m: 9px;
-  --radius-l: 13px;
-  --radius-xl: 18px;
-  --radius-pill: 999px;
+  /* Precision-desk geometry: crisp corners, hairline depth, no pills. */
+  --radius-s: 4px;
+  --radius-m: 6px;
+  --radius-l: 8px;
+  --radius-xl: 10px;
+  --radius-pill: 8px;
 
-  --shadow-s: 0 1px 2px hsla(213, 40%, 14%, 0.05), 0 2px 10px hsla(213, 40%, 14%, 0.05);
-  --shadow-m: 0 1px 3px hsla(213, 40%, 14%, 0.06), 0 12px 30px -16px hsla(213, 40%, 14%, 0.22);
-  --shadow-l: 0 2px 6px hsla(213, 40%, 14%, 0.08), 0 34px 70px -38px hsla(213, 40%, 14%, 0.4);
+  --shadow-s: 0 1px 2px hsla(213, 40%, 14%, 0.06);
+  --shadow-m: 0 1px 2px hsla(213, 40%, 14%, 0.07), 0 4px 12px -6px hsla(213, 40%, 14%, 0.14);
+  --shadow-l: 0 1px 3px hsla(213, 40%, 14%, 0.08), 0 10px 28px -14px hsla(213, 40%, 14%, 0.28);
+
+  /* Glass system — frosted surfaces that refract the living-metal field behind
+     them. Light theme: bright frost with a hairline highlight. Kept opaque
+     enough (>=0.7) that text over it stays WCAG AA. */
+  --glass-bg: hsla(210, 40%, 99%, 0.72);
+  --glass-bg-strong: hsla(210, 40%, 99%, 0.86);
+  --glass-border: hsla(213, 30%, 40%, 0.18);
+  --glass-hi: hsla(0, 0%, 100%, 0.55);
+  --glass-blur: 18px;
+  --glass-shadow: 0 1px 3px hsla(213, 40%, 14%, 0.08), 0 16px 40px -20px hsla(213, 40%, 14%, 0.35);
 
   /* One easing for the whole machine — a sprung lever that settles. */
   --ease: cubic-bezier(0.2, 0.85, 0.2, 1);
@@ -205,7 +224,7 @@ button {
 }
 
 :focus-visible {
-  outline: 2px solid var(--brand);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -322,6 +341,8 @@ code {
   --brand-soft: hsl(33 40% 18%);
   --brand-glow: transparent;
   --on-brand: hsl(28 42% 10%);
+  /* On the dark page the bright brand amber already clears 3:1. */
+  --focus-ring: var(--brand);
 
   --danger: hsl(353 84% 61%);
   --danger-soft: hsl(353 44% 18%);
@@ -329,6 +350,10 @@ code {
   --caution-soft: hsl(33 40% 18%);
   --clear: hsl(150 60% 52%);
   --clear-soft: hsl(154 36% 16%);
+  /* On dark, the bright aspect colors are already the readable text tone. */
+  --aspect-clear-ink: var(--aspect-clear);
+  --aspect-caution-ink: var(--aspect-caution);
+  --aspect-danger-ink: var(--aspect-danger);
 
   --brass: hsl(40 50% 58%);
   --brass-soft: hsl(38 30% 20%);
@@ -340,9 +365,17 @@ code {
   --error-bg: hsl(353 40% 17%);
   --error-fg: hsl(353 76% 76%);
 
-  --shadow-s: 0 1px 2px hsla(0, 0%, 0%, 0.4), 0 2px 10px hsla(0, 0%, 0%, 0.3);
-  --shadow-m: 0 1px 3px hsla(0, 0%, 0%, 0.45), 0 12px 30px -16px hsla(0, 0%, 0%, 0.6);
-  --shadow-l: 0 2px 6px hsla(0, 0%, 0%, 0.45), 0 34px 70px -38px hsla(0, 0%, 0%, 0.75);
+  --shadow-s: 0 1px 2px hsla(0, 0%, 0%, 0.4);
+  --shadow-m: 0 1px 2px hsla(0, 0%, 0%, 0.45), 0 4px 12px -6px hsla(0, 0%, 0%, 0.5);
+  --shadow-l: 0 1px 3px hsla(0, 0%, 0%, 0.45), 0 10px 28px -14px hsla(0, 0%, 0%, 0.6);
+
+  /* Dark glass: deep navy frost over the molten field, with a faint top highlight. */
+  --glass-bg: hsla(213, 44%, 10%, 0.62);
+  --glass-bg-strong: hsla(213, 46%, 9%, 0.82);
+  --glass-border: hsla(210, 40%, 92%, 0.12);
+  --glass-hi: hsla(210, 40%, 92%, 0.08);
+  --glass-blur: 22px;
+  --glass-shadow: inset 0 1px 0 hsla(210, 40%, 92%, 0.07), 0 24px 60px -24px hsla(213, 60%, 3%, 0.7);
 }
 
 .agent-pay-app[data-theme="dark"].agent-pay-landing {
@@ -1701,7 +1734,7 @@ code {
   align-items: center;
   justify-content: center;
   gap: 9px;
-  min-height: 44px;
+  min-height: 36px;
   border: 1px solid transparent;
   border-radius: var(--radius-pill);
   font-weight: 650;
@@ -1759,7 +1792,7 @@ code {
 }
 
 .icon-action {
-  width: 44px;
+  width: 36px;
   color: var(--ink);
   background: var(--surface);
   border-color: var(--line);
@@ -1850,7 +1883,8 @@ code {
 /* ------------------------------------------------------------------ */
 
 .agent-pay-console {
-  width: min(var(--container), calc(100vw - 32px));
+  /* 100% (not 100vw) so the console never overflows its margined glass frame. */
+  width: min(var(--container), 100%);
   margin: 0 auto;
   padding: clamp(8px, 2vw, 20px) 0 64px;
 }
@@ -1885,11 +1919,11 @@ code {
 
 .agent-connection-panel {
   display: grid;
-  grid-template-columns: minmax(240px, 0.8fr) minmax(0, 1.2fr);
-  gap: 18px;
-  align-items: end;
-  margin-bottom: 16px;
-  padding: 20px;
+  grid-template-columns: minmax(280px, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  margin-bottom: 14px;
+  padding: 14px 16px;
   border: 1px solid var(--line);
   border-radius: var(--radius-l);
   background: var(--surface);
@@ -1902,6 +1936,69 @@ code {
   align-items: center;
   border-color: color-mix(in srgb, var(--clear) 42%, transparent);
   background: linear-gradient(100deg, var(--clear-soft), var(--surface) 60%);
+}
+
+/* --- Agent bridge: live MCP/HTTP traffic, no simulated connection ---- */
+
+.bridge-state {
+  display: inline-block;
+  width: fit-content;
+  margin-top: 10px;
+  padding: 2px 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-m);
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.bridge-state.is-live {
+  color: var(--success-fg);
+  border-color: color-mix(in srgb, var(--clear) 45%, var(--line));
+}
+
+.bridge-state.is-down {
+  color: var(--error-fg);
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--line));
+}
+
+.bridge-activity ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.bridge-activity li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  gap: 12px;
+  align-items: baseline;
+  padding: 5px 10px;
+  border-left: 2px solid var(--clear);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--ink-2);
+}
+
+.bridge-activity li.is-err {
+  border-left-color: var(--danger);
+}
+
+.bridge-activity li code {
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bridge-activity > .muted {
+  margin: 0;
+  font-size: 0.85rem;
 }
 
 .connection-copy h2 {
@@ -1928,20 +2025,8 @@ code {
   text-transform: uppercase;
 }
 
-.connection-flag i {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--ink-3);
-}
-
 .agent-connection-panel.connected .connection-flag {
   color: var(--success-fg);
-}
-
-.agent-connection-panel.connected .connection-flag i {
-  background: var(--clear);
-  box-shadow: none;
 }
 
 .agent-connection-form {
@@ -2053,15 +2138,26 @@ code {
   box-shadow: none;
 }
 
+/* Layout only — the console-glass rule further down owns the sheet's
+   opaque background, border, and text colors. */
 .agent-pay-sheet-content.payment-sheet-drawer {
   display: flex;
   flex-direction: column;
   gap: 18px;
   width: min(520px, calc(100vw - 24px));
-  border-color: color-mix(in srgb, var(--caution) 24%, var(--line));
-  background:
-    radial-gradient(420px 220px at 100% 0%, color-mix(in srgb, var(--caution) 12%, transparent), transparent 72%),
-    var(--surface);
+  box-shadow: var(--shadow-l);
+}
+
+.payment-sheet-reason {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+}
+
+.payment-sheet-reason .muted {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.55;
 }
 
 .payment-sheet-drawer .payment-sheet-copy {
@@ -2080,6 +2176,50 @@ code {
   gap: 16px;
 }
 
+.console-subject-input {
+  width: min(240px, 30vw);
+  padding: 8px 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-m);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+}
+
+.console-subject-input::placeholder {
+  color: var(--ink-3);
+}
+
+.console-subject-input:focus {
+  border-color: var(--brand);
+}
+.console-subject-input:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* The 402 wall is a doorway: show the buyer command, not just a textarea. */
+.payment-sheet-howto {
+  display: grid;
+  gap: 10px;
+}
+
+.payment-sheet-howto .muted {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+.payment-sheet-docs-link {
+  justify-self: start;
+  color: var(--brand-ink);
+  font-size: 0.84rem;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
 /* --- Run strip — the lever readout ---------------------------------- */
 
 .control-strip {
@@ -2095,7 +2235,7 @@ code {
 
 .control-strip > div {
   min-width: 0;
-  padding: 14px 18px;
+  padding: 11px 16px;
   border-right: 1px solid var(--line);
 }
 
@@ -2125,6 +2265,372 @@ code {
   white-space: nowrap;
 }
 
+/* ================================================================== */
+/*  Verdict-first console: hero + numbered rail + check list          */
+/*  (verdict-first redesign, benchmarked to token-scanner UIs)        */
+/*  Color is the primary channel via the theme-aware --aspect-*-ink   */
+/*  tokens; a --con-brass accent carries small-caps labels.           */
+/* ================================================================== */
+
+.agent-pay-console {
+  --con-brass: color-mix(in oklab, var(--aspect-caution-ink) 58%, var(--muted-foreground));
+}
+
+/* Header: slim heading + inline capability tiles */
+.console-stat-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.stat-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  background: var(--card);
+}
+.stat-k {
+  font-family: var(--font-data);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--con-brass);
+}
+.stat-v {
+  font-family: var(--font-data);
+  font-size: 0.8rem;
+  color: var(--foreground);
+  white-space: nowrap;
+}
+
+/* Verdict hero: the single loudest object in every state */
+.agent-pay-verdict-hero {
+  display: block;
+  margin-bottom: 16px;
+  padding: clamp(20px, 3vw, 30px);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--v, var(--border));
+  border-radius: var(--radius-xl);
+  background: color-mix(in oklab, var(--v, transparent) 7%, var(--card));
+  box-shadow: var(--shadow-s);
+}
+.agent-pay-verdict-hero.is-clear { --v: var(--aspect-clear-ink); }
+.agent-pay-verdict-hero.is-caution,
+.agent-pay-verdict-hero.is-blocked { --v: var(--aspect-caution-ink); }
+.agent-pay-verdict-hero.is-danger { --v: var(--aspect-danger-ink); }
+
+.verdict-eyebrow {
+  display: inline-block;
+  margin-bottom: 12px;
+  padding: 3px 9px;
+  border: 1px solid color-mix(in oklab, var(--con-brass) 42%, transparent);
+  border-radius: 5px;
+  font-family: var(--font-data);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--con-brass);
+}
+
+.verdict-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: clamp(14px, 3vw, 26px);
+}
+.verdict-word {
+  margin: 0;
+  color: var(--v, var(--foreground));
+  font-size: clamp(2.2rem, 6vw, 3.4rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 0.95;
+}
+.verdict-detail {
+  flex: 1 1 260px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-top: 5px;
+}
+.verdict-note { margin: 0; font-size: 0.78rem; color: var(--muted-foreground); }
+.verdict-reason { margin: 0; font-size: 0.98rem; line-height: 1.5; color: var(--foreground); }
+.verdict-summary {
+  margin: 0;
+  font-family: var(--font-data);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+
+.verdict-blocked { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.verdict-word--blocked {
+  margin: 0;
+  color: var(--aspect-caution-ink);
+  font-size: clamp(1.4rem, 3vw, 1.9rem);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+/* Three-row aspect legend so every outcome reads as a normal result */
+.aspect-legend {
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.aspect-legend li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-left: 3px solid var(--border);
+  border-radius: 6px;
+  background: color-mix(in oklab, var(--foreground) 3%, transparent);
+  font-size: 0.82rem;
+  color: var(--muted-foreground);
+}
+.aspect-legend li b { margin-right: 2px; color: var(--foreground); font-weight: 700; letter-spacing: 0.03em; }
+.aspect-legend .is-clear { border-left-color: var(--aspect-clear-ink); }
+.aspect-legend .is-clear svg { color: var(--aspect-clear-ink); }
+.aspect-legend .is-caution { border-left-color: var(--aspect-caution-ink); }
+.aspect-legend .is-caution svg { color: var(--aspect-caution-ink); }
+.aspect-legend .is-danger { border-left-color: var(--aspect-danger-ink); }
+.aspect-legend .is-danger svg { color: var(--aspect-danger-ink); }
+
+.identity-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 16px; }
+.identity-subject { font-family: var(--font-data); font-size: 0.86rem; color: var(--foreground); }
+.identity-tag {
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-family: var(--font-data);
+  font-size: 0.64rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+.identity-link,
+.receipt-explorer-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--aspect-clear-ink);
+  font-size: 0.82rem;
+  text-decoration: none;
+}
+.identity-link:hover,
+.receipt-explorer-link:hover { text-decoration: underline; }
+
+/* Hero footer: the live-run block (input + white CTA + example chips) */
+.hero-run {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.hero-run-input {
+  flex: 1 1 220px;
+  min-width: 0;
+  height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  background: var(--surface);
+  color: var(--foreground);
+  font-family: var(--font-data);
+  font-size: 0.9rem;
+}
+.hero-run-input::placeholder { color: var(--muted-foreground); }
+.hero-run-input:focus-visible { outline: 2px solid var(--aspect-clear-ink); outline-offset: 1px; }
+
+/* Numbered pipeline rail: merges the old run-strip + settlement timeline */
+.agent-pay-pipeline-rail {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+}
+.rail-stop {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  border-radius: var(--radius-l);
+  background: var(--card);
+}
+.rail-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: var(--font-data);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--muted-foreground);
+}
+.rail-body { min-width: 0; }
+.rail-line { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.rail-name { font-size: 0.9rem; font-weight: 700; color: var(--foreground); }
+.rail-value {
+  min-width: 0;
+  font-family: var(--font-data);
+  font-size: 0.68rem;
+  color: var(--muted-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rail-caption { margin: 4px 0 0; font-size: 0.72rem; line-height: 1.4; color: var(--muted-foreground); }
+.rail-stop.is-done { border-left-color: var(--aspect-clear-ink); }
+.rail-stop.is-done .rail-num { color: var(--aspect-clear-ink); border-color: var(--aspect-clear-ink); }
+.rail-stop.is-blocked { border-left-color: var(--aspect-caution-ink); }
+.rail-stop.is-blocked .rail-num { color: var(--aspect-caution-ink); border-color: var(--aspect-caution-ink); }
+.rail-stop.is-active { border-left-color: var(--con-brass); }
+.rail-stop.is-active .rail-num { color: var(--con-brass); border-color: var(--con-brass); }
+.rail-stop.is-active {
+  background-image: linear-gradient(90deg, transparent, color-mix(in oklab, var(--con-brass) 16%, transparent), transparent);
+  background-size: 45% 100%;
+  background-repeat: no-repeat;
+  animation: rail-sweep 1.5s var(--ease, ease) infinite;
+}
+@keyframes rail-sweep {
+  from { background-position: -60% 0; }
+  to { background-position: 160% 0; }
+}
+
+/* Traffic-light check list */
+.check-list { display: flex; flex-direction: column; gap: 8px; }
+.check-summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin: 0 0 4px; }
+.check-count { font-weight: 700; color: var(--foreground); }
+.check-breakdown { font-family: var(--font-data); font-size: 0.72rem; color: var(--muted-foreground); }
+.check-list ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 12px;
+  border-left: 3px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  font-size: 0.86rem;
+  color: var(--foreground);
+}
+.check-row svg { flex: none; }
+.check-row.is-danger { border-left-color: var(--aspect-danger-ink); }
+.check-row.is-danger svg { color: var(--aspect-danger-ink); }
+.check-row.is-caution { border-left-color: var(--aspect-caution-ink); }
+.check-row.is-caution svg { color: var(--aspect-caution-ink); }
+.check-row.is-pass { border-left-color: var(--aspect-clear-ink); }
+.check-row.is-pass svg { color: var(--aspect-clear-ink); }
+.check-row.is-unchecked { color: var(--muted-foreground); }
+.check-row.is-unchecked svg { color: var(--muted-foreground); }
+.check-tag { margin-left: auto; font-family: var(--font-data); font-size: 0.62rem; color: var(--muted-foreground); }
+
+/* Registry receipt: copyable key/value definition list */
+.decision-receipt { display: flex; flex-direction: column; gap: 12px; }
+.receipt-dl { margin: 0; display: flex; flex-direction: column; }
+.receipt-dl > div {
+  display: grid;
+  grid-template-columns: 128px 1fr;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.receipt-dl dt {
+  margin: 0;
+  font-family: var(--font-data);
+  font-size: 0.64rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--con-brass);
+}
+.receipt-dl dd { margin: 0; font-size: 0.86rem; color: var(--foreground); }
+.receipt-verdict { font-weight: 800; letter-spacing: 0.02em; }
+.receipt-verdict.is-clear { color: var(--aspect-clear-ink); }
+.receipt-verdict.is-caution { color: var(--aspect-caution-ink); }
+.receipt-verdict.is-danger { color: var(--aspect-danger-ink); }
+.hash-value { display: inline-flex; align-items: center; gap: 6px; }
+.hash-value code { font-family: var(--font-data); font-size: 0.78rem; }
+.hash-copy {
+  display: inline-flex;
+  padding: 2px;
+  border: none;
+  background: none;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+.hash-copy:hover { color: var(--foreground); }
+.hash-copy.is-copied { color: var(--aspect-clear-ink); }
+.receipt-block-tag { font-family: var(--font-data); font-size: 0.72rem; color: var(--aspect-clear-ink); }
+
+@media (prefers-reduced-motion: reduce) {
+  .rail-stop.is-active { animation: none; }
+}
+@media (max-width: 900px) {
+  .agent-pay-pipeline-rail { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 760px) {
+  .agent-pay-pipeline-rail { grid-template-columns: 1fr; }
+}
+
+/* ---- Dark glass overrides for the console redesign ------------------ */
+[data-theme="dark"] .console-glass-frame .agent-pay-console { --con-brass: var(--box-brass); }
+[data-theme="dark"] .console-glass-frame .stat-tile,
+[data-theme="dark"] .console-glass-frame .rail-stop,
+[data-theme="dark"] .console-glass-frame .check-row,
+[data-theme="dark"] .console-glass-frame .aspect-legend li {
+  background: hsla(213 46% 7% / 0.55);
+  border-color: var(--box-line);
+}
+[data-theme="dark"] .console-glass-frame .agent-pay-verdict-hero {
+  background: color-mix(in oklab, var(--v, transparent) 13%, hsla(213 46% 7% / 0.85));
+  border-color: var(--box-line);
+  border-left-color: var(--v, var(--box-line));
+}
+[data-theme="dark"] .console-glass-frame .stat-v,
+[data-theme="dark"] .console-glass-frame .rail-name,
+[data-theme="dark"] .console-glass-frame .check-count,
+[data-theme="dark"] .console-glass-frame .check-row,
+[data-theme="dark"] .console-glass-frame .verdict-reason,
+[data-theme="dark"] .console-glass-frame .receipt-dl dd,
+[data-theme="dark"] .console-glass-frame .identity-subject,
+[data-theme="dark"] .console-glass-frame .aspect-legend li b { color: var(--box-ink); }
+[data-theme="dark"] .console-glass-frame .rail-value,
+[data-theme="dark"] .console-glass-frame .rail-caption,
+[data-theme="dark"] .console-glass-frame .verdict-note,
+[data-theme="dark"] .console-glass-frame .verdict-summary,
+[data-theme="dark"] .console-glass-frame .check-breakdown,
+[data-theme="dark"] .console-glass-frame .check-tag,
+[data-theme="dark"] .console-glass-frame .aspect-legend li,
+[data-theme="dark"] .console-glass-frame .identity-tag { color: var(--box-ink-2); }
+[data-theme="dark"] .console-glass-frame .rail-num { border-color: var(--box-line); color: var(--box-ink-2); }
+[data-theme="dark"] .console-glass-frame .hero-run-input {
+  background: hsla(213 46% 7% / 0.6);
+  border-color: var(--box-line);
+  color: var(--box-ink);
+}
+
 /* ------------------------------------------------------------------ */
 /*  Workspace panels                                                   */
 /* ------------------------------------------------------------------ */
@@ -2136,13 +2642,25 @@ code {
   align-items: start;
 }
 
+/* Card chrome flattening: the shadcn base ships rounded-xl + shadow; the
+   desk look is hairline + crisp corners + flat. */
+.agent-pay-card {
+  border-radius: var(--radius-xl);
+  box-shadow: none;
+}
+/* .panel already pads the card; the shadcn header's px-6/pt-6 would double it. */
+.agent-pay-card.panel > [data-slot="card-header"] {
+  padding: 0;
+}
+
+/* Sleek panels: hairline border, flat fill, no floating shadow. */
 .panel {
   width: 100%;
-  padding: 20px;
+  padding: 16px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-l);
-  box-shadow: var(--shadow-s);
+  box-shadow: none;
 }
 
 .operation-card,
@@ -2169,17 +2687,17 @@ code {
 .agent-pay-tabs-list {
   display: inline-flex;
   gap: 3px;
-  min-height: 42px;
-  padding: 4px;
+  min-height: 36px;
+  padding: 3px;
   border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-l);
   background: var(--surface-2);
 }
 
 .agent-pay-tabs-trigger {
-  min-height: 32px;
-  padding: 0 14px;
-  border-radius: var(--radius-pill);
+  min-height: 28px;
+  padding: 0 12px;
+  border-radius: var(--radius-m);
   color: var(--ink-2);
   font-weight: 650;
   font-size: 0.83rem;
@@ -2200,6 +2718,19 @@ code {
   display: none;
 }
 
+/* The console auto-advances the active tab as a run progresses; a short
+   settle makes that read as intentional, not a hard swap. */
+.agent-pay-tabs-content[data-state="active"] {
+  animation: agent-pay-tab-in 200ms var(--ease) both;
+}
+@keyframes agent-pay-tab-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .agent-pay-tabs-content[data-state="active"] { animation: none; }
+}
+
 .tab-panel-flow {
   display: grid;
   gap: 14px;
@@ -2209,40 +2740,25 @@ code {
   background: var(--line);
 }
 
+/* Empty state is quiet: a rule, a label, one line — no fake content. */
 .agent-pay-empty-state {
   display: grid;
-  grid-template-columns: minmax(0, 0.85fr) minmax(180px, 0.55fr);
-  gap: 18px;
-  align-items: center;
-  min-height: 210px;
-  padding: 18px;
-  border: 1px dashed var(--line-strong);
-  border-radius: var(--radius-m);
-  background: var(--surface-2);
+  align-content: center;
+  min-height: 180px;
+  padding: 24px 2px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: none;
 }
 
 .empty-state-copy strong {
   display: block;
-  margin-top: 4px;
+  margin-top: 6px;
   color: var(--ink);
   font-size: 1rem;
   font-weight: 700;
+  letter-spacing: -0.01em;
 }
-
-.empty-state-skeleton {
-  display: grid;
-  gap: 10px;
-}
-
-.empty-state-skeleton .agent-pay-skeleton {
-  height: 12px;
-  border-radius: var(--radius-s);
-  background: color-mix(in srgb, var(--ink) 8%, transparent);
-}
-
-.empty-state-skeleton .agent-pay-skeleton:first-child { width: 72%; }
-.empty-state-skeleton .agent-pay-skeleton:nth-child(2) { width: 100%; }
-.empty-state-skeleton .agent-pay-skeleton:nth-child(3) { width: 56%; }
 
 .panel-header {
   display: flex;
@@ -2275,57 +2791,56 @@ code {
   font-size: 0.8rem;
 }
 
-/* --- Timeline — block sections on one line -------------------------- */
+/* --- Timeline — the settlement rail itself: hairline + ticks --------- */
 
 .timeline {
+  position: relative;
   display: grid;
-  gap: 10px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+/* The rail runs the full column; ticks cross it per stop. */
+.timeline::before {
+  content: "";
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 5px;
+  width: 1px;
+  background: var(--line);
+}
+
 .timeline-step {
+  position: relative;
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
-  gap: 12px;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 10px;
   align-items: start;
-  min-height: 68px;
-  padding: 13px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-m);
-  background: var(--surface-2);
-  transition:
-    background 420ms var(--ease),
-    border-color 420ms var(--ease);
+  padding: 8px 0 16px;
 }
 
-.timeline-step.done {
-  border-color: color-mix(in srgb, var(--clear) 40%, transparent);
-  background: var(--clear-soft);
+.timeline-step:last-child {
+  padding-bottom: 8px;
 }
 
-.timeline-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border: 1px solid var(--line);
-  border-radius: 50%;
-  color: var(--ink-2);
-  background: var(--surface);
-  transition:
-    background 380ms var(--ease),
-    color 380ms var(--ease),
-    border-color 380ms var(--ease);
+.timeline-tick {
+  width: 11px;
+  height: 2px;
+  margin-top: 8px;
+  border-radius: 1px;
+  background: var(--line-strong);
+  transition: background 380ms var(--ease), transform 380ms var(--ease);
 }
 
-.timeline-step.done .timeline-icon {
-  color: hsl(206 34% 96%);
+.timeline-step.done .timeline-tick {
   background: var(--clear);
-  border-color: transparent;
-  animation: ap-pop 420ms var(--ease);
+  transform: scaleX(1.2);
+}
+
+.timeline-step.done .timeline-label {
+  color: var(--ink);
 }
 
 .timeline-label,
@@ -2334,16 +2849,17 @@ code {
 }
 
 .timeline-label {
-  margin-bottom: 5px;
+  margin-bottom: 3px;
   color: var(--ink);
   font-weight: 650;
-  font-size: 0.94rem;
+  font-size: 0.9rem;
+  line-height: 1.2;
 }
 
 .timeline-value {
   color: var(--ink-2);
   font-family: var(--font-mono);
-  font-size: 0.76rem;
+  font-size: 0.74rem;
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
@@ -2391,11 +2907,11 @@ code {
 
 .source-row {
   display: grid;
-  gap: 12px;
-  padding: 13px;
+  gap: 10px;
+  padding: 12px 14px;
   border: 1px solid var(--line);
   border-radius: var(--radius-m);
-  background: var(--surface-2);
+  background: none;
 }
 
 .source-row strong,
@@ -2421,21 +2937,23 @@ code {
   display: grid;
   gap: 12px;
   margin-top: 12px;
-  padding: 14px;
+  padding: 12px;
   border: 1px solid color-mix(in srgb, var(--readiness-aspect) 24%, var(--line));
   border-radius: var(--radius-m);
   background: var(--surface-2);
+  /* Clips the left-edge signal bar to the rounded corners. */
+  overflow: hidden;
   transition: background 380ms var(--ease), border-color 380ms var(--ease);
 }
 
+/* The signal aspect rides the card's left edge — no status dots (house rule). */
 .payment-readiness::before {
   content: "";
   position: absolute;
-  top: 16px;
-  right: 16px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
   background: var(--readiness-aspect);
 }
 
@@ -2447,7 +2965,7 @@ code {
   font-weight: 700;
 }
 
-/* Readiness rows carry the signal aspect as a quiet dot and border tint. */
+/* Readiness rows carry the signal aspect as a left edge and border tint. */
 .payment-readiness.ready,
 .payment-readiness.pass {
   --readiness-aspect: var(--clear);
@@ -2616,17 +3134,17 @@ code {
 .proof-path > .proof-row:first-child::before { top: 50%; }
 .proof-path > .proof-row:last-child::before { bottom: 50%; }
 
+/* Rail nodes are ticks crossing the proof rail, not dots (house rule). */
 .proof-row::after {
   content: "";
   position: absolute;
   left: -18px;
   top: 50%;
   width: 10px;
-  height: 10px;
-  margin-top: -5px;
-  border: 2px solid var(--brass);
-  border-radius: 50%;
-  background: var(--surface);
+  height: 3px;
+  margin-top: -1.5px;
+  border-radius: 1px;
+  background: var(--brass);
 }
 
 .proof-position {
@@ -2707,13 +3225,24 @@ code {
   margin-top: 8px;
 }
 
+/* No frame-in-frame: the table sits flush, rows split by hairlines. */
 .source-row .agent-pay-table,
 .payment-readiness .agent-pay-table,
 .evidence-record .agent-pay-table {
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-s);
-  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  border: 0;
+  background: none;
+}
+
+.source-row .agent-pay-table tr + tr td,
+.payment-readiness .agent-pay-table tr + tr td,
+.evidence-record .agent-pay-table tr + tr td {
+  border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+}
+
+.source-row .agent-pay-table td:first-child,
+.payment-readiness .agent-pay-table td:first-child,
+.evidence-record .agent-pay-table td:first-child {
+  padding-left: 0;
 }
 
 .tx-hash,
@@ -2726,6 +3255,9 @@ code {
   background: color-mix(in srgb, var(--ink) 5%, var(--surface));
   font-family: var(--font-mono);
   font-size: 0.74rem;
+  /* Long hex hashes must wrap, not clip, on mobile. `anywhere` (not
+     break-all) keeps the shared CLI command block from chopping mid-flag. */
+  overflow-wrap: anywhere;
 }
 
 .agent-pay-inline-code {
@@ -2844,217 +3376,219 @@ code {
 
 /* ------------------------------------------------------------------ */
 /*  Console glass-frame: cinematic dark-teal reskin                   */
-/*  Applies inside .console-glass-frame only — hero/ask/feed untouched*/
+/*  Applies inside [data-theme="dark"] .console-glass-frame only — hero/ask/feed untouched*/
 /* ------------------------------------------------------------------ */
 
 /* Console heading color — must be bright ink on dark glass */
-.console-glass-frame .console-heading h2 {
+[data-theme="dark"] .console-glass-frame .console-heading h2 {
   color: var(--box-ink);
 }
-.console-glass-frame .console-heading .muted {
+[data-theme="dark"] .console-glass-frame .console-heading .muted {
   color: var(--box-ink-2);
 }
 
 /* Primary button override — white pill in the console context */
-.console-glass-frame .agent-pay-button-primary-white {
+/* Light base: brand-filled primary. The dark glass skin repaints it white. */
+.agent-pay-button-primary-white {
   display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
   font-family: var(--font-body); font-weight: 650;
-  color: hsl(213 36% 12%); background: hsl(206 30% 96%);
+  color: var(--on-brand); background: var(--brand);
   border: none; border-radius: var(--radius-pill);
   padding: .7rem 1.1rem; cursor: pointer;
   transition: transform 160ms var(--ease), background-color 160ms var(--ease);
   height: 2.5rem;
 }
-.console-glass-frame .agent-pay-button-primary-white:hover { transform: translateY(-1px); background: hsl(206 24% 100%); }
-.console-glass-frame .agent-pay-button-primary-white:active { transform: translateY(0); }
-.console-glass-frame .agent-pay-button-primary-white:disabled { opacity: .6; cursor: default; transform: none; }
+.agent-pay-button-primary-white:hover { transform: translateY(-1px); background: var(--brand-hot); }
+.agent-pay-button-primary-white:active { transform: translateY(0); }
+.agent-pay-button-primary-white:disabled { opacity: .6; cursor: default; transform: none; }
+
+[data-theme="dark"] .console-glass-frame .agent-pay-button-primary-white {
+  color: hsl(213 36% 12%); background: hsl(206 30% 96%);
+}
+[data-theme="dark"] .console-glass-frame .agent-pay-button-primary-white:hover { transform: translateY(-1px); background: hsl(206 24% 100%); }
+[data-theme="dark"] .console-glass-frame .agent-pay-button-primary-white:active { transform: translateY(0); }
+[data-theme="dark"] .console-glass-frame .agent-pay-button-primary-white:disabled { opacity: .6; cursor: default; transform: none; }
 
 /* Dark glass treatment for all panel / surface elements */
-.console-glass-frame .agent-pay-card,
-.console-glass-frame .agent-pay-surface,
-.console-glass-frame .agent-connection-panel,
-.console-glass-frame .control-strip,
-.console-glass-frame .proof-verdict,
-.console-glass-frame .payment-readiness,
-.console-glass-frame .source-row,
-.console-glass-frame .decision-receipt,
-.console-glass-frame .evidence-record,
-.console-glass-frame .proof-row,
-.console-glass-frame .agent-pay-empty-state {
+[data-theme="dark"] .console-glass-frame .agent-pay-card,
+[data-theme="dark"] .console-glass-frame .agent-pay-surface,
+[data-theme="dark"] .console-glass-frame .agent-connection-panel,
+[data-theme="dark"] .console-glass-frame .control-strip,
+[data-theme="dark"] .console-glass-frame .proof-verdict,
+[data-theme="dark"] .console-glass-frame .payment-readiness,
+[data-theme="dark"] .console-glass-frame .source-row,
+[data-theme="dark"] .console-glass-frame .decision-receipt,
+[data-theme="dark"] .console-glass-frame .evidence-record,
+[data-theme="dark"] .console-glass-frame .proof-row {
   background: hsla(213 46% 7% / .82);
   border-color: var(--box-line);
   color: var(--box-ink);
 }
 
-.console-glass-frame .panel {
+[data-theme="dark"] .console-glass-frame .agent-pay-empty-state {
+  border-color: var(--box-line);
+  color: var(--box-ink);
+}
+
+[data-theme="dark"] .console-glass-frame .panel {
   background: hsla(213 46% 7% / .82);
   border-color: var(--box-line);
   color: var(--box-ink);
 }
 
-.console-glass-frame .timeline-step {
-  background: hsla(213 38% 11% / .9);
-  border-color: var(--box-line);
-  color: var(--box-ink);
+[data-theme="dark"] .console-glass-frame .timeline::before {
+  background: var(--box-line);
 }
 
-.console-glass-frame .timeline-step.done {
-  background: color-mix(in oklab, var(--aspect-clear) 8%, hsla(213 46% 7% / .82));
-  border-color: color-mix(in oklab, var(--aspect-clear) 30%, var(--box-line));
+[data-theme="dark"] .console-glass-frame .timeline-tick {
+  background: var(--box-ink-2);
 }
 
-.console-glass-frame .timeline-icon {
-  background: hsla(213 38% 15% / .9);
-  border-color: var(--box-line);
-  color: var(--box-ink-2);
-}
-
-.console-glass-frame .timeline-step.done .timeline-icon {
+[data-theme="dark"] .console-glass-frame .timeline-step.done .timeline-tick {
   background: var(--aspect-clear);
-  color: hsl(213 40% 8%);
-  border-color: transparent;
 }
 
-.console-glass-frame .timeline-label { color: var(--box-ink); }
-.console-glass-frame .timeline-value { color: var(--box-ink-2); }
+[data-theme="dark"] .console-glass-frame .timeline-label { color: var(--box-ink); }
+[data-theme="dark"] .console-glass-frame .timeline-value { color: var(--box-ink-2); }
 
-.console-glass-frame .strip-label { color: var(--box-brass); }
-.console-glass-frame .control-strip strong { color: var(--box-ink); }
-.console-glass-frame .control-strip > div { border-color: var(--box-line); }
+[data-theme="dark"] .console-glass-frame .strip-label { color: var(--box-brass); }
+[data-theme="dark"] .console-glass-frame .control-strip strong { color: var(--box-ink); }
+[data-theme="dark"] .console-glass-frame .control-strip > div { border-color: var(--box-line); }
 
-.console-glass-frame .muted { color: var(--box-ink-2); }
+[data-theme="dark"] .console-glass-frame .muted { color: var(--box-ink-2); }
 
 /* Panel header icon */
-.console-glass-frame .panel-icon {
+[data-theme="dark"] .console-glass-frame .panel-icon {
   background: hsla(213 38% 16% / .9);
   border-color: var(--box-line);
   color: var(--box-brass);
 }
 
-.console-glass-frame .panel-header h2 { color: var(--box-ink); }
-.console-glass-frame .panel-header p { color: var(--box-ink-2); }
+[data-theme="dark"] .console-glass-frame .panel-header h2 { color: var(--box-ink); }
+[data-theme="dark"] .console-glass-frame .panel-header p { color: var(--box-ink-2); }
 
 /* Tables */
-.console-glass-frame .agent-pay-table th { color: var(--box-brass); }
-.console-glass-frame .agent-pay-table td { color: var(--box-ink); border-color: var(--box-line); }
-.console-glass-frame .agent-pay-table td:first-child { color: var(--box-brass); }
+[data-theme="dark"] .console-glass-frame .agent-pay-table th { color: var(--box-brass); }
+[data-theme="dark"] .console-glass-frame .agent-pay-table td { color: var(--box-ink); border-color: var(--box-line); }
+[data-theme="dark"] .console-glass-frame .agent-pay-table td:first-child { color: var(--box-brass); }
 
 /* Tabs */
-.console-glass-frame .agent-pay-tabs-list {
+[data-theme="dark"] .console-glass-frame .agent-pay-tabs-list {
   background: hsla(213 38% 11% / .8);
   border-color: var(--box-line);
 }
-.console-glass-frame .agent-pay-tabs-trigger { color: var(--box-ink-2); }
-.console-glass-frame .agent-pay-tabs-trigger[data-state="active"] {
+[data-theme="dark"] .console-glass-frame .agent-pay-tabs-trigger { color: var(--box-ink-2); }
+[data-theme="dark"] .console-glass-frame .agent-pay-tabs-trigger[data-state="active"] {
   background: hsla(213 38% 16% / .9);
   color: var(--box-ink);
   box-shadow: inset 0 1px 0 hsla(210 40% 92% / .08);
 }
 
 /* Separator */
-.console-glass-frame .agent-pay-separator { background: var(--box-line); }
+[data-theme="dark"] .console-glass-frame .agent-pay-separator { background: var(--box-line); }
 
 /* Code blocks */
-.console-glass-frame .agent-pay-code-block,
-.console-glass-frame .tx-hash {
+[data-theme="dark"] .console-glass-frame .agent-pay-code-block,
+[data-theme="dark"] .console-glass-frame .tx-hash {
   background: hsla(213 38% 11% / .7);
   border-color: var(--box-line);
   color: var(--box-ink-2);
 }
-.console-glass-frame .agent-pay-inline-code { color: var(--box-ink-2); }
+[data-theme="dark"] .console-glass-frame .agent-pay-inline-code { color: var(--box-ink-2); }
 
 /* Input and textarea */
-.console-glass-frame .agent-pay-input,
-.console-glass-frame .agent-identifier-field input {
+[data-theme="dark"] .console-glass-frame .agent-pay-input,
+[data-theme="dark"] .console-glass-frame .agent-identifier-field input {
   background: hsla(213 44% 11% / .7);
   border-color: hsla(210 40% 92% / .14);
   color: var(--box-ink);
   font-family: var(--font-mono);
 }
-.console-glass-frame .agent-pay-input::placeholder { color: hsla(208 36% 70% / .4); }
-.console-glass-frame .agent-pay-input:focus { border-color: hsla(210 40% 92% / .3); box-shadow: none; }
+[data-theme="dark"] .console-glass-frame .agent-pay-input::placeholder { color: hsla(208 36% 70% / .4); }
+[data-theme="dark"] .console-glass-frame .agent-pay-input:focus { border-color: hsla(210 40% 92% / .3); box-shadow: none; }
 
-.console-glass-frame .agent-pay-textarea,
-.console-glass-frame .payload-field textarea {
+[data-theme="dark"] .console-glass-frame .agent-pay-textarea,
+[data-theme="dark"] .console-glass-frame .payload-field textarea {
   background: hsla(213 44% 11% / .7);
   border-color: hsla(210 40% 92% / .14);
   color: var(--box-ink);
 }
-.console-glass-frame .agent-pay-textarea:focus { border-color: hsla(210 40% 92% / .3); box-shadow: none; }
+[data-theme="dark"] .console-glass-frame .agent-pay-textarea:focus { border-color: hsla(210 40% 92% / .3); box-shadow: none; }
 
 /* Error alert */
-.console-glass-frame .error-banner {
+[data-theme="dark"] .console-glass-frame .error-banner {
   background: color-mix(in oklab, var(--aspect-danger) 10%, hsla(213 46% 7% / .9));
   border-color: color-mix(in oklab, var(--aspect-danger) 30%, transparent);
   color: var(--aspect-danger);
 }
 
 /* Proof verdict states */
-.console-glass-frame .proof-verdict {
+[data-theme="dark"] .console-glass-frame .proof-verdict {
   background: hsla(213 46% 7% / .82);
   border-color: var(--box-line);
 }
-.console-glass-frame .proof-verdict.is-clear {
+[data-theme="dark"] .console-glass-frame .proof-verdict.is-clear {
   border-color: color-mix(in oklab, var(--aspect-clear) 30%, var(--box-line));
   background: color-mix(in oklab, var(--aspect-clear) 5%, hsla(213 46% 7% / .82));
 }
-.console-glass-frame .proof-verdict.is-danger {
+[data-theme="dark"] .console-glass-frame .proof-verdict.is-danger {
   border-color: color-mix(in oklab, var(--aspect-danger) 30%, var(--box-line));
   background: color-mix(in oklab, var(--aspect-danger) 5%, hsla(213 46% 7% / .82));
 }
-.console-glass-frame .proof-verdict-note { color: var(--box-ink-2); }
-.console-glass-frame .proof-anchors dt { color: var(--box-brass); }
-.console-glass-frame .proof-anchors dd code { color: var(--box-ink-2); }
+[data-theme="dark"] .console-glass-frame .proof-verdict-note { color: var(--box-ink-2); }
+[data-theme="dark"] .console-glass-frame .proof-anchors dt { color: var(--box-brass); }
+[data-theme="dark"] .console-glass-frame .proof-anchors dd code { color: var(--box-ink-2); }
 
 /* Payment readiness states */
-.console-glass-frame .payment-readiness.ready,
-.console-glass-frame .payment-readiness.pass {
+[data-theme="dark"] .console-glass-frame .payment-readiness.ready,
+[data-theme="dark"] .console-glass-frame .payment-readiness.pass {
   --readiness-aspect: var(--aspect-clear);
   background: color-mix(in oklab, var(--aspect-clear) 5%, hsla(213 46% 7% / .82));
 }
-.console-glass-frame .payment-readiness.configuration_required,
-.console-glass-frame .payment-readiness.missing,
-.console-glass-frame .payment-readiness.payment_required {
+[data-theme="dark"] .console-glass-frame .payment-readiness.configuration_required,
+[data-theme="dark"] .console-glass-frame .payment-readiness.missing,
+[data-theme="dark"] .console-glass-frame .payment-readiness.payment_required {
   --readiness-aspect: var(--aspect-caution);
   background: color-mix(in oklab, var(--aspect-caution) 5%, hsla(213 46% 7% / .82));
 }
-.console-glass-frame .payment-readiness.facilitator_unavailable,
-.console-glass-frame .payment-readiness.facilitator_unsupported,
-.console-glass-frame .payment-readiness.rpc_unavailable,
-.console-glass-frame .payment-readiness.error,
-.console-glass-frame .payment-readiness.fail {
+[data-theme="dark"] .console-glass-frame .payment-readiness.facilitator_unavailable,
+[data-theme="dark"] .console-glass-frame .payment-readiness.facilitator_unsupported,
+[data-theme="dark"] .console-glass-frame .payment-readiness.rpc_unavailable,
+[data-theme="dark"] .console-glass-frame .payment-readiness.error,
+[data-theme="dark"] .console-glass-frame .payment-readiness.fail {
   --readiness-aspect: var(--aspect-danger);
   background: color-mix(in oklab, var(--aspect-danger) 5%, hsla(213 46% 7% / .82));
 }
 
 /* Decision receipt */
-.console-glass-frame .decision-receipt {
+[data-theme="dark"] .console-glass-frame .decision-receipt {
   border-color: color-mix(in oklab, var(--aspect-clear) 25%, var(--box-line));
   background: color-mix(in oklab, var(--aspect-clear) 5%, hsla(213 46% 7% / .82));
 }
-.console-glass-frame .receipt-heading { color: var(--aspect-clear); }
+[data-theme="dark"] .console-glass-frame .receipt-heading { color: var(--aspect-clear); }
 
 /* Proof position */
-.console-glass-frame .proof-position { color: var(--box-brass); }
+[data-theme="dark"] .console-glass-frame .proof-position { color: var(--box-brass); }
 
 /* Empty state */
-.console-glass-frame .empty-state-copy .strip-label { color: var(--box-brass); }
-.console-glass-frame .empty-state-copy strong { color: var(--box-ink); }
-.console-glass-frame .empty-state-skeleton .agent-pay-skeleton {
+[data-theme="dark"] .console-glass-frame .empty-state-copy .strip-label { color: var(--box-brass); }
+[data-theme="dark"] .console-glass-frame .empty-state-copy strong { color: var(--box-ink); }
+[data-theme="dark"] .console-glass-frame .empty-state-skeleton .agent-pay-skeleton {
   background: color-mix(in oklab, var(--box-ink) 8%, transparent);
 }
 
-/* Payment sheet drawer (shadcn Sheet) */
-.console-glass-frame .payment-sheet-drawer,
+/* Payment sheet drawer (shadcn Sheet) — opaque: it floats over live console
+   content, so any alpha reads as broken bleed-through. Portaled to <body>,
+   so it themes via the html-level .dark class, not the app scope. */
 .agent-pay-sheet-content.payment-sheet-drawer {
-  background: hsla(213 42% 9% / .95);
-  border-color: var(--box-line);
-  color: var(--box-ink);
+  background: var(--surface);
+  border-color: var(--line-strong);
+  color: var(--ink);
 }
-.console-glass-frame .payment-sheet-copy h2 { color: var(--aspect-caution); }
+[data-theme="dark"] .console-glass-frame .payment-sheet-copy h2 { color: var(--aspect-caution); }
 
 /* App header inside glass frame */
-.console-glass-frame .app-header {
+[data-theme="dark"] .console-glass-frame .app-header {
   width: 100%;
   margin: 0 auto;
   padding: clamp(14px, 2vh, 20px) clamp(20px, 3vw, 36px);
@@ -3062,76 +3596,75 @@ code {
   background: transparent;
   animation: none;
 }
-.console-glass-frame .brand-name { color: var(--box-ink); }
-.console-glass-frame .brand-sub { color: var(--box-ink-2); }
+[data-theme="dark"] .console-glass-frame .brand-name { color: var(--box-ink); }
+[data-theme="dark"] .console-glass-frame .brand-sub { color: var(--box-ink-2); }
 
 /* Connection panel — remove green gradient, use dark glass */
-.console-glass-frame .agent-connection-panel {
+[data-theme="dark"] .console-glass-frame .agent-connection-panel {
   background: hsla(213 46% 7% / .82);
   border-color: var(--box-line);
   box-shadow: inset 0 1px 0 hsla(210 40% 92% / .07), 0 24px 64px -16px hsla(213 60% 4% / .65);
   color: var(--box-ink);
 }
-.console-glass-frame .agent-connection-panel.connected {
+[data-theme="dark"] .console-glass-frame .agent-connection-panel.connected {
   background: hsla(213 46% 7% / .82);
   border-color: var(--box-line);
 }
-.console-glass-frame .connection-copy h2,
-.console-glass-frame .connection-copy .muted { color: var(--box-ink); }
-.console-glass-frame .connection-copy .muted { color: var(--box-ink-2); }
-.console-glass-frame .connection-flag { color: var(--box-brass); gap: .35rem; display: inline-flex; align-items: center; }
-.console-glass-frame .agent-connection-panel.connected .connection-flag { color: var(--aspect-clear); }
+[data-theme="dark"] .console-glass-frame .connection-copy h2,
+[data-theme="dark"] .console-glass-frame .connection-copy .muted { color: var(--box-ink); }
+[data-theme="dark"] .console-glass-frame .connection-copy .muted { color: var(--box-ink-2); }
+[data-theme="dark"] .console-glass-frame .connection-flag { color: var(--box-brass); gap: .35rem; display: inline-flex; align-items: center; }
+[data-theme="dark"] .console-glass-frame .agent-connection-panel.connected .connection-flag { color: var(--aspect-clear); }
 
 /* Secondary buttons inside glass frame */
-.console-glass-frame .secondary-action {
+[data-theme="dark"] .console-glass-frame .secondary-action {
   background: hsla(213 38% 16% / .9);
   border-color: var(--box-line);
   color: var(--box-ink);
 }
-.console-glass-frame .secondary-action:hover {
+[data-theme="dark"] .console-glass-frame .secondary-action:hover {
   background: hsla(213 38% 20% / .9);
   border-color: hsla(210 40% 92% / .2);
   color: var(--box-ink);
 }
 
 /* Icon action buttons */
-.console-glass-frame .icon-action {
+[data-theme="dark"] .console-glass-frame .icon-action {
   background: hsla(213 38% 16% / .9);
   border-color: var(--box-line);
   color: var(--box-ink);
 }
-.console-glass-frame .icon-action:hover {
+[data-theme="dark"] .console-glass-frame .icon-action:hover {
   background: hsla(213 38% 20% / .9);
   border-color: hsla(210 40% 92% / .2);
 }
 
 /* Source row inside source list */
-.console-glass-frame .source-list .agent-pay-table {
+[data-theme="dark"] .console-glass-frame .source-list .agent-pay-table {
   background: hsla(213 38% 11% / .7);
   border-color: var(--box-line);
 }
-.console-glass-frame .source-row {
+[data-theme="dark"] .console-glass-frame .source-row {
   background: hsla(213 38% 11% / .7);
 }
-.console-glass-frame .source-row strong { color: var(--box-ink); }
-.console-glass-frame .source-row span { color: var(--box-ink-2); }
+[data-theme="dark"] .console-glass-frame .source-row strong { color: var(--box-ink); }
+[data-theme="dark"] .console-glass-frame .source-row span { color: var(--box-ink-2); }
 
 /* Proof row rail */
-.console-glass-frame .proof-row {
+[data-theme="dark"] .console-glass-frame .proof-row {
   background: hsla(213 38% 11% / .7);
   border-color: var(--box-line);
 }
-.console-glass-frame .proof-row::before { background: var(--box-line); }
-.console-glass-frame .proof-row::after {
-  border-color: var(--box-brass);
-  background: hsla(213 38% 11% / .9);
+[data-theme="dark"] .console-glass-frame .proof-row::before { background: var(--box-line); }
+[data-theme="dark"] .console-glass-frame .proof-row::after {
+  background: var(--box-brass);
 }
 
 /* Agent connection error */
-.console-glass-frame .agent-connection-error { color: var(--aspect-danger); }
+[data-theme="dark"] .console-glass-frame .agent-connection-error { color: var(--aspect-danger); }
 
 /* Workspace console layout adjustments inside glass frame */
-.console-glass-frame .agent-pay-console {
+[data-theme="dark"] .console-glass-frame .agent-pay-console {
   width: 100%;
   padding: clamp(8px, 2vw, 20px) clamp(20px, 3vw, 36px) clamp(24px, 4vh, 48px);
 }
@@ -3163,7 +3696,7 @@ code {
   .stage-header { align-items: flex-start; flex-direction: column; gap: 5px; padding: 14px 16px 0; }
   .stage-header strong { white-space: normal; }
 
-  .agent-pay-console { width: min(100vw - 24px, 720px); }
+  .agent-pay-console { width: min(100%, 720px); }
   .console-header { align-items: stretch; flex-direction: column; }
   .console-actions { justify-content: space-between; }
   .console-actions .primary-action { flex: 1; }
@@ -3481,13 +4014,39 @@ code {
    own hero-cin* rules are untouched.
    ============================================================ */
 
-.page-fog{position:relative;min-height:100dvh;overflow:hidden;background:hsl(213 40% 5%);isolation:isolate}
-.page-fog::before{content:"";position:absolute;inset:0;z-index:-2;background:radial-gradient(120% 90% at 72% 18%, hsl(213 38% 12%) 0%, hsl(213 40% 7%) 48%, hsl(213 42% 5%) 100%);pointer-events:none}
+/* Theme-aware: dark keeps the dusk stage, light stays on the page bg. */
+.page-fog{position:relative;min-height:100dvh;overflow:hidden;background:var(--bg);isolation:isolate}
+[data-theme="dark"].page-fog,.dark .page-fog{background:hsl(213 40% 5%)}
+[data-theme="dark"].page-fog::before,.dark .page-fog::before{content:"";position:absolute;inset:0;z-index:-2;background:radial-gradient(120% 90% at 72% 18%, hsl(213 38% 12%) 0%, hsl(213 40% 7%) 48%, hsl(213 42% 5%) 100%);pointer-events:none}
 .page-fog::after{content:"";position:absolute;inset:-10% -20%;z-index:-1;pointer-events:none}
 
-.glass-frame{position:relative;margin:clamp(12px,2vw,24px);border:1px solid hsla(210 40% 92% / .1);border-radius:clamp(16px,2.5vw,28px);background:hsla(213 44% 8% / .55);backdrop-filter:blur(20px) saturate(1.15);-webkit-backdrop-filter:blur(20px) saturate(1.15);box-shadow:inset 0 1px 0 hsla(210 40% 92% / .08),0 40px 100px -32px hsla(213 60% 3% / .7)}
+/* Light frame is a plain card; the glass treatment belongs to the dark stage. */
+.glass-frame{position:relative;margin:clamp(12px,2vw,24px);border:1px solid var(--line);border-radius:12px;background:var(--surface);box-shadow:var(--shadow-m)}
+[data-theme="dark"] .glass-frame,.dark .glass-frame{border-color:hsla(210 40% 92% / .1);background:hsla(213 44% 8% / .55);backdrop-filter:blur(20px) saturate(1.15);-webkit-backdrop-filter:blur(20px) saturate(1.15);box-shadow:inset 0 1px 0 hsla(210 40% 92% / .08),0 40px 100px -32px hsla(213 60% 3% / .7)}
 
-.glass-card{border:1px solid var(--box-line);border-radius:clamp(12px,1.6vw,20px);background:hsla(213 46% 7% / .82);backdrop-filter:blur(24px) saturate(1.1);-webkit-backdrop-filter:blur(24px) saturate(1.1);box-shadow:inset 0 1px 0 hsla(210 40% 92% / .07),0 24px 64px -16px hsla(213 60% 4% / .65),0 4px 16px -4px hsla(213 60% 4% / .45);color:var(--box-ink)}
+.glass-card{border:1px solid var(--box-line);border-radius:10px;background:hsla(213 46% 7% / .82);backdrop-filter:blur(24px) saturate(1.1);-webkit-backdrop-filter:blur(24px) saturate(1.1);box-shadow:inset 0 1px 0 hsla(210 40% 92% / .07),0 24px 64px -16px hsla(213 60% 4% / .65),0 4px 16px -4px hsla(213 60% 4% / .45);color:var(--box-ink)}
+/* The VerdictCard is the primary result surface on the theme-aware /check and
+   /counterparty pages. On the light theme, relight the glass card and remap its
+   box-/aspect- tokens to readable light values so it belongs to the page instead
+   of slamming in a near-black panel. (Scoped to .verdict-card — the console's
+   own always-dark chrome uses these tokens and is untouched.) */
+.agent-pay-app[data-theme="light"] .verdict-card.glass-card{
+  background:var(--glass-bg-strong);border-color:var(--glass-border);
+  box-shadow:var(--glass-shadow);
+  backdrop-filter:blur(var(--glass-blur)) saturate(1.4);
+  -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(1.4);
+}
+.agent-pay-app[data-theme="light"] .verdict-card{
+  --box-ink:var(--ink);--box-ink-2:var(--ink-2);--box-line:var(--line);--box-brass:var(--brass);
+  --aspect-clear:var(--aspect-clear-ink);
+  --aspect-caution:var(--aspect-caution-ink);
+  --aspect-danger:var(--aspect-danger-ink);
+  color:var(--ink);
+}
+/* The share pill is near-white for the dark card; on light it needs an ink fill. */
+.agent-pay-app[data-theme="light"] .verdict-card .btn-pill-primary{
+  background:var(--ink);color:var(--surface);
+}
 
 .glass-input{width:100%;font-family:var(--font-mono);font-size:.9rem;color:var(--box-ink);background:hsla(213 44% 11% / .7);border:1px solid hsla(210 40% 92% / .14);border-radius:var(--radius-m);padding:.7rem .85rem;transition:border-color 180ms var(--ease)}
 .glass-input::placeholder{color:hsla(208 36% 70% / .4)}
@@ -3505,12 +4064,15 @@ code {
 .aspect-chip--danger{--chip-aspect:var(--aspect-danger)}
 .aspect-chip--neutral{--chip-aspect:var(--box-brass)}
 
+/* The console state badge follows the page theme; stage chips stay fixed-dark. */
+.agent-pay-badge.aspect-chip{color:var(--ink)}
+.agent-pay-badge.aspect-chip--neutral{--chip-aspect:var(--ink-3)}
+.agent-pay-badge.aspect-chip--caution{--chip-aspect:var(--caution)}
+.agent-pay-badge.aspect-chip--danger{--chip-aspect:var(--danger)}
+.agent-pay-badge.aspect-chip--clear{--chip-aspect:var(--clear)}
+
 .lamp-lens{--lamp-size:64px;width:var(--lamp-size);height:var(--lamp-size);border-radius:50%;background:var(--lamp-aspect);flex:none}
 
-.aspect-dot{width:7px;height:7px;border-radius:50%;display:inline-block}
-.aspect-dot--clear{background:var(--aspect-clear)}
-.aspect-dot--caution{background:var(--aspect-caution)}
-.aspect-dot--danger{background:var(--aspect-danger)}
 
 .mono-label{font-family:var(--font-mono);font-size:.64rem;font-weight:700;text-transform:uppercase;letter-spacing:.16em;color:var(--box-brass)}
 
@@ -3824,6 +4386,7 @@ code {
 
 /* The big aspect word — flat color from --vc-aspect, NO gradient */
 .verdict-aspect-word {
+  margin: 0;
   font-size: clamp(2.4rem, 6vw, 3.4rem);
   font-weight: 800;
   letter-spacing: -0.03em;
@@ -3971,6 +4534,118 @@ code {
   word-break: break-all;
 }
 
+.verdict-receipt {
+  display: grid;
+  gap: 10px;
+  padding-block: 12px;
+  border-block: 1px solid var(--box-line);
+}
+
+.verdict-receipt-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.verdict-receipt-head h3 {
+  margin: 2px 0 0;
+  color: var(--box-ink);
+  font-size: 0.98rem;
+  font-weight: 720;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+.verdict-receipt-kicker {
+  color: var(--box-ink-2);
+}
+
+.verdict-receipt-copy {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid color-mix(in oklab, var(--vc-aspect) 42%, var(--box-line));
+  border-radius: var(--radius-m);
+  background: color-mix(in oklab, var(--vc-aspect) 10%, transparent);
+  color: var(--box-ink);
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  font-weight: 680;
+  transition: transform 160ms var(--ease), background-color 160ms var(--ease);
+}
+
+.verdict-receipt-copy:hover {
+  transform: translateY(-1px);
+  background: color-mix(in oklab, var(--vc-aspect) 16%, transparent);
+}
+
+.verdict-receipt-copy:active {
+  transform: translateY(0);
+}
+
+.verdict-receipt-rows {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.verdict-receipt-row {
+  display: grid;
+  grid-template-columns: minmax(98px, 0.42fr) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 10px;
+  padding-block: 7px;
+  border-top: 1px solid color-mix(in oklab, var(--box-line) 74%, transparent);
+}
+
+.verdict-receipt-row:first-child {
+  border-top: 0;
+}
+
+.verdict-receipt-row dt {
+  color: var(--box-ink-2);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 720;
+  letter-spacing: 0.08em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.verdict-receipt-row dd {
+  margin: 0;
+  min-width: 0;
+}
+
+.verdict-receipt-row a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--box-ink);
+}
+
+.verdict-receipt-row a:hover {
+  color: var(--vc-aspect);
+}
+
+.verdict-receipt-row code {
+  color: inherit;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+}
+
+.verdict-receipt-error {
+  margin: 0;
+  color: var(--aspect-danger);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
 /* Share */
 .verdict-share {
   display: flex;
@@ -4004,6 +4679,7 @@ code {
 .verdict-flags,
 .verdict-not-checked,
 .verdict-proof,
+.verdict-receipt,
 .verdict-share,
 .verdict-footer {
   animation: verdict-body-in 300ms ease-out both;
@@ -4013,8 +4689,9 @@ code {
 .verdict-flags     { animation-delay: 160ms; }
 .verdict-not-checked { animation-delay: 200ms; }
 .verdict-proof     { animation-delay: 240ms; }
-.verdict-share     { animation-delay: 280ms; }
-.verdict-footer    { animation-delay: 300ms; }
+.verdict-receipt   { animation-delay: 280ms; }
+.verdict-share     { animation-delay: 320ms; }
+.verdict-footer    { animation-delay: 340ms; }
 
 @keyframes verdict-body-in {
   from { opacity: 0; transform: translateY(8px); }
@@ -4026,52 +4703,18 @@ code {
   .verdict-flags,
   .verdict-not-checked,
   .verdict-proof,
+  .verdict-receipt,
   .verdict-share,
   .verdict-footer {
     animation: none;
   }
 }
 
-/* === Feed === */
-
-.feed-glass-frame {
-  display: flex;
-  flex-direction: column;
-  min-height: calc(100dvh - clamp(24px, 4vw, 48px));
-}
-
-/* Nav bar inside the feed glass frame */
-.feed-frame-nav {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  padding: clamp(14px, 2vh, 22px) clamp(20px, 3vw, 40px);
-  border-bottom: 1px solid hsla(210, 40%, 92%, 0.07);
-}
-
-.feed-frame-links {
-  border-color: hsla(210, 40%, 92%, 0.12);
-  background: hsla(213, 44%, 10%, 0.6);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-}
-
-.feed-frame-links a {
-  display: inline-flex;
-  align-items: center;
-  min-height: 32px;
-  padding: 0 13px;
-  border-radius: var(--radius-pill);
-  font-size: 0.82rem;
-  font-weight: 650;
-  letter-spacing: 0.01em;
-  transition: color 200ms var(--ease), background 200ms var(--ease);
-}
-
-.feed-frame-links a:hover {
-  color: hsl(206, 34%, 96%);
-  background: hsla(210, 40%, 92%, 0.08);
+@media (max-width: 460px) {
+  .verdict-receipt-row {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -4454,131 +5097,16 @@ code {
   }
 }
 
-/* Focal content area */
-.feed-focal {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  padding: clamp(32px, 5vh, 72px) clamp(20px, 4vw, 56px);
-  max-width: 720px;
-  width: 100%;
-  margin: 0 auto;
-  gap: 8px;
-}
-
-/* Section heading */
-.feed-section-title {
-  font-size: clamp(1.9rem, 3.6vw, 2.7rem);
-  font-weight: 800;
-  color: hsl(206 34% 96%);
-  margin: 0 0 1.5rem;
-  letter-spacing: -0.025em;
-  line-height: 1.1;
-}
-
-/* List container — glass-card as the list shell */
-.feed-list-card {
-  width: 100%;
-  padding: 0;
-  overflow: hidden;
-}
-
-/* Centered empty/loading/error state */
-.feed-empty-card {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: clamp(24px, 4vh, 48px) clamp(20px, 3vw, 32px);
-  text-align: center;
-}
-
-/* Bare list reset */
-.feed-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-/* Each row */
-.feed-row {
-  border-bottom: 1px solid hsla(210, 40%, 92%, 0.07);
-  animation: feedRowIn 320ms cubic-bezier(0.22, 1, 0.36, 1) calc(var(--row-idx, 0) * 60ms) both;
-}
-
-.feed-row:last-child {
-  border-bottom: none;
-}
-
-/* The tappable anchor */
-.feed-row-link {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: clamp(12px, 2vh, 18px) clamp(16px, 2.5vw, 28px);
-  text-decoration: none;
-  transition: background 160ms var(--ease);
-}
-
-.feed-row-link:hover {
-  background: hsla(210, 40%, 92%, 0.05);
-}
-
-/* Hash display */
-.feed-row-hash {
-  flex: 1;
-  font-size: 0.82rem;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Verdict label */
-.feed-row-verdict {
-  font-size: 0.82rem;
-  font-weight: 650;
-  color: var(--box-ink);
-  letter-spacing: 0.01em;
-  flex-shrink: 0;
-}
-
-/* Actions cluster (icons, right side) */
-.feed-row-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-left: auto;
-  flex-shrink: 0;
-}
-
-.feed-row-ext {
-  color: var(--box-ink-2);
-  opacity: 0.6;
-}
-
-/* Stagger-in animation */
-@keyframes feedRowIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: none; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .feed-row {
-    animation: none !important;
-  }
-}
-
 /* ===== HARD OVERRIDE: zero glowing dots / ambient lights (user directive) ===== */
 .hero-cin-lamp-glow, .hero-swap-token-glow { display: none !important; }
 .page-fog::after, .agent-pay-landing::before, .agent-pay-landing::after { background: none !important; box-shadow: none !important; }
 .hero-cin-backdrop, .hero-cin-fog-a, .hero-cin-fog-b, .hero-cin-scene-wrap { background: hsl(213 40% 6%) !important; box-shadow: none !important; }
-.lamp-lens, .aspect-dot, .hero-cin-dot, .check-progress-dot, .sig-lamp, .sig-lamp-halo, .hero-signal i, .proof-layer::before, .aspect-chip::before, .hero-cin-status-dot { box-shadow: none !important; filter: none !important; }
+.lamp-lens, .hero-cin-dot, .check-progress-dot, .sig-lamp, .sig-lamp-halo, .hero-signal i, .proof-layer::before, .aspect-chip::before, .hero-cin-status-dot { box-shadow: none !important; filter: none !important; }
 .lamp-lens, .aspect-chip, .check-progress-dot, .hero-signal i, .sig-lamp, .sig-lamp-halo { animation: none !important; }
 [class*="sheet"] { background-image: none !important; }
 
 /* ===== NO DOTS: remove every colored indicator dot + lamp disc (user directive, final) ===== */
-[class*="-dot"], .aspect-dot,
+[class*="-dot"],
 .aspect-chip::before, .proof-layer::before, .section-kicker::before,
 .hero-signal i, .hero-signal > i, .hero-cin-dot,
 .lamp-lens, .check-progress-dots, .check-progress-dot,
@@ -4587,56 +5115,11 @@ code {
 .aspect-chip { gap: 0 !important; }
 .hero-signal { padding-left: 13px !important; }
 
-/* ===== FLAT BG: no gradient page background (user directive) ===== */
-.page-fog, .page-fog::before { background: hsl(213 40% 6%) !important; }
-.agent-pay-landing { background: hsl(213 40% 6%) !important; }
+/* ===== FLAT BG: no gradient page background (user directive; dark stage only) ===== */
+[data-theme="dark"].page-fog, [data-theme="dark"].page-fog::before,
+.dark .page-fog, .dark .page-fog::before { background: hsl(213 40% 6%) !important; }
+.dark .agent-pay-landing { background: hsl(213 40% 6%) !important; }
 .hero-cin-scene-wrap, .hero-cin-swap-wrap { background: transparent !important; }
-
-/* ---- Hero verdict reveal (cinematic focal subject) ----------------- */
-/* The WebGL VerdictReveal is the hero's focal subject, driven by the token list.
-   Position it as a contained panel in the upper-right void so the verdict word
-   reads; the shader's own vignette softens its edges into the backdrop. */
-.hero-cin-scene-wrap--reveal {
-  top: 7%;
-  right: 3%;
-  left: auto;
-  bottom: auto;
-  width: min(760px, 56%);
-  height: 52%;
-  -webkit-mask-image: none;
-  mask-image: none;
-  pointer-events: none;
-}
-
-.hero-cin-scene-wrap--reveal .hero-verdict-reveal {
-  width: 100%;
-  height: 100%;
-  /* a faint screen frame so the reveal reads as a contained panel */
-  border: 1px solid color-mix(in oklab, var(--vr-tint) 30%, var(--box-line));
-  border-radius: clamp(12px, 1.4vw, 18px);
-  overflow: hidden;
-  box-shadow: 0 24px 70px -28px color-mix(in oklab, var(--vr-tint) 45%, transparent);
-}
-
-/* The verdict word carries the hero — make it larger and unmistakable. */
-.hero-verdict-reveal .vr-word {
-  font-size: clamp(3rem, 6vw, 5.4rem);
-}
-
-.hero-verdict-reveal .vr-scanning {
-  top: 18px;
-  left: 20px;
-}
-
-@media (max-width: 1067px) {
-  .hero-cin-scene-wrap--reveal {
-    top: 6%;
-    right: 4%;
-    width: 92%;
-    height: 36%;
-    opacity: 0.85;
-  }
-}
 
 /* ---- Hero token list (discoverability card) ----------------------- */
 .hero-cin-tokencard {
@@ -4791,4 +5274,24 @@ code {
 /* Token list is the foreground card now — un-hide it (keeps the base glass look). */
 .hero-cin-card.hero-cin-tokencard {
   display: block !important;
+}
+
+/* ===== Thin, theme-aware scrollbars (default OS bars read unfinished on the
+   dark console/feed) ===== */
+* { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: color-mix(in oklab, var(--line-strong) 80%, transparent);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover { background: var(--line-strong); background-clip: padding-box; }
+[data-theme="dark"] *, .dark * { scrollbar-color: var(--box-line) transparent; }
+
+/* Screen-reader-only landmark helper. */
+.agentpay-sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
