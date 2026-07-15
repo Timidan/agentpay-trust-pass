@@ -251,6 +251,7 @@ function evidence(overrides: Partial<PaymentAssetEvidence> = {}): PaymentAssetEv
     supplyMutable: false,
     holderConcentrationPct: 20,
     contractAgeBlocks: 10000,
+    apiVersion: "2.0.0",
     observedBlockHash: "7".repeat(64),
     observedBlockHeight: 8_000_000,
     observedAt: NOW,

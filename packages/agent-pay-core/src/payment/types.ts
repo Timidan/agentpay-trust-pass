@@ -138,6 +138,7 @@ export type PaymentAssetEvidence = {
   supplyMutable: boolean | null;
   holderConcentrationPct: number | null;
   contractAgeBlocks: number | null;
+  apiVersion: string | null;
   observedBlockHash: string | null;
   observedBlockHeight: number | null;
   observedAt: string;
