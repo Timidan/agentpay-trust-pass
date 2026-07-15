@@ -29,12 +29,22 @@ export type PaymentEvaluationInput = {
 };
 
 export function operatorPolicyHash(policy: OperatorPolicy): string {
-  const { signature: _signature, policyHash: _policyHash, ...content } = policy;
+  const {
+    signature: _signature,
+    signatureMessage: _signatureMessage,
+    policyHash: _policyHash,
+    ...content
+  } = policy;
   return artifactHash(content);
 }
 
 export function providerDecisionHash(decision: ProviderDecision): string {
-  const { signature: _signature, decisionHash: _decisionHash, ...content } = decision;
+  const {
+    signature: _signature,
+    signatureMessage: _signatureMessage,
+    decisionHash: _decisionHash,
+    ...content
+  } = decision;
   return artifactHash(content);
 }
 

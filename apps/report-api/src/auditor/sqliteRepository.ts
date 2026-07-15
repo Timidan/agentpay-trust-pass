@@ -13,11 +13,14 @@ import type {
   ReservationRecord,
   ReservationResult,
   ReservationStatus,
+  ObservationReceiptResult,
+  ReceiptShareRecord,
   ResponseObservation,
+  SettlementApplyResult,
   StoredPaymentCheck
 } from "./repository.js";
 
-const CURRENT_SCHEMA_VERSION = 3;
+const CURRENT_SCHEMA_VERSION = 5;
 const DECIMAL_INTEGER = /^(0|[1-9][0-9]*)$/;
 const UTC_DAY = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
 
@@ -494,6 +497,119 @@ class SqliteRepository implements SqliteAuditorRepository {
     return row ? jsonColumn<SettlementProof>(row) : null;
   }
 
+  applySettlement(
+    check: StoredPaymentCheck,
+    settlement: SettlementProof,
+    reservationStatus: "consumed" | "quarantined" | null
+  ): SettlementApplyResult {
+    if (check.id !== settlement.checkId) {
+      throw new TypeError("Settlement check id must match the updated check");
+    }
+    const transactionHash = normalizeHash(settlement.transactionHash, "settlement.transactionHash");
+    const observedAt = isoTimestamp(settlement.observedAt, "settlement.observedAt");
+    const proofHash = normalizeHash(settlement.proofHash, "settlement.proofHash");
+
+    this.database.exec("BEGIN IMMEDIATE");
+    try {
+      const checkRow = this.maybeRow("SELECT operator_key, created_at, json FROM checks WHERE id = ?", check.id);
+      if (!checkRow) return this.rollbackResult({ ok: false, reason: "check_not_found" });
+      const storedCheck = jsonColumn<StoredPaymentCheck>(checkRow);
+      if (
+        stringColumn(checkRow, "operator_key") !== normalizeKey(check.operatorPublicKey) ||
+        stringColumn(checkRow, "created_at") !== isoTimestamp(check.createdAt, "check.createdAt") ||
+        storedCheck.idempotencyKey !== check.idempotencyKey
+      ) {
+        return this.rollbackResult({ ok: false, reason: "check_conflict" });
+      }
+
+      const existingRow = this.maybeRow("SELECT json FROM settlements WHERE check_id = ?", check.id);
+      const existing = existingRow ? jsonColumn<SettlementProof>(existingRow) : null;
+      if (existing && existing.transactionHash !== transactionHash) {
+        return this.rollbackResult({ ok: false, reason: "transaction_conflict" });
+      }
+      if (existing && (existing.verdict === "match" || existing.verdict === "mismatch")) {
+        this.database.exec("ROLLBACK");
+        return { ok: true, created: false, settlement: existing };
+      }
+      if (!["reserved", "settlement_pending", "settlement_unverifiable"].includes(storedCheck.status)) {
+        return this.rollbackResult({ ok: false, reason: "terminal_settlement" });
+      }
+
+      const reservation = this.maybeRow("SELECT status FROM reservations WHERE check_id = ?", check.id);
+      if (!reservation) return this.rollbackResult({ ok: false, reason: "reservation_conflict" });
+      const currentReservationStatus = stringColumn(reservation, "status") as ReservationStatus;
+      if (reservationStatus !== null) {
+        const allowed = reservationStatus === "consumed"
+          ? ["active", "quarantined", "expired"]
+          : ["active", "expired"];
+        if (currentReservationStatus !== reservationStatus && !allowed.includes(currentReservationStatus)) {
+          return this.rollbackResult({ ok: false, reason: "reservation_conflict" });
+        }
+        if (currentReservationStatus !== reservationStatus) {
+          this.database.prepare(
+            "UPDATE reservations SET status = ?, updated_at = ? WHERE check_id = ?"
+          ).run(reservationStatus, observedAt, check.id);
+        }
+      } else if (!["active", "expired"].includes(currentReservationStatus)) {
+        return this.rollbackResult({ ok: false, reason: "reservation_conflict" });
+      }
+
+      const conflictingTransaction = this.maybeRow(
+        "SELECT check_id FROM settlements WHERE transaction_hash = ? AND check_id <> ?",
+        transactionHash,
+        check.id
+      );
+      if (conflictingTransaction) {
+        return this.rollbackResult({ ok: false, reason: "transaction_conflict" });
+      }
+
+      this.database.prepare(
+        `INSERT OR IGNORE INTO settlement_attempts
+          (check_id, transaction_hash, proof_hash, verdict, observed_at, json)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      ).run(
+        check.id,
+        transactionHash,
+        proofHash,
+        settlement.verdict,
+        observedAt,
+        canonicalJson(settlement)
+      );
+      if (existing) {
+        this.database.prepare(
+          `UPDATE settlements
+           SET verdict = ?, observed_at = ?, json = ?
+           WHERE check_id = ? AND transaction_hash = ?`
+        ).run(settlement.verdict, observedAt, canonicalJson(settlement), check.id, transactionHash);
+      } else {
+        this.database.prepare(
+          `INSERT INTO settlements
+            (check_id, transaction_hash, verdict, observed_at, json)
+           VALUES (?, ?, ?, ?, ?)`
+        ).run(check.id, transactionHash, settlement.verdict, observedAt, canonicalJson(settlement));
+      }
+      const updated = this.changed(
+        `UPDATE checks
+         SET verdict = ?, status = ?, updated_at = ?, json = ?
+         WHERE id = ? AND operator_key = ? AND created_at = ?`,
+        check.decision.verdict,
+        check.status,
+        isoTimestamp(check.updatedAt, "check.updatedAt"),
+        canonicalJson(check),
+        check.id,
+        normalizeKey(check.operatorPublicKey),
+        isoTimestamp(check.createdAt, "check.createdAt")
+      );
+      if (!updated) return this.rollbackResult({ ok: false, reason: "check_conflict" });
+
+      this.database.exec("COMMIT");
+      return { ok: true, created: !existing || existing.proofHash !== proofHash, settlement };
+    } catch (error) {
+      this.rollbackQuietly();
+      throw error;
+    }
+  }
+
   saveResponseObservation(observation: ResponseObservation): boolean {
     return this.insert(
       `INSERT OR IGNORE INTO response_observations
@@ -509,6 +625,66 @@ class SqliteRepository implements SqliteAuditorRepository {
   getResponseObservation(checkId: string): ResponseObservation | null {
     const row = this.maybeRow("SELECT json FROM response_observations WHERE check_id = ?", checkId);
     return row ? jsonColumn<ResponseObservation>(row) : null;
+  }
+
+  saveObservationAndReceipt(
+    observation: ResponseObservation,
+    receipt: PurchaseReceipt
+  ): ObservationReceiptResult {
+    if (observation.checkId !== receipt.checkId) {
+      throw new TypeError("Observation and receipt check ids must match");
+    }
+    this.database.exec("BEGIN IMMEDIATE");
+    try {
+      if (!this.maybeRow("SELECT 1 AS found FROM checks WHERE id = ?", observation.checkId)) {
+        return this.rollbackResult({ ok: false, reason: "check_not_found" });
+      }
+      const settlementRow = this.maybeRow("SELECT verdict FROM settlements WHERE check_id = ?", observation.checkId);
+      if (!settlementRow || stringColumn(settlementRow, "verdict") !== "match") {
+        return this.rollbackResult({ ok: false, reason: "settlement_required" });
+      }
+
+      const existingObservation = this.getResponseObservation(observation.checkId);
+      if (existingObservation && existingObservation.observationHash !== observation.observationHash) {
+        return this.rollbackResult({ ok: false, reason: "observation_conflict" });
+      }
+      const existingReceipt = this.getReceiptByCheckId(receipt.checkId);
+      if (!existingObservation && existingReceipt && existingReceipt.receiptHash !== receipt.receiptHash) {
+        return this.rollbackResult({ ok: false, reason: "receipt_conflict" });
+      }
+
+      if (!existingObservation) {
+        this.database.prepare(
+          `INSERT INTO response_observations
+            (check_id, observation_hash, observed_at, json)
+           VALUES (?, ?, ?, ?)`
+        ).run(
+          observation.checkId,
+          normalizeHash(observation.observationHash, "observation.observationHash"),
+          isoTimestamp(observation.observedAt, "observation.observedAt"),
+          canonicalJson(observation)
+        );
+      }
+      if (!existingReceipt) {
+        this.database.prepare(
+          `INSERT INTO receipts
+            (receipt_id, check_id, receipt_hash, created_at, json)
+           VALUES (?, ?, ?, ?, ?)`
+        ).run(
+          receipt.receiptId,
+          receipt.checkId,
+          normalizeHash(receipt.receiptHash, "receipt.receiptHash"),
+          isoTimestamp(receipt.createdAt, "receipt.createdAt"),
+          canonicalJson(receipt)
+        );
+      }
+
+      this.database.exec("COMMIT");
+      return { ok: true, created: !existingObservation && !existingReceipt };
+    } catch (error) {
+      this.rollbackQuietly();
+      throw error;
+    }
   }
 
   saveReceipt(receipt: PurchaseReceipt): boolean {
@@ -532,6 +708,47 @@ class SqliteRepository implements SqliteAuditorRepository {
   getReceiptByCheckId(checkId: string): PurchaseReceipt | null {
     const row = this.maybeRow("SELECT json FROM receipts WHERE check_id = ?", checkId);
     return row ? jsonColumn<PurchaseReceipt>(row) : null;
+  }
+
+  saveReceiptShare(share: ReceiptShareRecord): boolean {
+    return this.insert(
+      `INSERT OR IGNORE INTO receipt_shares
+        (id, receipt_id, operator_key, token_hash, created_at, expires_at, revoked_at, json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      share.id,
+      share.receiptId,
+      normalizeKey(share.operatorPublicKey),
+      normalizeHash(share.tokenHash, "receiptShare.tokenHash"),
+      isoTimestamp(share.createdAt, "receiptShare.createdAt"),
+      isoTimestamp(share.expiresAt, "receiptShare.expiresAt"),
+      nullableTimestamp(share.revokedAt, "receiptShare.revokedAt"),
+      canonicalJson(share)
+    );
+  }
+
+  getReceiptShare(id: string): ReceiptShareRecord | null {
+    const row = this.maybeRow("SELECT json, revoked_at FROM receipt_shares WHERE id = ?", id);
+    return row ? receiptShareFromRow(row) : null;
+  }
+
+  findReceiptShareByTokenHash(receiptId: string, tokenHash: string): ReceiptShareRecord | null {
+    const row = this.maybeRow(
+      "SELECT json, revoked_at FROM receipt_shares WHERE receipt_id = ? AND token_hash = ?",
+      receiptId,
+      normalizeHash(tokenHash, "receiptShare.tokenHash")
+    );
+    return row ? receiptShareFromRow(row) : null;
+  }
+
+  revokeReceiptShare(id: string, operatorPublicKey: string, revokedAt: string): boolean {
+    return this.changed(
+      `UPDATE receipt_shares
+       SET revoked_at = ?
+       WHERE id = ? AND operator_key = ? AND revoked_at IS NULL`,
+      isoTimestamp(revokedAt, "receiptShare.revokedAt"),
+      id,
+      normalizeKey(operatorPublicKey)
+    );
   }
 
   saveAnchorJob(job: AnchorJob): boolean {
@@ -709,6 +926,11 @@ class SqliteRepository implements SqliteAuditorRepository {
     } catch {
       // SQLite may already have rolled back the transaction.
     }
+  }
+
+  private rollbackResult<T>(result: T): T {
+    this.database.exec("ROLLBACK");
+    return result;
   }
 
   private expireReservations(now: string): void {
@@ -937,14 +1159,49 @@ const MIGRATION_3 = `
     ON authorization_reservations(operator_key, asset, payer_key, nonce);
 `;
 
+const MIGRATION_4 = `
+  CREATE TABLE settlement_attempts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    check_id TEXT NOT NULL REFERENCES checks(id) ON DELETE RESTRICT,
+    transaction_hash TEXT NOT NULL,
+    proof_hash TEXT NOT NULL UNIQUE,
+    verdict TEXT NOT NULL,
+    observed_at TEXT NOT NULL,
+    json TEXT NOT NULL
+  ) STRICT;
+  CREATE INDEX settlement_attempts_check_idx
+    ON settlement_attempts(check_id, observed_at DESC);
+`;
+
+const MIGRATION_5 = `
+  CREATE TABLE receipt_shares (
+    id TEXT PRIMARY KEY,
+    receipt_id TEXT NOT NULL REFERENCES receipts(receipt_id) ON DELETE RESTRICT,
+    operator_key TEXT NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    revoked_at TEXT,
+    json TEXT NOT NULL
+  ) STRICT;
+  CREATE INDEX receipt_shares_receipt_idx
+    ON receipt_shares(receipt_id, expires_at);
+`;
+
 const MIGRATIONS = [
   { version: 1, sql: MIGRATION_1 },
   { version: 2, sql: MIGRATION_2 },
-  { version: 3, sql: MIGRATION_3 }
+  { version: 3, sql: MIGRATION_3 },
+  { version: 4, sql: MIGRATION_4 },
+  { version: 5, sql: MIGRATION_5 }
 ] as const;
 
 function tokenFromRow(row: Row): AgentTokenRecord {
   return { ...jsonColumn<AgentTokenRecord>(row), revokedAt: nullableStringColumn(row, "revoked_at") };
+}
+
+function receiptShareFromRow(row: Row): ReceiptShareRecord {
+  return { ...jsonColumn<ReceiptShareRecord>(row), revokedAt: nullableStringColumn(row, "revoked_at") };
 }
 
 function prepareReservation(input: ReservationInput, now: string): PreparedReservation {

@@ -28,7 +28,7 @@ export type PaymentAssetEvidenceInput = {
   declaredMetadata: DeclaredPaymentMetadata;
 };
 
-export type CasperRpcClientOptions = {
+export type NodeRpcClientOptions = {
   rpcUrl: string;
   timeoutMs?: number;
   maxResponseBytes?: number;
@@ -36,7 +36,7 @@ export type CasperRpcClientOptions = {
   fetchImpl?: typeof fetch;
 };
 
-export class CasperRpcClient {
+export class NodeRpcClient {
   readonly rpcUrl: string;
   readonly timeoutMs: number;
   readonly maxResponseBytes: number;
@@ -45,7 +45,7 @@ export class CasperRpcClient {
   private readonly fetchImpl: typeof fetch;
   private nextRequestId = 1;
 
-  constructor(options: CasperRpcClientOptions) {
+  constructor(options: NodeRpcClientOptions) {
     const parsedUrl = new URL(options.rpcUrl);
     if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
       throw new TypeError("Casper RPC URL must use HTTP or HTTPS");
@@ -124,7 +124,7 @@ export class CasperRpcClient {
       if (typeof code !== "number" || typeof message !== "string") {
         throw new Error("Malformed Casper RPC response: invalid error object");
       }
-      throw new CasperRpcError(method, code, message, rpcError?.data);
+      throw new NodeRpcError(method, code, message, rpcError?.data);
     }
     if (!("result" in record)) {
       throw new Error("Malformed Casper RPC response: result is missing");
@@ -264,14 +264,14 @@ export class CasperRpcClient {
   }
 }
 
-export class CasperRpcError extends Error {
+export class NodeRpcError extends Error {
   readonly method: string;
   readonly code: number;
   readonly data: unknown;
 
   constructor(method: string, code: number, message: string, data: unknown) {
     super(`Casper RPC ${method} failed (${code}): ${message}`);
-    this.name = "CasperRpcError";
+    this.name = "NodeRpcError";
     this.method = method;
     this.code = code;
     this.data = data;

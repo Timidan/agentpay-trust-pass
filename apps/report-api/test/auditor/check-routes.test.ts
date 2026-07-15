@@ -297,6 +297,7 @@ function policy(dailyCap: string): OperatorPolicy {
     evidenceMaxAgeSeconds: 60,
     reviewOnInvestmentAdvisories: false,
     allowPinnedResourceSchemeMismatch: true,
+    signatureMessage: "AgentPay Operator Action v1\n{}",
     signature: `01${"4".repeat(128)}`,
     policyHash: ""
   };
@@ -318,6 +319,7 @@ function providerPin(): ProviderDecision {
     perCallCeiling: "1000",
     expiresAt: "2026-07-16T21:00:00.000Z",
     promptedByCheckId: "check-review",
+    signatureMessage: "AgentPay Operator Action v1\n{}",
     signature: `01${"5".repeat(128)}`,
     decisionHash: ""
   };

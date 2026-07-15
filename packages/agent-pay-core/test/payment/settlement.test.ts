@@ -54,6 +54,16 @@ describe("Casper x402 settlement decoding", () => {
     expect(decoded.transaction.signature).toMatch(/^01[0-9a-f]{128}$/);
   });
 
+  it("decodes the direct result returned by the node RPC client", () => {
+    const directResult = (fixture as RpcFixture).result;
+    const decoded = decodeCasperX402Transaction(directResult);
+
+    expect(decoded.ok).toBe(true);
+    if (!decoded.ok) return;
+    expect(decoded.transaction.transactionHash).toBe(TRANSACTION_HASH);
+    expect(decoded.finality).toBe("finalized");
+  });
+
   it("returns MATCH for the real Tab402 settlement", () => {
     const proof = compare(fixture);
 

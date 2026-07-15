@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import type { Router } from "express";
 import { AuditorAuth } from "./auth.js";
-import { CasperRpcClient } from "./casperRpc.js";
+import { NodeRpcClient } from "./casperRpc.js";
 import { createAuditorRouter } from "./routes.js";
 import { PaymentAuditService } from "./service.js";
 import { openSqliteRepository, type SqliteAuditorRepository } from "./sqliteRepository.js";
@@ -20,20 +20,25 @@ export type AuditorRuntime = {
   repository: SqliteAuditorRepository;
   auth: AuditorAuth;
   service: PaymentAuditService;
-  rpc: CasperRpcClient;
+  rpc: NodeRpcClient;
   close(): void;
 };
 
 export function createAuditorRuntime(options: AuditorRuntimeOptions): AuditorRuntime {
   const repository = openSqliteRepository(options.databasePath, { now: options.now });
   try {
-    const rpc = new CasperRpcClient({ rpcUrl: options.rpcUrl, now: options.now });
+    const rpc = new NodeRpcClient({ rpcUrl: options.rpcUrl, now: options.now });
     const auth = new AuditorAuth({
       repository,
       publicOrigin: normalizeOrigin(options.publicOrigin),
       now: options.now
     });
-    const service = new PaymentAuditService({ repository, evidenceLoader: rpc, now: options.now });
+    const service = new PaymentAuditService({
+      repository,
+      evidenceLoader: rpc,
+      settlementLoader: rpc,
+      now: options.now
+    });
     const router = createAuditorRouter({ repository, auth, service });
     return { router, repository, auth, service, rpc, close: () => repository.close() };
   } catch (error) {

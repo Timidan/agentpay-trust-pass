@@ -4,6 +4,7 @@ import {
   operatorPolicyHash,
   parseCasperPublicKey,
   providerDecisionHash,
+  verifyPurchaseReceipt,
   type OperatorPolicy,
   type ProviderDecision
 } from "@agent-pay/core";
@@ -109,13 +110,14 @@ export function createAuditorRouter(dependencies: AuditorRouterDependencies): Ro
         policy.policyHash
       );
     }
-    auth.verifyOperatorAction({
+    const verified = auth.verifyOperatorAction({
       challengeId: requiredString(body, "challengeId"),
       operatorPublicKey: session.operatorPublicKey,
       origin: requestOrigin(request),
       action: { kind: "policy_revision", artifactHash: policy.policyHash, revision: policy.revision },
       signature: policy.signature
     });
+    requireSignatureMessage("policy", verified.message, policy.signatureMessage);
     if (!repository.savePolicy(policy)) {
       throw conflict("policy_revision_conflict", "Policy revision already exists", "policy.revision", expectedRevision, policy.revision);
     }
@@ -144,7 +146,7 @@ export function createAuditorRouter(dependencies: AuditorRouterDependencies): Ro
         decision.decisionHash
       );
     }
-    auth.verifyOperatorAction({
+    const verified = auth.verifyOperatorAction({
       challengeId: requiredString(body, "challengeId"),
       operatorPublicKey: session.operatorPublicKey,
       origin: requestOrigin(request),
@@ -155,6 +157,7 @@ export function createAuditorRouter(dependencies: AuditorRouterDependencies): Ro
       },
       signature: decision.signature
     });
+    requireSignatureMessage("decision", verified.message, decision.signatureMessage);
     if (!repository.saveProviderDecision(decision)) {
       throw conflict(
         "provider_revision_conflict",
@@ -289,7 +292,66 @@ export function createAuditorRouter(dependencies: AuditorRouterDependencies): Ro
       }
       response.json({ check: service.cancelCheck(check.id) });
     });
+
+    router.post("/checks/:id/verify-settlement", async (request, response) => {
+      const principal = authenticateRequest(request, auth).principal;
+      const check = service.getCheck(request.params.id);
+      if (!check) throw new AuthError("check_not_found", "Payment check was not found", 404);
+      requireCheckOwnership(principal, check.operatorPublicKey, check.agentTokenId);
+      requireAgentScope(principal, "settlements:write", "Agent token cannot verify settlements");
+      const body = bodyRecord(request);
+      const result = await service.verifySettlement(check.id, body.transactionHash);
+      response.json(result);
+    });
+
+    router.post("/checks/:id/response-observations", (request, response) => {
+      const principal = authenticateRequest(request, auth).principal;
+      const check = service.getCheck(request.params.id);
+      if (!check) throw new AuthError("check_not_found", "Payment check was not found", 404);
+      requireCheckOwnership(principal, check.operatorPublicKey, check.agentTokenId);
+      requireAgentScope(principal, "observations:write", "Agent token cannot record response observations");
+      const result = service.recordResponseObservation(check.id, bodyRecord(request));
+      response.status(result.created ? 201 : 200).json(result);
+    });
+
+    router.get("/receipts/:id", (request, response) => {
+      if (typeof request.query.share === "string") {
+        const receipt = service.getSharedReceipt(request.params.id, request.query.share);
+        if (!receipt) throw new AuthError("receipt_not_found", "Purchase receipt was not found", 404);
+        response.json({ receipt });
+        return;
+      }
+      const principal = authenticateRequest(request, auth).principal;
+      const receipt = service.getReceipt(request.params.id);
+      if (!receipt) throw new AuthError("receipt_not_found", "Purchase receipt was not found", 404);
+      const check = service.getCheck(receipt.checkId);
+      if (!check) throw new AuthError("receipt_not_found", "Purchase receipt was not found", 404);
+      requireCheckOwnership(principal, check.operatorPublicKey, check.agentTokenId);
+      requireAgentScope(principal, "receipts:read", "Agent token cannot read purchase receipts");
+      response.json({ receipt });
+    });
+
+    router.post("/receipts/:id/shares", (request, response) => {
+      const session = requireOperator(request, auth);
+      const body = bodyRecord(request);
+      const created = service.createReceiptShare(request.params.id, session.operatorPublicKey, body.expiresAt);
+      response.status(201).json({
+        ...created,
+        url: `${auth.publicOrigin}/v1/receipts/${encodeURIComponent(request.params.id)}?share=${encodeURIComponent(created.token)}`
+      });
+    });
+
+    router.delete("/receipts/:id/shares/:shareId", (request, response) => {
+      const session = requireOperator(request, auth);
+      service.revokeReceiptShare(request.params.id, request.params.shareId, session.operatorPublicKey);
+      response.status(204).send();
+    });
   }
+
+  router.post("/receipts/verify", (request, response) => {
+    const body = bodyRecord(request);
+    response.json(verifyPurchaseReceipt(body.receipt));
+  });
 
   router.use((error: unknown, _request: Request, response: Response, _next: NextFunction) => {
     if (error instanceof AuthError) {
@@ -387,6 +449,16 @@ function requireCheckOwnership(
   if (!ownsCheck) throw new AuthError("check_not_found", "Payment check was not found", 404);
 }
 
+function requireAgentScope(principal: AuthPrincipal, scope: AgentTokenScope, message: string): void {
+  if (principal.kind === "agent" && !principal.token.scopes.includes(scope)) {
+    throw new AuthError("agent_scope_denied", message, 403, {
+      field: "scope",
+      expected: scope,
+      received: principal.token.scopes
+    });
+  }
+}
+
 function readCredential(request: Request, cookieName: string): { token: string; source: CredentialSource } {
   const authorization = request.header("authorization");
   if (authorization) {
@@ -437,6 +509,7 @@ function parsePolicy(value: unknown): OperatorPolicy {
     evidenceMaxAgeSeconds: rangedInteger(input.evidenceMaxAgeSeconds, "policy.evidenceMaxAgeSeconds", 1, 86_400),
     reviewOnInvestmentAdvisories: booleanValue(input.reviewOnInvestmentAdvisories, "policy.reviewOnInvestmentAdvisories"),
     allowPinnedResourceSchemeMismatch: booleanValue(input.allowPinnedResourceSchemeMismatch, "policy.allowPinnedResourceSchemeMismatch"),
+    signatureMessage: boundedString(input.signatureMessage, "policy.signatureMessage", 1, 10_000),
     signature: normalizedSignature(input.signature, "policy.signature"),
     policyHash: hashValue(input.policyHash, "policy.policyHash")
   };
@@ -465,6 +538,7 @@ function parseProviderDecision(value: unknown): ProviderDecision {
     perCallCeiling: decimalString(input.perCallCeiling, "decision.perCallCeiling", false),
     expiresAt: canonicalTimestamp(input.expiresAt, "decision.expiresAt"),
     promptedByCheckId: boundedString(input.promptedByCheckId, "decision.promptedByCheckId", 1, 128),
+    signatureMessage: boundedString(input.signatureMessage, "decision.signatureMessage", 1, 10_000),
     signature: normalizedSignature(input.signature, "decision.signature"),
     decisionHash: hashValue(input.decisionHash, "decision.decisionHash")
   };
@@ -518,6 +592,18 @@ function requireRevision(label: string, expected: number, received: number): voi
       label === "policy" ? "policy_revision_conflict" : `${label}_revision_conflict`,
       "Signed revision must increment by exactly one",
       `${label}.revision`,
+      expected,
+      received
+    );
+  }
+}
+
+function requireSignatureMessage(label: string, expected: string, received: string): void {
+  if (expected !== received) {
+    throw invalid(
+      "signed_action_mismatch",
+      "Stored signature message does not match the consumed operator challenge",
+      `${label}.signatureMessage`,
       expected,
       received
     );

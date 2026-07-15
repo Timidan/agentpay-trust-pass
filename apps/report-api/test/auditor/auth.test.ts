@@ -159,7 +159,7 @@ describe("AuditorAuth", () => {
         action,
         signature
       })
-    ).toBeUndefined();
+    ).toEqual({ message: issued.message });
     expect(() =>
       context.auth.verifyOperatorAction({
         challengeId: issued.challenge.id,

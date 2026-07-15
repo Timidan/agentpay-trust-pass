@@ -58,6 +58,7 @@ describe("signed operator routes", () => {
     const session = await createSession(context.app);
     const policy = policyRevision(1);
     const signed = await signArtifact(context.app, session.authorization, policyAction(policy));
+    policy.signatureMessage = signed.message;
     policy.signature = signMessage(signed.message);
 
     const created = await request(context.app)
@@ -88,6 +89,7 @@ describe("signed operator routes", () => {
     const session = await createSession(context.app);
     const skipped = policyRevision(2);
     const skippedChallenge = await signArtifact(context.app, session.authorization, policyAction(skipped));
+    skipped.signatureMessage = skippedChallenge.message;
     skipped.signature = signMessage(skippedChallenge.message);
 
     const revisionResponse = await request(context.app)
@@ -105,6 +107,7 @@ describe("signed operator routes", () => {
 
     const policy = policyRevision(1);
     const signed = await signArtifact(context.app, session.authorization, policyAction(policy));
+    policy.signatureMessage = signed.message;
     policy.signature = signMessage(signed.message);
     policy.assetDailyCaps[ASSET] = "999999";
 
@@ -122,6 +125,7 @@ describe("signed operator routes", () => {
     const session = await createSession(context.app);
     const policy = policyRevision(1, OTHER_OPERATOR);
     const signed = await signArtifact(context.app, session.authorization, policyAction(policy), OTHER_PRIVATE_KEY);
+    policy.signatureMessage = signed.message;
     policy.signature = signMessage(signed.message, OTHER_PRIVATE_KEY);
 
     const response = await request(context.app)
@@ -138,6 +142,7 @@ describe("signed operator routes", () => {
     const session = await createSession(context.app);
     const decision = providerPin(1);
     const pinChallenge = await signArtifact(context.app, session.authorization, providerAction(decision));
+    decision.signatureMessage = pinChallenge.message;
     decision.signature = signMessage(pinChallenge.message);
 
     await request(context.app)
@@ -156,6 +161,7 @@ describe("signed operator routes", () => {
     const issuedToken = await issueAgentToken(context.app, session.authorization, 1, ["checks:write"]);
     const secondDecision = providerPin(2);
     const secondChallenge = await signArtifact(context.app, session.authorization, providerAction(secondDecision));
+    secondDecision.signatureMessage = secondChallenge.message;
     secondDecision.signature = signMessage(secondChallenge.message);
 
     const forbidden = await request(context.app)
@@ -224,6 +230,7 @@ describe("signed operator routes", () => {
 
     const policy = policyRevision(1);
     const signed = await signArtifact(context.app, session.authorization, policyAction(policy));
+    policy.signatureMessage = signed.message;
     policy.signature = signMessage(signed.message);
 
     const response = await request(context.app)
@@ -340,6 +347,7 @@ function policyRevision(revision: number, operatorPublicKey = OPERATOR): Operato
     evidenceMaxAgeSeconds: 60,
     reviewOnInvestmentAdvisories: false,
     allowPinnedResourceSchemeMismatch: true,
+    signatureMessage: "",
     signature: "",
     policyHash: ""
   };
@@ -361,6 +369,7 @@ function providerPin(revision: number): ProviderDecision {
     perCallCeiling: "1000",
     expiresAt: "2026-07-16T21:00:00.000Z",
     promptedByCheckId: "check-review",
+    signatureMessage: "",
     signature: "",
     decisionHash: ""
   };

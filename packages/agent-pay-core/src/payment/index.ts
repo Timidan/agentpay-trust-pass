@@ -22,6 +22,10 @@ export {
   decodeCasperX402Transaction
 } from "./settlement.js";
 export {
+  buildPurchaseReceipt,
+  verifyPurchaseReceipt
+} from "./receipt.js";
+export {
   decodePaymentRequiredHeader,
   normalizeOriginalRequest,
   normalizePaymentRequired
@@ -34,3 +38,8 @@ export type {
   DecodedCasperX402Transaction,
   DecodeSettlementResult
 } from "./settlement.js";
+export type {
+  PurchaseReceiptInput,
+  ReceiptVerificationError,
+  ReceiptVerificationResult
+} from "./receipt.js";

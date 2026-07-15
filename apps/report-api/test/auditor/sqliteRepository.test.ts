@@ -56,7 +56,7 @@ describe("openSqliteRepository", () => {
     const receipt = makeReceipt(check, policy, providerDecision, settlement, observation);
     const anchorJob = makeAnchorJob(receipt.receiptId);
 
-    expect(first.schemaVersion()).toBe(3);
+    expect(first.schemaVersion()).toBe(5);
     expect(first.saveChallenge(challenge)).toBe(true);
     expect(first.saveSession(session)).toBe(true);
     expect(first.savePolicy(policy)).toBe(true);
@@ -71,7 +71,7 @@ describe("openSqliteRepository", () => {
     repositories.splice(repositories.indexOf(first), 1);
 
     const reopened = open(databasePath);
-    expect(reopened.schemaVersion()).toBe(3);
+    expect(reopened.schemaVersion()).toBe(5);
     expect(reopened.getChallenge(challenge.id)).toEqual(challenge);
     expect(reopened.findSessionByTokenHash(session.tokenHash)).toEqual(session);
     expect(reopened.getCurrentPolicy(OPERATOR)).toEqual(policy);
@@ -400,6 +400,7 @@ function makePolicy(): OperatorPolicy {
     evidenceMaxAgeSeconds: 60,
     reviewOnInvestmentAdvisories: false,
     allowPinnedResourceSchemeMismatch: true,
+    signatureMessage: "AgentPay Operator Action v1\n{}",
     signature: `01${"e".repeat(128)}`,
     policyHash: "f".repeat(64)
   };
@@ -419,6 +420,7 @@ function makeProviderDecision(): ProviderDecision {
     perCallCeiling: "1000",
     expiresAt: "2026-07-16T21:00:00.000Z",
     promptedByCheckId: "check-review",
+    signatureMessage: "AgentPay Operator Action v1\n{}",
     signature: `01${"a".repeat(128)}`,
     decisionHash: "1".repeat(64)
   };

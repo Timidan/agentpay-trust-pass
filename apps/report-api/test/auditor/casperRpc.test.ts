@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
-import { CasperRpcClient } from "../../src/auditor/casperRpc.js";
+import { NodeRpcClient } from "../../src/auditor/casperRpc.js";
 
 const PACKAGE_HASH = "50ec5690bde5e72f5152cb5154119eb706961e376b19050534a95a13ead8baaf";
 const CONTRACT_HASH = "81ad8086b869c0ad6b06ce38bedb82542411531b930962be5479c88f144ef4df";
@@ -36,14 +36,14 @@ afterEach(async () => {
   );
 });
 
-describe("CasperRpcClient", () => {
+describe("NodeRpcClient", () => {
   it("loads package, active contract, exact authorization entry point, and metadata", async () => {
     const requests: RpcRequest[] = [];
     const rpcUrl = await startRpcServer((request) => {
       requests.push(request);
       return stateReply(request);
     });
-    const client = new CasperRpcClient({
+    const client = new NodeRpcClient({
       rpcUrl,
       now: () => new Date(OBSERVED_AT)
     });
@@ -90,7 +90,7 @@ describe("CasperRpcClient", () => {
 
   it("selects the highest non-disabled package version", async () => {
     const rpcUrl = await startRpcServer(stateReply);
-    const client = new CasperRpcClient({ rpcUrl, now: () => new Date(OBSERVED_AT) });
+    const client = new NodeRpcClient({ rpcUrl, now: () => new Date(OBSERVED_AT) });
 
     const evidence = await client.loadPaymentAssetEvidence(assetInput());
 
@@ -107,7 +107,7 @@ describe("CasperRpcClient", () => {
       }
       return reply;
     });
-    const client = new CasperRpcClient({ rpcUrl, now: () => new Date(OBSERVED_AT) });
+    const client = new NodeRpcClient({ rpcUrl, now: () => new Date(OBSERVED_AT) });
 
     const evidence = await client.loadPaymentAssetEvidence(assetInput());
 
@@ -124,7 +124,7 @@ describe("CasperRpcClient", () => {
       }
       return reply;
     });
-    const client = new CasperRpcClient({ rpcUrl, now: () => new Date(OBSERVED_AT) });
+    const client = new NodeRpcClient({ rpcUrl, now: () => new Date(OBSERVED_AT) });
 
     const evidence = await client.loadPaymentAssetEvidence(assetInput());
 
@@ -146,7 +146,7 @@ describe("CasperRpcClient", () => {
         error: { code: -32003, message: "state query failed: value not found" }
       }
     }));
-    const client = new CasperRpcClient({ rpcUrl, now: () => new Date(OBSERVED_AT) });
+    const client = new NodeRpcClient({ rpcUrl, now: () => new Date(OBSERVED_AT) });
 
     const evidence = await client.loadPaymentAssetEvidence(assetInput());
 
@@ -174,9 +174,9 @@ describe("CasperRpcClient", () => {
       body: { jsonrpc: "2.0", id: request.id }
     }));
 
-    await expect(new CasperRpcClient({ rpcUrl: rpcErrorUrl }).call("query_global_state", {}))
+    await expect(new NodeRpcClient({ rpcUrl: rpcErrorUrl }).call("query_global_state", {}))
       .rejects.toThrow("Casper RPC query_global_state failed (-32000): boom");
-    await expect(new CasperRpcClient({ rpcUrl: malformedUrl }).call("query_global_state", {}))
+    await expect(new NodeRpcClient({ rpcUrl: malformedUrl }).call("query_global_state", {}))
       .rejects.toThrow("Malformed Casper RPC response: result is missing");
   });
 
@@ -185,7 +185,7 @@ describe("CasperRpcClient", () => {
       delayMs: 100,
       body: { jsonrpc: "2.0", id: request.id, result: {} }
     }));
-    const client = new CasperRpcClient({ rpcUrl, timeoutMs: 20 });
+    const client = new NodeRpcClient({ rpcUrl, timeoutMs: 20 });
 
     await expect(client.call("query_global_state", {})).rejects.toThrow(
       "Casper RPC query_global_state timed out after 20ms"
@@ -204,7 +204,7 @@ describe("CasperRpcClient", () => {
         }
       };
     });
-    const client = new CasperRpcClient({ rpcUrl });
+    const client = new NodeRpcClient({ rpcUrl });
 
     await expect(client.getTransaction(TRANSACTION_HASH)).resolves.toMatchObject({
       transaction: { Version1: { hash: TRANSACTION_HASH } }

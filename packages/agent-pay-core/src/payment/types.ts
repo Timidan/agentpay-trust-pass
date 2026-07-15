@@ -164,6 +164,7 @@ export type OperatorPolicy = {
   evidenceMaxAgeSeconds: number;
   reviewOnInvestmentAdvisories: boolean;
   allowPinnedResourceSchemeMismatch: boolean;
+  signatureMessage: string;
   signature: string;
   policyHash: string;
 };
@@ -181,6 +182,7 @@ export type ProviderDecision = {
   perCallCeiling: string;
   expiresAt: string;
   promptedByCheckId: string;
+  signatureMessage: string;
   signature: string;
   decisionHash: string;
 };

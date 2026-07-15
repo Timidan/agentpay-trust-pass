@@ -185,7 +185,7 @@ export class AuditorAuth {
     origin: string;
     action: OperatorActionDescriptor;
     signature: string;
-  }): void {
+  }): { message: string } {
     validateOperatorAction(input.action);
     const challenge = this.requireUsableChallenge(
       input.challengeId,
@@ -204,6 +204,7 @@ export class AuditorAuth {
     }
     this.verifySignature(challenge, input.signature);
     this.consumeChallenge(challenge);
+    return { message: challenge.action };
   }
 
   authenticateCredential(rawToken: string): AuthPrincipal {

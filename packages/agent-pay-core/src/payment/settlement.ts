@@ -58,7 +58,9 @@ export function decodeCasperX402Transaction(rpcEnvelope: unknown): DecodeSettlem
     if (envelope.error !== undefined && envelope.error !== null) {
       return { ok: false, code: "settlement_rpc_unavailable", message: "Casper RPC returned an error" };
     }
-    const initialResult = requireRecord(envelope.result, "RPC result");
+    const initialResult = "result" in envelope
+      ? requireRecord(envelope.result, "RPC result")
+      : envelope;
     const result = asRecord(initialResult.value) ?? initialResult;
     const transaction = requireRecord(result.transaction, "transaction");
     const version1 = requireRecord(transaction.Version1, "transaction.Version1");

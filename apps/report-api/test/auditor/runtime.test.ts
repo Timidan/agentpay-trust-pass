@@ -38,7 +38,7 @@ describe("auditor runtime", () => {
         now: () => new Date("2026-07-15T21:00:00.000Z")
       });
 
-      expect(runtime.repository.schemaVersion()).toBe(3);
+      expect(runtime.repository.schemaVersion()).toBe(5);
       expect(runtime.router).toBeDefined();
       runtime.close();
       runtime.close();

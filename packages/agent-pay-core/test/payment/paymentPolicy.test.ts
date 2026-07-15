@@ -282,6 +282,7 @@ function policy(overrides: Partial<OperatorPolicy> = {}): OperatorPolicy {
     evidenceMaxAgeSeconds: 3600,
     reviewOnInvestmentAdvisories: false,
     allowPinnedResourceSchemeMismatch: true,
+    signatureMessage: "AgentPay Operator Action v1\n{}",
     signature: "9".repeat(128),
     policyHash: "",
     ...overrides
@@ -304,6 +305,7 @@ function providerDecision(overrides: Partial<ProviderDecision> = {}): ProviderDe
     perCallCeiling: "100000000",
     expiresAt: "2026-07-16T21:00:00.000Z",
     promptedByCheckId: "check-first",
+    signatureMessage: "AgentPay Operator Action v1\n{}",
     signature: "a".repeat(128),
     decisionHash: "",
     ...overrides

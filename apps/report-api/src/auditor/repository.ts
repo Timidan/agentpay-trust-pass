@@ -140,6 +140,35 @@ export type ResponseObservation = {
   observationHash: string;
 };
 
+export type SettlementApplyResult =
+  | { ok: true; created: boolean; settlement: SettlementProof }
+  | {
+      ok: false;
+      reason:
+        | "check_not_found"
+        | "check_conflict"
+        | "transaction_conflict"
+        | "reservation_conflict"
+        | "terminal_settlement";
+    };
+
+export type ObservationReceiptResult =
+  | { ok: true; created: boolean }
+  | {
+      ok: false;
+      reason: "check_not_found" | "settlement_required" | "observation_conflict" | "receipt_conflict";
+    };
+
+export type ReceiptShareRecord = {
+  id: string;
+  receiptId: string;
+  operatorPublicKey: string;
+  tokenHash: string;
+  createdAt: string;
+  expiresAt: string;
+  revokedAt: string | null;
+};
+
 export type AnchorJobStatus = "pending" | "submitted" | "confirmed" | "failed";
 
 export type AnchorJob = {
@@ -196,12 +225,25 @@ export interface AuditorRepository {
 
   saveSettlement(settlement: SettlementProof): boolean;
   getSettlement(checkId: string): SettlementProof | null;
+  applySettlement(
+    check: StoredPaymentCheck,
+    settlement: SettlementProof,
+    reservationStatus: "consumed" | "quarantined" | null
+  ): SettlementApplyResult;
   saveResponseObservation(observation: ResponseObservation): boolean;
   getResponseObservation(checkId: string): ResponseObservation | null;
+  saveObservationAndReceipt(
+    observation: ResponseObservation,
+    receipt: PurchaseReceipt
+  ): ObservationReceiptResult;
 
   saveReceipt(receipt: PurchaseReceipt): boolean;
   getReceipt(receiptId: string): PurchaseReceipt | null;
   getReceiptByCheckId(checkId: string): PurchaseReceipt | null;
+  saveReceiptShare(share: ReceiptShareRecord): boolean;
+  getReceiptShare(id: string): ReceiptShareRecord | null;
+  findReceiptShareByTokenHash(receiptId: string, tokenHash: string): ReceiptShareRecord | null;
+  revokeReceiptShare(id: string, operatorPublicKey: string, revokedAt: string): boolean;
 
   saveAnchorJob(job: AnchorJob): boolean;
   updateAnchorJob(job: AnchorJob): boolean;

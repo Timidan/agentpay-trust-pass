@@ -1,6 +1,8 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import {
   artifactHash,
+  buildPurchaseReceipt,
+  compareSettlement,
   evaluatePayment,
   normalizeOriginalRequest,
   normalizePaymentRequired,
@@ -11,12 +13,16 @@ import {
   type PaymentDecision,
   type PaymentTerms,
   type ProviderDecision,
+  type PurchaseReceipt,
   type Reason,
-  type ReasonCode
+  type ReasonCode,
+  type SettlementProof
 } from "@agent-pay/core";
-import { AuthError } from "./auth.js";
+import { AuthError, hashBearerToken } from "./auth.js";
 import type {
   AuditorRepository,
+  ReceiptShareRecord,
+  ResponseObservation,
   ReservationResult,
   StoredPaymentCheck
 } from "./repository.js";
@@ -24,6 +30,7 @@ import type {
 const HEX_64 = /^[0-9a-f]{64}$/;
 const ADDRESS = /^(?:(?:00|01)[0-9a-f]{64}|02[0-9a-f]{66})$/;
 const DECIMAL = /^(0|[1-9][0-9]*)$/;
+const MAX_RECEIPT_SHARE_TTL_MS = 30 * 24 * 60 * 60 * 1_000;
 
 export type PaymentEvidenceLoader = {
   loadPaymentAssetEvidence(input: {
@@ -40,7 +47,13 @@ export type PaymentEvidenceLoader = {
 export type PaymentAuditServiceOptions = {
   repository: AuditorRepository;
   evidenceLoader: PaymentEvidenceLoader;
+  settlementLoader?: PaymentSettlementLoader;
   now?: () => Date;
+};
+
+export type PaymentSettlementLoader = {
+  rpcUrl: string;
+  getTransaction(hash: string, signal?: AbortSignal): Promise<unknown>;
 };
 
 export type CreateCheckInput = {
@@ -55,11 +68,13 @@ export type CreateCheckInput = {
 export class PaymentAuditService {
   private readonly repository: AuditorRepository;
   private readonly evidenceLoader: PaymentEvidenceLoader;
+  private readonly settlementLoader: PaymentSettlementLoader | null;
   private readonly now: () => Date;
 
   constructor(options: PaymentAuditServiceOptions) {
     this.repository = options.repository;
     this.evidenceLoader = options.evidenceLoader;
+    this.settlementLoader = options.settlementLoader ?? null;
     this.now = options.now ?? (() => new Date());
   }
 
@@ -233,6 +248,236 @@ export class PaymentAuditService {
     return cancelled;
   }
 
+  async verifySettlement(
+    checkId: string,
+    transactionHashValue: unknown
+  ): Promise<{ created: boolean; check: StoredPaymentCheck; proof: SettlementProof; receipt: PurchaseReceipt | null }> {
+    const transactionHash = parseHash(transactionHashValue, "transactionHash");
+    const check = this.repository.getCheck(checkId);
+    if (!check) throw new AuthError("check_not_found", "Payment check was not found", 404);
+    if (check.decision.verdict !== "pay" || !check.authorization) {
+      throw new AuthError("settlement_not_allowed", "Only a PAY check can verify a settlement", 409, {
+        field: "check.decision.verdict",
+        expected: "pay",
+        received: check.decision.verdict
+      });
+    }
+
+    const existing = this.repository.getSettlement(check.id);
+    if (existing && (existing.verdict === "match" || existing.verdict === "mismatch")) {
+      if (existing.transactionHash !== transactionHash) throw settlementConflict(existing.transactionHash, transactionHash);
+      return {
+        created: false,
+        check,
+        proof: existing,
+        receipt: this.repository.getReceiptByCheckId(check.id)
+      };
+    }
+    if (existing && existing.transactionHash !== transactionHash) {
+      throw settlementConflict(existing.transactionHash, transactionHash);
+    }
+    if (!["reserved", "settlement_pending", "settlement_unverifiable"].includes(check.status)) {
+      throw new AuthError("settlement_not_allowed", "Payment check cannot accept a settlement in its current state", 409, {
+        field: "check.status",
+        expected: ["reserved", "settlement_pending", "settlement_unverifiable"],
+        received: check.status
+      });
+    }
+    if (!this.settlementLoader) {
+      throw new AuthError("settlement_rpc_unavailable", "Casper settlement verification is not configured", 503, {
+        retryable: true
+      });
+    }
+
+    const observedAt = this.nowDate().toISOString();
+    let rpcResult: unknown;
+    try {
+      rpcResult = await this.settlementLoader.getTransaction(transactionHash);
+    } catch {
+      rpcResult = { error: { code: "transport_error", message: "Casper RPC request failed" } };
+    }
+    const proof = compareSettlement({
+      checkId: check.id,
+      transactionHash,
+      approved: check.authorization,
+      rpcEnvelope: rpcResult,
+      rpcEndpoint: this.settlementLoader.rpcUrl,
+      observedAt
+    });
+    const updatedCheck: StoredPaymentCheck = {
+      ...check,
+      status: settlementCheckStatus(proof),
+      updatedAt: observedAt
+    };
+    const reservationStatus = proof.verdict === "match"
+      ? "consumed" as const
+      : proof.verdict === "mismatch"
+        ? "quarantined" as const
+        : null;
+    const persisted = this.repository.applySettlement(updatedCheck, proof, reservationStatus);
+    if (!persisted.ok) {
+      if (persisted.reason === "transaction_conflict") throw settlementConflict(existing?.transactionHash ?? null, transactionHash);
+      throw new AuthError(
+        persisted.reason === "check_not_found" ? "check_not_found" : "settlement_conflict",
+        persisted.reason === "check_not_found"
+          ? "Payment check was not found"
+          : "Payment settlement state changed before verification completed",
+        persisted.reason === "check_not_found" ? 404 : 409,
+        { field: "settlement", expected: "current PAY reservation", received: persisted.reason }
+      );
+    }
+    const storedCheck = this.repository.getCheck(check.id);
+    if (!storedCheck) throw new AuthError("check_not_found", "Payment check was not found", 404);
+    return {
+      created: persisted.created,
+      check: storedCheck,
+      proof: persisted.settlement,
+      receipt: this.repository.getReceiptByCheckId(check.id)
+    };
+  }
+
+  recordResponseObservation(
+    checkId: string,
+    input: unknown
+  ): { created: boolean; observation: ResponseObservation; receipt: PurchaseReceipt } {
+    const check = this.repository.getCheck(checkId);
+    if (!check) throw new AuthError("check_not_found", "Payment check was not found", 404);
+    const settlement = this.repository.getSettlement(check.id);
+    if (check.status !== "settled" || !settlement || settlement.verdict !== "match") {
+      throw new AuthError("settlement_required", "A matching settlement is required before recording the response", 409, {
+        field: "check.status",
+        expected: "settled",
+        received: check.status
+      });
+    }
+
+    const now = this.nowDate();
+    const observation = parseResponseObservation(check.id, input, now);
+    const existingObservation = this.repository.getResponseObservation(check.id);
+    const existingReceipt = this.repository.getReceiptByCheckId(check.id);
+    if (existingObservation && existingObservation.observationHash !== observation.observationHash) {
+      throw observationConflict(existingObservation.observationHash, observation.observationHash);
+    }
+    if (existingObservation && existingReceipt) {
+      return { created: false, observation: existingObservation, receipt: existingReceipt };
+    }
+    if (!check.policy || !check.providerDecision || !check.authorization) {
+      throw new AuthError("receipt_state_invalid", "PAY check is missing signed receipt artifacts", 500);
+    }
+
+    const response = {
+      observerVersion: observation.observerVersion,
+      status: observation.status,
+      contentType: observation.contentType,
+      bodyBytes: observation.bodyBytes,
+      bodyHash: observation.bodyHash,
+      observedAt: observation.observedAt
+    };
+    const receipt = buildPurchaseReceipt({
+      receiptId: `receipt-${check.id}`,
+      checkId: check.id,
+      request: check.request,
+      terms: check.terms,
+      evidence: check.evidence,
+      policy: check.policy,
+      providerDecision: check.providerDecision,
+      decision: check.decision,
+      authorization: check.authorization,
+      settlement,
+      response,
+      anchor: { status: "off_chain_verified", transactionHash: null },
+      createdAt: now.toISOString()
+    });
+    const persisted = this.repository.saveObservationAndReceipt(observation, receipt);
+    if (!persisted.ok) {
+      if (persisted.reason === "observation_conflict") {
+        throw observationConflict(
+          this.repository.getResponseObservation(check.id)?.observationHash ?? null,
+          observation.observationHash
+        );
+      }
+      throw new AuthError(
+        persisted.reason === "check_not_found" ? "check_not_found" : "receipt_conflict",
+        persisted.reason === "check_not_found"
+          ? "Payment check was not found"
+          : "Receipt state changed before it could be persisted",
+        persisted.reason === "check_not_found" ? 404 : 409,
+        { field: "receipt", expected: "one immutable receipt", received: persisted.reason }
+      );
+    }
+    const storedObservation = this.repository.getResponseObservation(check.id);
+    const storedReceipt = this.repository.getReceiptByCheckId(check.id);
+    if (!storedObservation || !storedReceipt) {
+      throw new AuthError("receipt_state_invalid", "Persisted receipt could not be reloaded", 500);
+    }
+    return { created: persisted.created, observation: storedObservation, receipt: storedReceipt };
+  }
+
+  getReceipt(receiptId: string): PurchaseReceipt | null {
+    return this.repository.getReceipt(receiptId);
+  }
+
+  createReceiptShare(
+    receiptId: string,
+    operatorPublicKey: string,
+    expiresAtValue: unknown
+  ): { token: string; share: Omit<ReceiptShareRecord, "tokenHash"> } {
+    this.requireOwnedReceipt(receiptId, operatorPublicKey);
+    const now = this.nowDate();
+    const expiresAt = canonicalTimestamp(expiresAtValue, "expiresAt");
+    const expiresAtMs = Date.parse(expiresAt);
+    if (expiresAtMs <= now.getTime() || expiresAtMs - now.getTime() > MAX_RECEIPT_SHARE_TTL_MS) {
+      throw invalidRequest("expiresAt", "future timestamp no more than 30 days away", expiresAt);
+    }
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const token = randomBytes(32).toString("base64url");
+      const record: ReceiptShareRecord = {
+        id: randomUUID(),
+        receiptId,
+        operatorPublicKey,
+        tokenHash: hashBearerToken(token),
+        createdAt: now.toISOString(),
+        expiresAt,
+        revokedAt: null
+      };
+      if (this.repository.saveReceiptShare(record)) {
+        const { tokenHash: _tokenHash, ...share } = record;
+        return { token, share };
+      }
+    }
+    throw new AuthError("receipt_share_conflict", "Could not create a unique receipt share", 409);
+  }
+
+  getSharedReceipt(receiptId: string, token: unknown): PurchaseReceipt | null {
+    if (typeof token !== "string") return null;
+    let tokenHash: string;
+    try {
+      tokenHash = hashBearerToken(token);
+    } catch {
+      return null;
+    }
+    const share = this.repository.findReceiptShareByTokenHash(receiptId, tokenHash);
+    if (!share || share.revokedAt !== null || Date.parse(share.expiresAt) <= this.nowDate().getTime()) {
+      return null;
+    }
+    return this.repository.getReceipt(receiptId);
+  }
+
+  revokeReceiptShare(receiptId: string, shareId: string, operatorPublicKey: string): void {
+    this.requireOwnedReceipt(receiptId, operatorPublicKey);
+    const share = this.repository.getReceiptShare(shareId);
+    if (!share || share.receiptId !== receiptId || share.operatorPublicKey !== operatorPublicKey) {
+      throw new AuthError("receipt_share_not_found", "Receipt share was not found", 404);
+    }
+    if (share.revokedAt !== null) {
+      throw new AuthError("receipt_share_revoked", "Receipt share has already been revoked", 409);
+    }
+    if (!this.repository.revokeReceiptShare(share.id, operatorPublicKey, this.nowDate().toISOString())) {
+      throw new AuthError("receipt_share_revoked", "Receipt share has already been revoked", 409);
+    }
+  }
+
   private requireIdempotentRace(
     operatorPublicKey: string,
     input: CreateCheckInput,
@@ -248,6 +493,16 @@ export class PaymentAuditService {
     }
     ensureIdempotentMatch(raced, input.agentTokenId, terms, requestHash, authorization);
     return raced;
+  }
+
+  private requireOwnedReceipt(receiptId: string, operatorPublicKey: string): PurchaseReceipt {
+    const receipt = this.repository.getReceipt(receiptId);
+    if (!receipt) throw new AuthError("receipt_not_found", "Purchase receipt was not found", 404);
+    const check = this.repository.getCheck(receipt.checkId);
+    if (!check || check.operatorPublicKey !== operatorPublicKey) {
+      throw new AuthError("receipt_not_found", "Purchase receipt was not found", 404);
+    }
+    return receipt;
   }
 
   private nowDate(): Date {
@@ -469,6 +724,11 @@ function hash(value: unknown, field: string): string {
   return value;
 }
 
+function parseHash(value: unknown, field: string): string {
+  if (typeof value !== "string") throw invalidRequest(field, "64 lowercase hexadecimal characters", value);
+  return hash(value, field);
+}
+
 function network(value: unknown, field: string): "casper:casper-test" {
   if (value !== "casper:casper-test") throw invalidRequest(field, "casper:casper-test", value);
   return value;
@@ -476,4 +736,67 @@ function network(value: unknown, field: string): "casper:casper-test" {
 
 function invalidRequest(field: string, expected: unknown, received: unknown): AuthError {
   return new AuthError("invalid_request", `${field} is invalid`, 400, { field, expected, received });
+}
+
+function settlementCheckStatus(proof: SettlementProof): StoredPaymentCheck["status"] {
+  switch (proof.verdict) {
+    case "match": return "settled";
+    case "mismatch": return "settlement_mismatch";
+    case "pending": return "settlement_pending";
+    case "unverifiable": return "settlement_unverifiable";
+  }
+}
+
+function parseResponseObservation(checkId: string, value: unknown, now: Date): ResponseObservation {
+  const input = asRecord(value);
+  if (!input) throw invalidRequest("observation", "object", value);
+  const allowedKeys = ["bodyBytes", "bodyHash", "contentType", "observedAt", "observerVersion", "status"];
+  const receivedKeys = Object.keys(input).sort();
+  if (artifactHash(receivedKeys) !== artifactHash(allowedKeys)) {
+    throw invalidRequest("observation", allowedKeys, receivedKeys);
+  }
+  const observerVersion = boundedString(input.observerVersion, "observerVersion", 1, 128);
+  const status = numberField(input.status, "status");
+  if (!Number.isSafeInteger(status) || status < 100 || status > 599) {
+    throw invalidRequest("status", "HTTP status from 100 to 599", status);
+  }
+  const contentType = input.contentType === null
+    ? null
+    : boundedString(input.contentType, "contentType", 1, 256);
+  const bodyBytes = numberField(input.bodyBytes, "bodyBytes");
+  if (!Number.isSafeInteger(bodyBytes) || bodyBytes < 0) {
+    throw invalidRequest("bodyBytes", "non-negative safe integer", bodyBytes);
+  }
+  const bodyHash = parseHash(input.bodyHash, "bodyHash");
+  const observedAt = canonicalTimestamp(input.observedAt, "observedAt");
+  if (Date.parse(observedAt) > now.getTime()) {
+    throw invalidRequest("observedAt", "timestamp no later than server time", observedAt);
+  }
+  const content = { checkId, observerVersion, status, contentType, bodyBytes, bodyHash, observedAt };
+  return { ...content, observationHash: artifactHash(content) };
+}
+
+function canonicalTimestamp(value: unknown, field: string): string {
+  if (typeof value !== "string") throw invalidRequest(field, "canonical ISO timestamp", value);
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp) || new Date(timestamp).toISOString() !== value) {
+    throw invalidRequest(field, "canonical ISO timestamp", value);
+  }
+  return value;
+}
+
+function settlementConflict(expected: string | null, received: string): AuthError {
+  return new AuthError("settlement_conflict", "Payment check is already bound to another settlement", 409, {
+    field: "transactionHash",
+    expected,
+    received
+  });
+}
+
+function observationConflict(expected: string | null, received: string): AuthError {
+  return new AuthError("observation_conflict", "Payment response metadata is already recorded", 409, {
+    field: "observation",
+    expected,
+    received
+  });
 }
