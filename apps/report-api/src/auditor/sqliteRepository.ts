@@ -1,0 +1,810 @@
+import { mkdirSync } from "node:fs";
+import { dirname } from "node:path";
+import { DatabaseSync, type SQLInputValue } from "node:sqlite";
+import { canonicalJson, type OperatorPolicy, type ProviderDecision, type PurchaseReceipt, type SettlementProof } from "@agent-pay/core";
+import type {
+  AgentTokenRecord,
+  AnchorJob,
+  AuditorRepository,
+  AuthChallenge,
+  AuthSession,
+  ReservationInput,
+  ReservationRecord,
+  ReservationResult,
+  ReservationStatus,
+  ResponseObservation,
+  StoredPaymentCheck
+} from "./repository.js";
+
+const CURRENT_SCHEMA_VERSION = 1;
+const DECIMAL_INTEGER = /^(0|[1-9][0-9]*)$/;
+const UTC_DAY = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
+
+export type OpenSqliteRepositoryOptions = {
+  now?: () => Date;
+};
+
+export interface SqliteAuditorRepository extends AuditorRepository {
+  close(): void;
+}
+
+export function openSqliteRepository(
+  path: string,
+  options: OpenSqliteRepositoryOptions = {}
+): SqliteAuditorRepository {
+  if (!path) throw new TypeError("SQLite database path must not be empty");
+  if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
+  return new SqliteRepository(path, options.now ?? (() => new Date()));
+}
+
+class SqliteRepository implements SqliteAuditorRepository {
+  private readonly database: DatabaseSync;
+  private readonly now: () => Date;
+  private closed = false;
+
+  constructor(path: string, now: () => Date) {
+    this.database = new DatabaseSync(path);
+    this.now = now;
+    this.database.exec("PRAGMA foreign_keys = ON");
+    this.database.exec("PRAGMA busy_timeout = 5000");
+    if (path !== ":memory:") this.database.exec("PRAGMA journal_mode = WAL");
+    this.migrate();
+  }
+
+  close(): void {
+    if (this.closed) return;
+    this.database.close();
+    this.closed = true;
+  }
+
+  schemaVersion(): number {
+    const row = this.row("SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations");
+    return numberColumn(row, "version");
+  }
+
+  saveChallenge(challenge: AuthChallenge): boolean {
+    return this.insert(
+      `INSERT OR IGNORE INTO auth_challenges
+        (id, operator_key, origin, purpose, nonce, issued_at, expires_at, used_at, json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      challenge.id,
+      normalizeKey(challenge.operatorPublicKey),
+      challenge.origin,
+      challenge.purpose,
+      challenge.nonce,
+      isoTimestamp(challenge.issuedAt, "challenge.issuedAt"),
+      isoTimestamp(challenge.expiresAt, "challenge.expiresAt"),
+      nullableTimestamp(challenge.usedAt, "challenge.usedAt"),
+      canonicalJson(challenge)
+    );
+  }
+
+  getChallenge(id: string): AuthChallenge | null {
+    const row = this.maybeRow("SELECT json, used_at FROM auth_challenges WHERE id = ?", id);
+    if (!row) return null;
+    return { ...jsonColumn<AuthChallenge>(row), usedAt: nullableStringColumn(row, "used_at") };
+  }
+
+  consumeChallenge(id: string, usedAt: string): boolean {
+    const normalized = isoTimestamp(usedAt, "challenge.usedAt");
+    return this.changed(
+      `UPDATE auth_challenges
+       SET used_at = ?
+       WHERE id = ? AND used_at IS NULL AND issued_at <= ? AND expires_at > ?`,
+      normalized,
+      id,
+      normalized,
+      normalized
+    );
+  }
+
+  saveSession(session: AuthSession): boolean {
+    return this.insert(
+      `INSERT OR IGNORE INTO auth_sessions
+        (id, operator_key, token_hash, origin, created_at, expires_at, revoked_at, json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      session.id,
+      normalizeKey(session.operatorPublicKey),
+      normalizeHash(session.tokenHash, "session.tokenHash"),
+      session.origin,
+      isoTimestamp(session.createdAt, "session.createdAt"),
+      isoTimestamp(session.expiresAt, "session.expiresAt"),
+      nullableTimestamp(session.revokedAt, "session.revokedAt"),
+      canonicalJson(session)
+    );
+  }
+
+  findSessionByTokenHash(tokenHash: string): AuthSession | null {
+    const row = this.maybeRow(
+      "SELECT json, revoked_at FROM auth_sessions WHERE token_hash = ?",
+      normalizeHash(tokenHash, "session.tokenHash")
+    );
+    if (!row) return null;
+    return { ...jsonColumn<AuthSession>(row), revokedAt: nullableStringColumn(row, "revoked_at") };
+  }
+
+  revokeSession(id: string, revokedAt: string): boolean {
+    return this.changed(
+      "UPDATE auth_sessions SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL",
+      isoTimestamp(revokedAt, "session.revokedAt"),
+      id
+    );
+  }
+
+  savePolicy(policy: OperatorPolicy): boolean {
+    return this.insert(
+      `INSERT OR IGNORE INTO policies
+        (policy_id, operator_key, revision, policy_hash, effective_at, json)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      policy.policyId,
+      normalizeKey(policy.operatorPublicKey),
+      positiveInteger(policy.revision, "policy.revision"),
+      normalizeHash(policy.policyHash, "policy.policyHash"),
+      isoTimestamp(policy.effectiveAt, "policy.effectiveAt"),
+      canonicalJson(policy)
+    );
+  }
+
+  getCurrentPolicy(operatorPublicKey: string): OperatorPolicy | null {
+    const row = this.maybeRow(
+      "SELECT json FROM policies WHERE operator_key = ? ORDER BY revision DESC LIMIT 1",
+      normalizeKey(operatorPublicKey)
+    );
+    return row ? jsonColumn<OperatorPolicy>(row) : null;
+  }
+
+  latestPolicyRevision(operatorPublicKey: string): number {
+    const row = this.row(
+      "SELECT COALESCE(MAX(revision), 0) AS revision FROM policies WHERE operator_key = ?",
+      normalizeKey(operatorPublicKey)
+    );
+    return numberColumn(row, "revision");
+  }
+
+  saveProviderDecision(decision: ProviderDecision): boolean {
+    return this.insert(
+      `INSERT OR IGNORE INTO provider_decisions
+        (decision_id, operator_key, revision, kind, origin, payee, asset, network, expires_at, json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      decision.decisionId,
+      normalizeKey(decision.operatorPublicKey),
+      positiveInteger(decision.revision, "providerDecision.revision"),
+      decision.kind,
+      decision.origin,
+      normalizeKey(decision.payee),
+      normalizeKey(decision.asset),
+      decision.network,
+      isoTimestamp(decision.expiresAt, "providerDecision.expiresAt"),
+      canonicalJson(decision)
+    );
+  }
+
+  listProviderDecisions(operatorPublicKey: string): ProviderDecision[] {
+    return this.rows(
+      "SELECT json FROM provider_decisions WHERE operator_key = ? ORDER BY revision DESC",
+      normalizeKey(operatorPublicKey)
+    ).map((row) => jsonColumn<ProviderDecision>(row));
+  }
+
+  latestProviderDecisionRevision(operatorPublicKey: string): number {
+    const row = this.row(
+      "SELECT COALESCE(MAX(revision), 0) AS revision FROM provider_decisions WHERE operator_key = ?",
+      normalizeKey(operatorPublicKey)
+    );
+    return numberColumn(row, "revision");
+  }
+
+  saveAgentToken(token: AgentTokenRecord): boolean {
+    return this.insert(
+      `INSERT OR IGNORE INTO agent_tokens
+        (id, operator_key, token_hash, revision, expires_at, revoked_at, json)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      token.id,
+      normalizeKey(token.operatorPublicKey),
+      normalizeHash(token.tokenHash, "agentToken.tokenHash"),
+      positiveInteger(token.revision, "agentToken.revision"),
+      nullableTimestamp(token.expiresAt, "agentToken.expiresAt"),
+      nullableTimestamp(token.revokedAt, "agentToken.revokedAt"),
+      canonicalJson(token)
+    );
+  }
+
+  getAgentToken(id: string): AgentTokenRecord | null {
+    const row = this.maybeRow("SELECT json, revoked_at FROM agent_tokens WHERE id = ?", id);
+    return row ? tokenFromRow(row) : null;
+  }
+
+  findAgentTokenByHash(tokenHash: string): AgentTokenRecord | null {
+    const row = this.maybeRow(
+      "SELECT json, revoked_at FROM agent_tokens WHERE token_hash = ?",
+      normalizeHash(tokenHash, "agentToken.tokenHash")
+    );
+    return row ? tokenFromRow(row) : null;
+  }
+
+  revokeAgentToken(id: string, revokedAt: string): boolean {
+    return this.changed(
+      "UPDATE agent_tokens SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL",
+      isoTimestamp(revokedAt, "agentToken.revokedAt"),
+      id
+    );
+  }
+
+  saveCheck(check: StoredPaymentCheck): boolean {
+    return this.insert(
+      `INSERT OR IGNORE INTO checks
+        (id, operator_key, agent_token_id, payer_key, idempotency_key, verdict, status, created_at, updated_at, json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      check.id,
+      normalizeKey(check.operatorPublicKey),
+      check.agentTokenId,
+      check.payerPublicKey ? normalizeKey(check.payerPublicKey) : null,
+      check.idempotencyKey,
+      check.decision.verdict,
+      check.status,
+      isoTimestamp(check.createdAt, "check.createdAt"),
+      isoTimestamp(check.updatedAt, "check.updatedAt"),
+      canonicalJson(check)
+    );
+  }
+
+  updateCheck(check: StoredPaymentCheck): boolean {
+    return this.changed(
+      `UPDATE checks
+       SET verdict = ?, status = ?, updated_at = ?, json = ?
+       WHERE id = ? AND operator_key = ? AND created_at = ?
+         AND ((idempotency_key IS NULL AND ? IS NULL) OR idempotency_key = ?)`,
+      check.decision.verdict,
+      check.status,
+      isoTimestamp(check.updatedAt, "check.updatedAt"),
+      canonicalJson(check),
+      check.id,
+      normalizeKey(check.operatorPublicKey),
+      isoTimestamp(check.createdAt, "check.createdAt"),
+      check.idempotencyKey,
+      check.idempotencyKey
+    );
+  }
+
+  getCheck(id: string): StoredPaymentCheck | null {
+    const row = this.maybeRow("SELECT json FROM checks WHERE id = ?", id);
+    return row ? jsonColumn<StoredPaymentCheck>(row) : null;
+  }
+
+  findCheckByIdempotencyKey(operatorPublicKey: string, idempotencyKey: string): StoredPaymentCheck | null {
+    const row = this.maybeRow(
+      "SELECT json FROM checks WHERE operator_key = ? AND idempotency_key = ?",
+      normalizeKey(operatorPublicKey),
+      idempotencyKey
+    );
+    return row ? jsonColumn<StoredPaymentCheck>(row) : null;
+  }
+
+  reserve(input: ReservationInput): ReservationResult {
+    const amount = decimalAmount(input.amount, "reservation.amount", false);
+    const dailyCap = decimalAmount(input.dailyCap, "reservation.dailyCap", true);
+    const maximumConcurrent = positiveInteger(
+      input.maximumConcurrentReservations,
+      "reservation.maximumConcurrentReservations"
+    );
+    const operatorKey = normalizeKey(input.operatorPublicKey);
+    const asset = normalizeKey(input.asset);
+    const now = this.nowIso();
+    const expiresAt = isoTimestamp(input.expiresAt, "reservation.expiresAt");
+    if (expiresAt <= now) throw new TypeError("reservation.expiresAt must be in the future");
+    const utcDay = now.slice(0, 10);
+
+    this.database.exec("BEGIN IMMEDIATE");
+    try {
+      this.expireReservations(now);
+      const checkRow = this.maybeRow("SELECT operator_key, json FROM checks WHERE id = ?", input.checkId);
+      if (!checkRow || stringColumn(checkRow, "operator_key") !== operatorKey) {
+        this.database.exec("COMMIT");
+        return { ok: false, reason: "check_not_found" };
+      }
+      const check = jsonColumn<StoredPaymentCheck>(checkRow);
+      if (normalizeKey(check.terms.asset) !== asset || check.terms.amount !== input.amount) {
+        this.database.exec("COMMIT");
+        return { ok: false, reason: "reservation_conflict" };
+      }
+
+      const existing = this.getReservation(input.checkId);
+      if (existing) {
+        const identical =
+          existing.operatorPublicKey === operatorKey &&
+          existing.asset === asset &&
+          existing.amount === input.amount &&
+          existing.status === "active";
+        this.database.exec("COMMIT");
+        return identical ? { ok: true } : { ok: false, reason: "reservation_conflict" };
+      }
+
+      const concurrent = numberColumn(
+        this.row(
+          `SELECT COUNT(*) AS count FROM reservations
+           WHERE operator_key = ? AND status IN ('active', 'quarantined')`,
+          operatorKey
+        ),
+        "count"
+      );
+      if (concurrent >= maximumConcurrent) {
+        this.database.exec("COMMIT");
+        return { ok: false, reason: "maximum_concurrent_reservations" };
+      }
+
+      const committed = this.sumReservationRows(
+        operatorKey,
+        asset,
+        utcDay,
+        ["active", "quarantined", "consumed"]
+      );
+      if (committed + amount > dailyCap) {
+        this.database.exec("COMMIT");
+        return { ok: false, reason: "policy_daily_cap_exceeded" };
+      }
+
+      this.database.prepare(
+        `INSERT INTO reservations
+          (check_id, operator_key, asset, amount, utc_day, status, expires_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?)`
+      ).run(input.checkId, operatorKey, asset, input.amount, utcDay, expiresAt, now, now);
+      this.database.exec("COMMIT");
+      return { ok: true };
+    } catch (error) {
+      try {
+        this.database.exec("ROLLBACK");
+      } catch {
+        // The transaction may already have been rolled back by SQLite.
+      }
+      throw error;
+    }
+  }
+
+  getReservation(checkId: string): ReservationRecord | null {
+    const row = this.maybeRow("SELECT * FROM reservations WHERE check_id = ?", checkId);
+    return row ? reservationFromRow(row) : null;
+  }
+
+  transitionReservation(
+    checkId: string,
+    status: Exclude<ReservationStatus, "active" | "expired">,
+    at: string
+  ): boolean {
+    const allowedFrom = status === "quarantined" ? ["active"] : ["active", "quarantined"];
+    const placeholders = allowedFrom.map(() => "?").join(", ");
+    return this.changed(
+      `UPDATE reservations SET status = ?, updated_at = ?
+       WHERE check_id = ? AND status IN (${placeholders})`,
+      status,
+      isoTimestamp(at, "reservation.updatedAt"),
+      checkId,
+      ...allowedFrom
+    );
+  }
+
+  reservedTotal(operatorPublicKey: string, asset: string, utcDay: string): string {
+    validateUtcDay(utcDay);
+    this.expireReservations(this.nowIso());
+    return this.sumReservationRows(
+      normalizeKey(operatorPublicKey),
+      normalizeKey(asset),
+      utcDay,
+      ["active", "quarantined"]
+    ).toString();
+  }
+
+  spentTotal(operatorPublicKey: string, asset: string, utcDay: string): string {
+    validateUtcDay(utcDay);
+    return this.sumReservationRows(
+      normalizeKey(operatorPublicKey),
+      normalizeKey(asset),
+      utcDay,
+      ["consumed"]
+    ).toString();
+  }
+
+  saveSettlement(settlement: SettlementProof): boolean {
+    return this.insert(
+      `INSERT OR IGNORE INTO settlements
+        (check_id, transaction_hash, verdict, observed_at, json)
+       VALUES (?, ?, ?, ?, ?)`,
+      settlement.checkId,
+      normalizeHash(settlement.transactionHash, "settlement.transactionHash"),
+      settlement.verdict,
+      isoTimestamp(settlement.observedAt, "settlement.observedAt"),
+      canonicalJson(settlement)
+    );
+  }
+
+  getSettlement(checkId: string): SettlementProof | null {
+    const row = this.maybeRow("SELECT json FROM settlements WHERE check_id = ?", checkId);
+    return row ? jsonColumn<SettlementProof>(row) : null;
+  }
+
+  saveResponseObservation(observation: ResponseObservation): boolean {
+    return this.insert(
+      `INSERT OR IGNORE INTO response_observations
+        (check_id, observation_hash, observed_at, json)
+       VALUES (?, ?, ?, ?)`,
+      observation.checkId,
+      normalizeHash(observation.observationHash, "observation.observationHash"),
+      isoTimestamp(observation.observedAt, "observation.observedAt"),
+      canonicalJson(observation)
+    );
+  }
+
+  getResponseObservation(checkId: string): ResponseObservation | null {
+    const row = this.maybeRow("SELECT json FROM response_observations WHERE check_id = ?", checkId);
+    return row ? jsonColumn<ResponseObservation>(row) : null;
+  }
+
+  saveReceipt(receipt: PurchaseReceipt): boolean {
+    return this.insert(
+      `INSERT OR IGNORE INTO receipts
+        (receipt_id, check_id, receipt_hash, created_at, json)
+       VALUES (?, ?, ?, ?, ?)`,
+      receipt.receiptId,
+      receipt.checkId,
+      normalizeHash(receipt.receiptHash, "receipt.receiptHash"),
+      isoTimestamp(receipt.createdAt, "receipt.createdAt"),
+      canonicalJson(receipt)
+    );
+  }
+
+  getReceipt(receiptId: string): PurchaseReceipt | null {
+    const row = this.maybeRow("SELECT json FROM receipts WHERE receipt_id = ?", receiptId);
+    return row ? jsonColumn<PurchaseReceipt>(row) : null;
+  }
+
+  getReceiptByCheckId(checkId: string): PurchaseReceipt | null {
+    const row = this.maybeRow("SELECT json FROM receipts WHERE check_id = ?", checkId);
+    return row ? jsonColumn<PurchaseReceipt>(row) : null;
+  }
+
+  saveAnchorJob(job: AnchorJob): boolean {
+    return this.insert(
+      `INSERT OR IGNORE INTO anchor_jobs
+        (id, receipt_id, status, attempts, next_attempt_at, transaction_hash, updated_at, json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      job.id,
+      job.receiptId,
+      job.status,
+      nonNegativeInteger(job.attempts, "anchorJob.attempts"),
+      isoTimestamp(job.nextAttemptAt, "anchorJob.nextAttemptAt"),
+      nullableHash(job.transactionHash, "anchorJob.transactionHash"),
+      isoTimestamp(job.updatedAt, "anchorJob.updatedAt"),
+      canonicalJson(job)
+    );
+  }
+
+  updateAnchorJob(job: AnchorJob): boolean {
+    return this.changed(
+      `UPDATE anchor_jobs
+       SET status = ?, attempts = ?, next_attempt_at = ?, transaction_hash = ?, updated_at = ?, json = ?
+       WHERE id = ? AND receipt_id = ?`,
+      job.status,
+      nonNegativeInteger(job.attempts, "anchorJob.attempts"),
+      isoTimestamp(job.nextAttemptAt, "anchorJob.nextAttemptAt"),
+      nullableHash(job.transactionHash, "anchorJob.transactionHash"),
+      isoTimestamp(job.updatedAt, "anchorJob.updatedAt"),
+      canonicalJson(job),
+      job.id,
+      job.receiptId
+    );
+  }
+
+  getAnchorJob(id: string): AnchorJob | null {
+    const row = this.maybeRow("SELECT json FROM anchor_jobs WHERE id = ?", id);
+    return row ? jsonColumn<AnchorJob>(row) : null;
+  }
+
+  private migrate(): void {
+    this.database.exec(`
+      CREATE TABLE IF NOT EXISTS schema_migrations (
+        version INTEGER PRIMARY KEY,
+        applied_at TEXT NOT NULL
+      ) STRICT
+    `);
+    if (this.schemaVersion() >= CURRENT_SCHEMA_VERSION) return;
+
+    this.database.exec("BEGIN IMMEDIATE");
+    try {
+      this.database.exec(MIGRATION_1);
+      this.database.prepare(
+        "INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)"
+      ).run(CURRENT_SCHEMA_VERSION, this.nowIso());
+      this.database.exec("COMMIT");
+    } catch (error) {
+      try {
+        this.database.exec("ROLLBACK");
+      } catch {
+        // The migration transaction may already have been rolled back.
+      }
+      throw error;
+    }
+  }
+
+  private nowIso(): string {
+    const value = this.now();
+    if (!(value instanceof Date) || !Number.isFinite(value.getTime())) {
+      throw new TypeError("SQLite repository clock returned an invalid date");
+    }
+    return value.toISOString();
+  }
+
+  private expireReservations(now: string): void {
+    this.database.prepare(
+      `UPDATE reservations SET status = 'expired', updated_at = ?
+       WHERE status = 'active' AND expires_at <= ?`
+    ).run(now, now);
+  }
+
+  private sumReservationRows(
+    operatorPublicKey: string,
+    asset: string,
+    utcDay: string,
+    statuses: ReservationStatus[]
+  ): bigint {
+    const placeholders = statuses.map(() => "?").join(", ");
+    const rows = this.rows(
+      `SELECT amount FROM reservations
+       WHERE operator_key = ? AND asset = ? AND utc_day = ? AND status IN (${placeholders})`,
+      operatorPublicKey,
+      asset,
+      utcDay,
+      ...statuses
+    );
+    return rows.reduce(
+      (total, row) => total + decimalAmount(stringColumn(row, "amount"), "reservation.amount", true),
+      0n
+    );
+  }
+
+  private insert(sql: string, ...values: SQLInputValue[]): boolean {
+    return this.changed(sql, ...values);
+  }
+
+  private changed(sql: string, ...values: SQLInputValue[]): boolean {
+    const result = this.database.prepare(sql).run(...values);
+    return Number(result.changes) > 0;
+  }
+
+  private row(sql: string, ...values: SQLInputValue[]): Row {
+    const result = this.maybeRow(sql, ...values);
+    if (!result) throw new Error("SQLite query unexpectedly returned no row");
+    return result;
+  }
+
+  private maybeRow(sql: string, ...values: SQLInputValue[]): Row | null {
+    return (this.database.prepare(sql).get(...values) as Row | undefined) ?? null;
+  }
+
+  private rows(sql: string, ...values: SQLInputValue[]): Row[] {
+    return this.database.prepare(sql).all(...values) as Row[];
+  }
+}
+
+type Row = Record<string, unknown>;
+
+const MIGRATION_1 = `
+  CREATE TABLE auth_challenges (
+    id TEXT PRIMARY KEY,
+    operator_key TEXT NOT NULL,
+    origin TEXT NOT NULL,
+    purpose TEXT NOT NULL,
+    nonce TEXT NOT NULL UNIQUE,
+    issued_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    used_at TEXT,
+    json TEXT NOT NULL
+  ) STRICT;
+  CREATE INDEX auth_challenges_operator_idx ON auth_challenges(operator_key, expires_at);
+
+  CREATE TABLE auth_sessions (
+    id TEXT PRIMARY KEY,
+    operator_key TEXT NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    origin TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    revoked_at TEXT,
+    json TEXT NOT NULL
+  ) STRICT;
+  CREATE INDEX auth_sessions_operator_idx ON auth_sessions(operator_key, expires_at);
+
+  CREATE TABLE policies (
+    policy_id TEXT PRIMARY KEY,
+    operator_key TEXT NOT NULL,
+    revision INTEGER NOT NULL,
+    policy_hash TEXT NOT NULL UNIQUE,
+    effective_at TEXT NOT NULL,
+    json TEXT NOT NULL,
+    UNIQUE(operator_key, revision)
+  ) STRICT;
+
+  CREATE TABLE provider_decisions (
+    decision_id TEXT PRIMARY KEY,
+    operator_key TEXT NOT NULL,
+    revision INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    origin TEXT NOT NULL,
+    payee TEXT NOT NULL,
+    asset TEXT NOT NULL,
+    network TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    json TEXT NOT NULL,
+    UNIQUE(operator_key, revision)
+  ) STRICT;
+  CREATE INDEX provider_decisions_tuple_idx
+    ON provider_decisions(operator_key, origin, payee, asset, network, revision DESC);
+
+  CREATE TABLE agent_tokens (
+    id TEXT PRIMARY KEY,
+    operator_key TEXT NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    revision INTEGER NOT NULL,
+    expires_at TEXT,
+    revoked_at TEXT,
+    json TEXT NOT NULL,
+    UNIQUE(operator_key, revision)
+  ) STRICT;
+
+  CREATE TABLE checks (
+    id TEXT PRIMARY KEY,
+    operator_key TEXT NOT NULL,
+    agent_token_id TEXT,
+    payer_key TEXT,
+    idempotency_key TEXT,
+    verdict TEXT NOT NULL,
+    status TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    json TEXT NOT NULL,
+    UNIQUE(operator_key, idempotency_key)
+  ) STRICT;
+  CREATE INDEX checks_operator_created_idx ON checks(operator_key, created_at DESC);
+
+  CREATE TABLE reservations (
+    check_id TEXT PRIMARY KEY REFERENCES checks(id) ON DELETE RESTRICT,
+    operator_key TEXT NOT NULL,
+    asset TEXT NOT NULL,
+    amount TEXT NOT NULL,
+    utc_day TEXT NOT NULL,
+    status TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  ) STRICT;
+  CREATE INDEX reservations_cap_idx ON reservations(operator_key, asset, utc_day, status);
+  CREATE INDEX reservations_expiry_idx ON reservations(status, expires_at);
+
+  CREATE TABLE settlements (
+    check_id TEXT PRIMARY KEY REFERENCES checks(id) ON DELETE RESTRICT,
+    transaction_hash TEXT NOT NULL UNIQUE,
+    verdict TEXT NOT NULL,
+    observed_at TEXT NOT NULL,
+    json TEXT NOT NULL
+  ) STRICT;
+
+  CREATE TABLE response_observations (
+    check_id TEXT PRIMARY KEY REFERENCES checks(id) ON DELETE RESTRICT,
+    observation_hash TEXT NOT NULL,
+    observed_at TEXT NOT NULL,
+    json TEXT NOT NULL
+  ) STRICT;
+
+  CREATE TABLE receipts (
+    receipt_id TEXT PRIMARY KEY,
+    check_id TEXT NOT NULL UNIQUE REFERENCES checks(id) ON DELETE RESTRICT,
+    receipt_hash TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL,
+    json TEXT NOT NULL
+  ) STRICT;
+
+  CREATE TABLE anchor_jobs (
+    id TEXT PRIMARY KEY,
+    receipt_id TEXT NOT NULL REFERENCES receipts(receipt_id) ON DELETE RESTRICT,
+    status TEXT NOT NULL,
+    attempts INTEGER NOT NULL,
+    next_attempt_at TEXT NOT NULL,
+    transaction_hash TEXT,
+    updated_at TEXT NOT NULL,
+    json TEXT NOT NULL
+  ) STRICT;
+  CREATE INDEX anchor_jobs_due_idx ON anchor_jobs(status, next_attempt_at);
+`;
+
+function tokenFromRow(row: Row): AgentTokenRecord {
+  return { ...jsonColumn<AgentTokenRecord>(row), revokedAt: nullableStringColumn(row, "revoked_at") };
+}
+
+function reservationFromRow(row: Row): ReservationRecord {
+  return {
+    checkId: stringColumn(row, "check_id"),
+    operatorPublicKey: stringColumn(row, "operator_key"),
+    asset: stringColumn(row, "asset"),
+    amount: stringColumn(row, "amount"),
+    utcDay: stringColumn(row, "utc_day"),
+    status: stringColumn(row, "status") as ReservationStatus,
+    expiresAt: stringColumn(row, "expires_at"),
+    createdAt: stringColumn(row, "created_at"),
+    updatedAt: stringColumn(row, "updated_at")
+  };
+}
+
+function jsonColumn<T>(row: Row): T {
+  const value = stringColumn(row, "json");
+  try {
+    return JSON.parse(value) as T;
+  } catch (error) {
+    throw new Error("Stored auditor JSON is invalid", { cause: error });
+  }
+}
+
+function stringColumn(row: Row, name: string): string {
+  const value = row[name];
+  if (typeof value !== "string") throw new Error(`SQLite column ${name} is not a string`);
+  return value;
+}
+
+function nullableStringColumn(row: Row, name: string): string | null {
+  const value = row[name];
+  if (value === null) return null;
+  if (typeof value !== "string") throw new Error(`SQLite column ${name} is not a string or null`);
+  return value;
+}
+
+function numberColumn(row: Row, name: string): number {
+  const value = row[name];
+  if (typeof value !== "number" || !Number.isSafeInteger(value)) {
+    throw new Error(`SQLite column ${name} is not a safe integer`);
+  }
+  return value;
+}
+
+function normalizeKey(value: string): string {
+  if (typeof value !== "string" || !value) throw new TypeError("Indexed key must not be empty");
+  return value.toLowerCase();
+}
+
+function normalizeHash(value: string, field: string): string {
+  if (!/^[0-9a-f]{64}$/i.test(value)) throw new TypeError(`${field} must be a 64-character hexadecimal hash`);
+  return value.toLowerCase();
+}
+
+function nullableHash(value: string | null, field: string): string | null {
+  return value === null ? null : normalizeHash(value, field);
+}
+
+function isoTimestamp(value: string, field: string): string {
+  const milliseconds = Date.parse(value);
+  if (!Number.isFinite(milliseconds)) throw new TypeError(`${field} must be a valid timestamp`);
+  return new Date(milliseconds).toISOString();
+}
+
+function nullableTimestamp(value: string | null, field: string): string | null {
+  return value === null ? null : isoTimestamp(value, field);
+}
+
+function positiveInteger(value: number, field: string): number {
+  if (!Number.isSafeInteger(value) || value <= 0) throw new TypeError(`${field} must be a positive safe integer`);
+  return value;
+}
+
+function nonNegativeInteger(value: number, field: string): number {
+  if (!Number.isSafeInteger(value) || value < 0) throw new TypeError(`${field} must be a non-negative safe integer`);
+  return value;
+}
+
+function decimalAmount(value: string, field: string, allowZero: boolean): bigint {
+  if (!DECIMAL_INTEGER.test(value)) throw new TypeError(`${field} must be a canonical decimal integer string`);
+  const parsed = BigInt(value);
+  if (!allowZero && parsed === 0n) throw new TypeError(`${field} must be greater than zero`);
+  return parsed;
+}
+
+function validateUtcDay(value: string): void {
+  if (!UTC_DAY.test(value) || Number.isNaN(Date.parse(`${value}T00:00:00.000Z`))) {
+    throw new TypeError("utcDay must be a valid YYYY-MM-DD date");
+  }
+}
