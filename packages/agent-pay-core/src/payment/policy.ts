@@ -165,6 +165,18 @@ function evaluateEvidence(input: PaymentEvaluationInput, nowMs: number, reasons:
       )
     );
   }
+  if (evidence.name !== null && input.terms.extra.name !== evidence.name) {
+    reasons.push(
+      reason(
+        "authorization_field_mismatch",
+        "block",
+        "Declared token name differs from the on-chain authorization domain",
+        "asset.name",
+        evidence.name,
+        input.terms.extra.name
+      )
+    );
+  }
 
   const mandatoryMissing = [
     evidence.activeContractHash === null ? "activeContractHash" : null,

@@ -111,6 +111,8 @@ export type ReservationInput = {
   amount: string;
   dailyCap: string;
   maximumConcurrentReservations: number;
+  payerPublicKey: string;
+  nonce: string;
   expiresAt: string;
 };
 
@@ -120,7 +122,9 @@ export type ReservationResult =
       ok: false;
       reason:
         | "check_not_found"
+        | "check_conflict"
         | "reservation_conflict"
+        | "authorization_replay"
         | "policy_daily_cap_exceeded"
         | "maximum_concurrent_reservations";
     };
@@ -182,10 +186,13 @@ export interface AuditorRepository {
   findCheckByIdempotencyKey(operatorPublicKey: string, idempotencyKey: string): StoredPaymentCheck | null;
 
   reserve(input: ReservationInput): ReservationResult;
+  saveCheckAndReserve(check: StoredPaymentCheck, input: ReservationInput): ReservationResult;
   getReservation(checkId: string): ReservationRecord | null;
   transitionReservation(checkId: string, status: Exclude<ReservationStatus, "active" | "expired">, at: string): boolean;
   reservedTotal(operatorPublicKey: string, asset: string, utcDay: string): string;
   spentTotal(operatorPublicKey: string, asset: string, utcDay: string): string;
+  activeReservationCount(operatorPublicKey: string): number;
+  authorizationReplayUsed(operatorPublicKey: string, asset: string, payerPublicKey: string, nonce: string): boolean;
 
   saveSettlement(settlement: SettlementProof): boolean;
   getSettlement(checkId: string): SettlementProof | null;

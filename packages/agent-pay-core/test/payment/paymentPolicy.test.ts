@@ -40,6 +40,7 @@ describe("payment policy", () => {
     ["missing package", base({ evidence: evidence({ packageExists: false }) }), "block", "asset_package_not_found"],
     ["missing entry point", base({ evidence: evidence({ authorizationEntrypoint: false }) }), "block", "authorization_entrypoint_missing"],
     ["wrong decimals", base({ evidence: evidence({ decimals: 8 }) }), "block", "asset_decimals_mismatch"],
+    ["wrong on-chain token name", base({ evidence: evidence({ name: "Different Token" }) }), "block", "authorization_field_mismatch"],
     ["daily cap", base({ spent: "900000000", reserved: "100000000" }), "block", "policy_daily_cap_exceeded"],
     ["replayed nonce", base({ replayedNonces: [authorization().nonce] }), "block", "authorization_replay"]
   ] as const)("classifies %s", (_label, input, verdict, code) => {

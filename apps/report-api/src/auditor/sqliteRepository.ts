@@ -17,7 +17,7 @@ import type {
   StoredPaymentCheck
 } from "./repository.js";
 
-const CURRENT_SCHEMA_VERSION = 2;
+const CURRENT_SCHEMA_VERSION = 3;
 const DECIMAL_INTEGER = /^(0|[1-9][0-9]*)$/;
 const UTC_DAY = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
 
@@ -350,81 +350,38 @@ class SqliteRepository implements SqliteAuditorRepository {
   }
 
   reserve(input: ReservationInput): ReservationResult {
-    const amount = decimalAmount(input.amount, "reservation.amount", false);
-    const dailyCap = decimalAmount(input.dailyCap, "reservation.dailyCap", true);
-    const maximumConcurrent = positiveInteger(
-      input.maximumConcurrentReservations,
-      "reservation.maximumConcurrentReservations"
-    );
-    const operatorKey = normalizeKey(input.operatorPublicKey);
-    const asset = normalizeKey(input.asset);
-    const now = this.nowIso();
-    const expiresAt = isoTimestamp(input.expiresAt, "reservation.expiresAt");
-    if (expiresAt <= now) throw new TypeError("reservation.expiresAt must be in the future");
-    const utcDay = now.slice(0, 10);
-
+    const prepared = prepareReservation(input, this.nowIso());
     this.database.exec("BEGIN IMMEDIATE");
     try {
-      this.expireReservations(now);
-      const checkRow = this.maybeRow("SELECT operator_key, json FROM checks WHERE id = ?", input.checkId);
-      if (!checkRow || stringColumn(checkRow, "operator_key") !== operatorKey) {
-        this.database.exec("COMMIT");
-        return { ok: false, reason: "check_not_found" };
-      }
-      const check = jsonColumn<StoredPaymentCheck>(checkRow);
-      if (normalizeKey(check.terms.asset) !== asset || check.terms.amount !== input.amount) {
-        this.database.exec("COMMIT");
-        return { ok: false, reason: "reservation_conflict" };
-      }
-
-      const existing = this.getReservation(input.checkId);
-      if (existing) {
-        const identical =
-          existing.operatorPublicKey === operatorKey &&
-          existing.asset === asset &&
-          existing.amount === input.amount &&
-          existing.status === "active";
-        this.database.exec("COMMIT");
-        return identical ? { ok: true } : { ok: false, reason: "reservation_conflict" };
-      }
-
-      const concurrent = numberColumn(
-        this.row(
-          `SELECT COUNT(*) AS count FROM reservations
-           WHERE operator_key = ? AND status IN ('active', 'quarantined')`,
-          operatorKey
-        ),
-        "count"
-      );
-      if (concurrent >= maximumConcurrent) {
-        this.database.exec("COMMIT");
-        return { ok: false, reason: "maximum_concurrent_reservations" };
-      }
-
-      const committed = this.sumReservationRows(
-        operatorKey,
-        asset,
-        utcDay,
-        ["active", "quarantined", "consumed"]
-      );
-      if (committed + amount > dailyCap) {
-        this.database.exec("COMMIT");
-        return { ok: false, reason: "policy_daily_cap_exceeded" };
-      }
-
-      this.database.prepare(
-        `INSERT INTO reservations
-          (check_id, operator_key, asset, amount, utc_day, status, expires_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?)`
-      ).run(input.checkId, operatorKey, asset, input.amount, utcDay, expiresAt, now, now);
+      const result = this.reserveWithinTransaction(input, prepared);
       this.database.exec("COMMIT");
-      return { ok: true };
+      return result;
     } catch (error) {
-      try {
+      this.rollbackQuietly();
+      throw error;
+    }
+  }
+
+  saveCheckAndReserve(check: StoredPaymentCheck, input: ReservationInput): ReservationResult {
+    if (check.id !== input.checkId) {
+      throw new TypeError("Reserved check id must match reservation.checkId");
+    }
+    const prepared = prepareReservation(input, this.nowIso());
+    this.database.exec("BEGIN IMMEDIATE");
+    try {
+      if (!this.saveCheck(check)) {
         this.database.exec("ROLLBACK");
-      } catch {
-        // The transaction may already have been rolled back by SQLite.
+        return { ok: false, reason: "check_conflict" };
       }
+      const result = this.reserveWithinTransaction(input, prepared);
+      if (!result.ok) {
+        this.database.exec("ROLLBACK");
+        return result;
+      }
+      this.database.exec("COMMIT");
+      return result;
+    } catch (error) {
+      this.rollbackQuietly();
       throw error;
     }
   }
@@ -441,14 +398,29 @@ class SqliteRepository implements SqliteAuditorRepository {
   ): boolean {
     const allowedFrom = status === "quarantined" ? ["active"] : ["active", "quarantined"];
     const placeholders = allowedFrom.map(() => "?").join(", ");
-    return this.changed(
-      `UPDATE reservations SET status = ?, updated_at = ?
-       WHERE check_id = ? AND status IN (${placeholders})`,
-      status,
-      isoTimestamp(at, "reservation.updatedAt"),
-      checkId,
-      ...allowedFrom
-    );
+    this.database.exec("BEGIN IMMEDIATE");
+    try {
+      const changed = this.changed(
+        `UPDATE reservations SET status = ?, updated_at = ?
+         WHERE check_id = ? AND status IN (${placeholders})`,
+        status,
+        isoTimestamp(at, "reservation.updatedAt"),
+        checkId,
+        ...allowedFrom
+      );
+      if (changed && status === "released") {
+        this.database.prepare("DELETE FROM authorization_reservations WHERE check_id = ?").run(checkId);
+      }
+      this.database.exec("COMMIT");
+      return changed;
+    } catch (error) {
+      try {
+        this.database.exec("ROLLBACK");
+      } catch {
+        // SQLite may already have rolled back the transaction.
+      }
+      throw error;
+    }
   }
 
   reservedTotal(operatorPublicKey: string, asset: string, utcDay: string): string {
@@ -470,6 +442,38 @@ class SqliteRepository implements SqliteAuditorRepository {
       utcDay,
       ["consumed"]
     ).toString();
+  }
+
+  activeReservationCount(operatorPublicKey: string): number {
+    this.expireReservations(this.nowIso());
+    return numberColumn(
+      this.row(
+        `SELECT COUNT(*) AS count FROM reservations
+         WHERE operator_key = ? AND status IN ('active', 'quarantined')`,
+        normalizeKey(operatorPublicKey)
+      ),
+      "count"
+    );
+  }
+
+  authorizationReplayUsed(
+    operatorPublicKey: string,
+    asset: string,
+    payerPublicKey: string,
+    nonce: string
+  ): boolean {
+    this.expireReservations(this.nowIso());
+    return this.maybeRow(
+      `SELECT 1 AS found FROM authorization_reservations replay
+       JOIN reservations reservation ON reservation.check_id = replay.check_id
+       WHERE replay.operator_key = ? AND replay.asset = ? AND replay.payer_key = ? AND replay.nonce = ?
+         AND reservation.status IN ('active', 'quarantined', 'consumed')
+       LIMIT 1`,
+      normalizeKey(operatorPublicKey),
+      normalizeKey(asset),
+      normalizeKey(payerPublicKey),
+      normalizeHash(nonce, "authorization.nonce")
+    ) !== null;
   }
 
   saveSettlement(settlement: SettlementProof): boolean {
@@ -606,7 +610,114 @@ class SqliteRepository implements SqliteAuditorRepository {
     return value.toISOString();
   }
 
+  private reserveWithinTransaction(
+    input: ReservationInput,
+    prepared: PreparedReservation
+  ): ReservationResult {
+    this.expireReservations(prepared.now);
+    const checkRow = this.maybeRow("SELECT operator_key, json FROM checks WHERE id = ?", input.checkId);
+    if (!checkRow || stringColumn(checkRow, "operator_key") !== prepared.operatorKey) {
+      return { ok: false, reason: "check_not_found" };
+    }
+    const check = jsonColumn<StoredPaymentCheck>(checkRow);
+    if (
+      normalizeKey(check.terms.asset) !== prepared.asset ||
+      check.terms.amount !== input.amount ||
+      !check.authorization ||
+      normalizeKey(check.authorization.payerPublicKey) !== prepared.payerKey ||
+      check.authorization.nonce !== prepared.nonce
+    ) {
+      return { ok: false, reason: "reservation_conflict" };
+    }
+
+    const existing = this.getReservation(input.checkId);
+    if (existing) {
+      const identical =
+        existing.operatorPublicKey === prepared.operatorKey &&
+        existing.asset === prepared.asset &&
+        existing.amount === input.amount &&
+        existing.status === "active";
+      return identical ? { ok: true } : { ok: false, reason: "reservation_conflict" };
+    }
+
+    const concurrent = numberColumn(
+      this.row(
+        `SELECT COUNT(*) AS count FROM reservations
+         WHERE operator_key = ? AND status IN ('active', 'quarantined')`,
+        prepared.operatorKey
+      ),
+      "count"
+    );
+    if (concurrent >= prepared.maximumConcurrent) {
+      return { ok: false, reason: "maximum_concurrent_reservations" };
+    }
+
+    const replay = this.maybeRow(
+      `SELECT 1 AS found FROM authorization_reservations replay
+       JOIN reservations reservation ON reservation.check_id = replay.check_id
+       WHERE replay.operator_key = ? AND replay.asset = ? AND replay.payer_key = ? AND replay.nonce = ?
+         AND reservation.status IN ('active', 'quarantined', 'consumed')
+       LIMIT 1`,
+      prepared.operatorKey,
+      prepared.asset,
+      prepared.payerKey,
+      prepared.nonce
+    );
+    if (replay) return { ok: false, reason: "authorization_replay" };
+
+    const committed = this.sumReservationRows(
+      prepared.operatorKey,
+      prepared.asset,
+      prepared.utcDay,
+      ["active", "quarantined", "consumed"]
+    );
+    if (committed + prepared.amount > prepared.dailyCap) {
+      return { ok: false, reason: "policy_daily_cap_exceeded" };
+    }
+
+    this.database.prepare(
+      `INSERT INTO reservations
+        (check_id, operator_key, asset, amount, utc_day, status, expires_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?)`
+    ).run(
+      input.checkId,
+      prepared.operatorKey,
+      prepared.asset,
+      input.amount,
+      prepared.utcDay,
+      prepared.expiresAt,
+      prepared.now,
+      prepared.now
+    );
+    this.database.prepare(
+      `INSERT INTO authorization_reservations
+        (check_id, operator_key, asset, payer_key, nonce)
+       VALUES (?, ?, ?, ?, ?)`
+    ).run(
+      input.checkId,
+      prepared.operatorKey,
+      prepared.asset,
+      prepared.payerKey,
+      prepared.nonce
+    );
+    return { ok: true };
+  }
+
+  private rollbackQuietly(): void {
+    try {
+      this.database.exec("ROLLBACK");
+    } catch {
+      // SQLite may already have rolled back the transaction.
+    }
+  }
+
   private expireReservations(now: string): void {
+    this.database.prepare(
+      `DELETE FROM authorization_reservations
+       WHERE check_id IN (
+         SELECT check_id FROM reservations WHERE status = 'active' AND expires_at <= ?
+       )`
+    ).run(now);
     this.database.prepare(
       `UPDATE reservations SET status = 'expired', updated_at = ?
        WHERE status = 'active' AND expires_at <= ?`
@@ -659,6 +770,19 @@ class SqliteRepository implements SqliteAuditorRepository {
 }
 
 type Row = Record<string, unknown>;
+
+type PreparedReservation = {
+  amount: bigint;
+  dailyCap: bigint;
+  maximumConcurrent: number;
+  operatorKey: string;
+  asset: string;
+  payerKey: string;
+  nonce: string;
+  now: string;
+  expiresAt: string;
+  utcDay: string;
+};
 
 const MIGRATION_1 = `
   CREATE TABLE auth_challenges (
@@ -800,13 +924,47 @@ const MIGRATION_2 = `
   ) STRICT;
 `;
 
+const MIGRATION_3 = `
+  CREATE TABLE authorization_reservations (
+    check_id TEXT PRIMARY KEY REFERENCES reservations(check_id) ON DELETE RESTRICT,
+    operator_key TEXT NOT NULL,
+    asset TEXT NOT NULL,
+    payer_key TEXT NOT NULL,
+    nonce TEXT NOT NULL,
+    UNIQUE(operator_key, asset, payer_key, nonce)
+  ) STRICT;
+  CREATE INDEX authorization_replay_idx
+    ON authorization_reservations(operator_key, asset, payer_key, nonce);
+`;
+
 const MIGRATIONS = [
   { version: 1, sql: MIGRATION_1 },
-  { version: 2, sql: MIGRATION_2 }
+  { version: 2, sql: MIGRATION_2 },
+  { version: 3, sql: MIGRATION_3 }
 ] as const;
 
 function tokenFromRow(row: Row): AgentTokenRecord {
   return { ...jsonColumn<AgentTokenRecord>(row), revokedAt: nullableStringColumn(row, "revoked_at") };
+}
+
+function prepareReservation(input: ReservationInput, now: string): PreparedReservation {
+  const expiresAt = isoTimestamp(input.expiresAt, "reservation.expiresAt");
+  if (expiresAt <= now) throw new TypeError("reservation.expiresAt must be in the future");
+  return {
+    amount: decimalAmount(input.amount, "reservation.amount", false),
+    dailyCap: decimalAmount(input.dailyCap, "reservation.dailyCap", true),
+    maximumConcurrent: positiveInteger(
+      input.maximumConcurrentReservations,
+      "reservation.maximumConcurrentReservations"
+    ),
+    operatorKey: normalizeKey(input.operatorPublicKey),
+    asset: normalizeKey(input.asset),
+    payerKey: normalizeKey(input.payerPublicKey),
+    nonce: normalizeHash(input.nonce, "reservation.nonce"),
+    now,
+    expiresAt,
+    utcDay: now.slice(0, 10)
+  };
 }
 
 function reservationFromRow(row: Row): ReservationRecord {

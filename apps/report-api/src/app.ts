@@ -3,6 +3,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import cors from "cors";
 import express, { type Express } from "express";
+import type { Router } from "express";
 import {
   findReport,
   hashJson,
@@ -93,7 +94,11 @@ type FeedEntry = {
   cardImageUrl: string;
 };
 
-export function createReportApp(): Express {
+export type CreateReportAppOptions = {
+  auditorRouter?: Router;
+};
+
+export function createReportApp(options: CreateReportAppOptions = {}): Express {
   const app = express();
   const quotes = new Map<string, QuoteSnapshot>();
   const settledTransactionQuotes = new Map<string, string>();
@@ -385,6 +390,8 @@ export function createReportApp(): Express {
       response.json({ tokens: [] });
     }
   });
+
+  if (options.auditorRouter) app.use("/v1", options.auditorRouter);
 
   app.use((error: unknown, _request: express.Request, response: express.Response, _next: express.NextFunction) => {
     const message = error instanceof Error ? error.message : "Unknown report API error";

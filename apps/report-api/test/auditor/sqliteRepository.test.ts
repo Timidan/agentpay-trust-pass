@@ -1,4 +1,5 @@
 import { mkdtemp, rm } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -55,7 +56,7 @@ describe("openSqliteRepository", () => {
     const receipt = makeReceipt(check, policy, providerDecision, settlement, observation);
     const anchorJob = makeAnchorJob(receipt.receiptId);
 
-    expect(first.schemaVersion()).toBe(2);
+    expect(first.schemaVersion()).toBe(3);
     expect(first.saveChallenge(challenge)).toBe(true);
     expect(first.saveSession(session)).toBe(true);
     expect(first.savePolicy(policy)).toBe(true);
@@ -70,7 +71,7 @@ describe("openSqliteRepository", () => {
     repositories.splice(repositories.indexOf(first), 1);
 
     const reopened = open(databasePath);
-    expect(reopened.schemaVersion()).toBe(2);
+    expect(reopened.schemaVersion()).toBe(3);
     expect(reopened.getChallenge(challenge.id)).toEqual(challenge);
     expect(reopened.findSessionByTokenHash(session.tokenHash)).toEqual(session);
     expect(reopened.getCurrentPolicy(OPERATOR)).toEqual(policy);
@@ -150,12 +151,14 @@ describe("openSqliteRepository", () => {
       amount: "60",
       dailyCap: "100",
       maximumConcurrentReservations: 10,
+      payerPublicKey: PAYER,
+      nonce: nonceFor(firstCheck.id),
       expiresAt: LATER
     };
     expect(first.reserve(reservation)).toEqual({ ok: true });
     expect(first.reserve(reservation)).toEqual({ ok: true });
     expect(
-      first.reserve({ ...reservation, checkId: secondCheck.id })
+      first.reserve(reservationFor(secondCheck.id, "60", "100"))
     ).toEqual({ ok: false, reason: "policy_daily_cap_exceeded" });
     expect(first.reservedTotal(OPERATOR, ASSET, "2026-07-15")).toBe("60");
     first.close();
@@ -237,6 +240,48 @@ describe("openSqliteRepository", () => {
     expect(repository.spentTotal(OPERATOR, ASSET, "2026-07-15")).toBe("60");
   });
 
+  it("claims authorization nonces atomically and releases only unused claims", async () => {
+    const repository = open(await temporaryDatabasePath());
+    const firstCheck = makeCheck("check-nonce-1", "10");
+    const secondCheck = makeCheck("check-nonce-2", "10", "idempotency-nonce-2");
+    const nonce = "a".repeat(64);
+    firstCheck.authorization = { ...firstCheck.authorization!, nonce };
+    secondCheck.authorization = { ...secondCheck.authorization!, nonce };
+    repository.saveCheck(firstCheck);
+    repository.saveCheck(secondCheck);
+
+    expect(repository.reserve({ ...reservationFor(firstCheck.id, "10", "100"), nonce })).toEqual({ ok: true });
+    expect(repository.reserve({ ...reservationFor(secondCheck.id, "10", "100"), nonce })).toEqual({
+      ok: false,
+      reason: "authorization_replay"
+    });
+    expect(repository.authorizationReplayUsed(OPERATOR, ASSET, PAYER, nonce)).toBe(true);
+
+    expect(repository.transitionReservation(firstCheck.id, "released", NOW)).toBe(true);
+    expect(repository.authorizationReplayUsed(OPERATOR, ASSET, PAYER, nonce)).toBe(false);
+    expect(repository.reserve({ ...reservationFor(secondCheck.id, "10", "100"), nonce })).toEqual({ ok: true });
+    expect(repository.transitionReservation(secondCheck.id, "consumed", NOW)).toBe(true);
+    expect(repository.authorizationReplayUsed(OPERATOR, ASSET, PAYER, nonce)).toBe(true);
+  });
+
+  it("rolls back a PAY check when its reservation cannot be admitted", async () => {
+    const repository = open(await temporaryDatabasePath());
+    const rejected = makeCheck("check-atomic-reject", "10");
+
+    expect(
+      repository.saveCheckAndReserve(rejected, reservationFor(rejected.id, "10", "0"))
+    ).toEqual({ ok: false, reason: "policy_daily_cap_exceeded" });
+    expect(repository.getCheck(rejected.id)).toBeNull();
+    expect(repository.getReservation(rejected.id)).toBeNull();
+
+    const admitted = makeCheck("check-atomic-admit", "10", "idempotency-atomic-admit");
+    expect(
+      repository.saveCheckAndReserve(admitted, reservationFor(admitted.id, "10", "10"))
+    ).toEqual({ ok: true });
+    expect(repository.getCheck(admitted.id)?.id).toBe(admitted.id);
+    expect(repository.getReservation(admitted.id)?.status).toBe("active");
+  });
+
   it("updates anchor jobs without mutating immutable receipts", async () => {
     const repository = open(await temporaryDatabasePath());
     const check = makeCheck("check-anchor", "60");
@@ -284,8 +329,14 @@ function reservationFor(checkId: string, amount: string, dailyCap: string, expir
     amount,
     dailyCap,
     maximumConcurrentReservations: 10,
+    payerPublicKey: PAYER,
+    nonce: nonceFor(checkId),
     expiresAt
   };
+}
+
+function nonceFor(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
 }
 
 function makeChallenge(): AuthChallenge {
@@ -376,7 +427,7 @@ function makeProviderDecision(): ProviderDecision {
 function makeCheck(id: string, amount: string, idempotencyKey = `idempotency-${id}`): StoredPaymentCheck {
   const request = makeRequest();
   const terms = makeTerms(amount);
-  const authorization = makeAuthorization(amount);
+  const authorization = makeAuthorization(amount, nonceFor(id));
   const evidence = makeEvidence();
   const decision = makeDecision(id, amount);
   return {
@@ -434,7 +485,7 @@ function makeTerms(amount: string): PaymentTerms {
   };
 }
 
-function makeAuthorization(amount: string): AuthorizationIntent {
+function makeAuthorization(amount: string, nonce: string): AuthorizationIntent {
   return {
     payerPublicKey: PAYER,
     from: "7".repeat(64),
@@ -442,7 +493,7 @@ function makeAuthorization(amount: string): AuthorizationIntent {
     amount,
     validAfter: "1784148600",
     validBefore: "1784149500",
-    nonce: "8".repeat(64),
+    nonce,
     network: "casper:casper-test",
     asset: ASSET,
     tokenName: "Casper X402 Token",

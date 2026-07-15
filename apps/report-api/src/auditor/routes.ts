@@ -14,6 +14,7 @@ import {
   agentTokenRevokeHash,
   hashBearerToken,
   type AgentTokenIssueSpec,
+  type AuthPrincipal,
   type OperatorActionDescriptor
 } from "./auth.js";
 import type {
@@ -22,6 +23,7 @@ import type {
   AuditorRepository,
   AuthSession
 } from "./repository.js";
+import { PaymentAuditService } from "./service.js";
 
 const HASH = /^[0-9a-f]{64}$/;
 const ACCOUNT_ADDRESS = /^00[0-9a-f]{64}$/;
@@ -37,6 +39,7 @@ const AGENT_SCOPES = new Set<AgentTokenScope>([
 export type AuditorRouterDependencies = {
   repository: AuditorRepository;
   auth: AuditorAuth;
+  service?: PaymentAuditService;
 };
 
 export function createAuditorRouter(dependencies: AuditorRouterDependencies): Router {
@@ -237,6 +240,57 @@ export function createAuditorRouter(dependencies: AuditorRouterDependencies): Ro
     response.status(204).send();
   });
 
+  if (dependencies.service) {
+    const service = dependencies.service;
+
+    router.post("/checks", async (request, response) => {
+      const body = bodyRecord(request);
+      const actor = requireCheckActor(request, auth, body.authorization);
+      const idempotencyKey = request.header("idempotency-key");
+      if (!idempotencyKey || idempotencyKey.length > 128 || !/^[A-Za-z0-9._:-]+$/.test(idempotencyKey)) {
+        throw invalid(
+          "invalid_request",
+          "Idempotency-Key must contain 1 to 128 URL-safe identifier characters",
+          "Idempotency-Key",
+          "1..128 characters",
+          idempotencyKey ?? null
+        );
+      }
+      const result = await service.createCheck({
+        operatorPublicKey: actor.operatorPublicKey,
+        agentTokenId: actor.agentTokenId,
+        idempotencyKey,
+        request: body.request,
+        paymentRequired: body.paymentRequired,
+        authorization: body.authorization
+      });
+      response.status(result.created ? 201 : 200).json(result);
+    });
+
+    router.get("/checks/:id", (request, response) => {
+      const principal = authenticateRequest(request, auth).principal;
+      const check = service.getCheck(request.params.id);
+      if (!check) throw new AuthError("check_not_found", "Payment check was not found", 404);
+      requireCheckOwnership(principal, check.operatorPublicKey, check.agentTokenId);
+      response.json({ check });
+    });
+
+    router.post("/checks/:id/cancel", (request, response) => {
+      const principal = authenticateRequest(request, auth).principal;
+      const check = service.getCheck(request.params.id);
+      if (!check) throw new AuthError("check_not_found", "Payment check was not found", 404);
+      requireCheckOwnership(principal, check.operatorPublicKey, check.agentTokenId);
+      if (principal.kind === "agent" && !principal.token.scopes.includes("checks:write")) {
+        throw new AuthError("agent_scope_denied", "Agent token cannot cancel payment checks", 403, {
+          field: "scope",
+          expected: "checks:write",
+          received: principal.token.scopes
+        });
+      }
+      response.json({ check: service.cancelCheck(check.id) });
+    });
+  }
+
   router.use((error: unknown, _request: Request, response: Response, _next: NextFunction) => {
     if (error instanceof AuthError) {
       response.status(error.status).json(error.toBody());
@@ -258,12 +312,24 @@ export function createAuditorRouter(dependencies: AuditorRouterDependencies): Ro
 type CredentialSource = "bearer" | "cookie";
 
 function requireOperator(request: Request, auth: AuditorAuth): AuthSession {
-  const credential = readCredential(request, auth.cookieName);
-  const principal = auth.authenticateCredential(credential.token);
+  const { principal } = authenticateRequest(request, auth);
   if (principal.kind !== "operator") {
     throw new AuthError("operator_session_required", "Administrative actions require an operator session", 403);
   }
-  if (credential.source === "cookie" && !["GET", "HEAD", "OPTIONS"].includes(request.method)) {
+  return principal.session;
+}
+
+function authenticateRequest(
+  request: Request,
+  auth: AuditorAuth
+): { principal: AuthPrincipal; credential: { token: string; source: CredentialSource } } {
+  const credential = readCredential(request, auth.cookieName);
+  const principal = auth.authenticateCredential(credential.token);
+  if (
+    principal.kind === "operator" &&
+    credential.source === "cookie" &&
+    !["GET", "HEAD", "OPTIONS"].includes(request.method)
+  ) {
     const origin = requestOrigin(request);
     if (origin !== principal.session.origin) {
       throw new AuthError("origin_mismatch", "Cookie-authenticated writes require the session Origin", 403, {
@@ -273,7 +339,52 @@ function requireOperator(request: Request, auth: AuditorAuth): AuthSession {
       });
     }
   }
-  return principal.session;
+  return { principal, credential };
+}
+
+function requireCheckActor(
+  request: Request,
+  auth: AuditorAuth,
+  authorization: unknown
+): { operatorPublicKey: string; agentTokenId: string | null } {
+  const authenticated = authenticateRequest(request, auth);
+  if (authenticated.principal.kind === "operator") {
+    return {
+      operatorPublicKey: authenticated.principal.session.operatorPublicKey,
+      agentTokenId: null
+    };
+  }
+  const authorizationRecord =
+    typeof authorization === "object" && authorization !== null && !Array.isArray(authorization)
+      ? (authorization as Record<string, unknown>)
+      : null;
+  if (!authorizationRecord || typeof authorizationRecord.payerPublicKey !== "string") {
+    throw invalid(
+      "invalid_request",
+      "Agent checks require an authorization payer public key",
+      "authorization.payerPublicKey",
+      "Casper public key",
+      authorizationRecord?.payerPublicKey ?? null
+    );
+  }
+  const token = auth.authorizeAgent(
+    authenticated.credential.token,
+    "checks:write",
+    authorizationRecord.payerPublicKey
+  );
+  return { operatorPublicKey: token.operatorPublicKey, agentTokenId: token.id };
+}
+
+function requireCheckOwnership(
+  principal: AuthPrincipal,
+  operatorPublicKey: string,
+  agentTokenId: string | null
+): void {
+  const ownsCheck =
+    principal.kind === "operator"
+      ? principal.session.operatorPublicKey === operatorPublicKey
+      : principal.token.operatorPublicKey === operatorPublicKey && principal.token.id === agentTokenId;
+  if (!ownsCheck) throw new AuthError("check_not_found", "Payment check was not found", 404);
 }
 
 function readCredential(request: Request, cookieName: string): { token: string; source: CredentialSource } {
