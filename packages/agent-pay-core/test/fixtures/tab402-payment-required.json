@@ -1,0 +1,25 @@
+{
+  "x402Version": 2,
+  "error": "Payment required",
+  "resource": {
+    "url": "http://tab402.fly.dev/v1/speak",
+    "description": "Text-to-speech via Deepgram, paid per call over x402",
+    "mimeType": "audio/mpeg"
+  },
+  "accepts": [
+    {
+      "scheme": "exact",
+      "network": "casper:casper-test",
+      "amount": "100000000",
+      "asset": "50ec5690bde5e72f5152cb5154119eb706961e376b19050534a95a13ead8baaf",
+      "payTo": "00b728a64f7e93d583c1b6f291ff26f4fd2f257d51ed1bb788c417b4b5225436d8",
+      "maxTimeoutSeconds": 300,
+      "extra": {
+        "name": "Casper X402 Token",
+        "symbol": "X402",
+        "version": "1",
+        "decimals": "9"
+      }
+    }
+  ]
+}

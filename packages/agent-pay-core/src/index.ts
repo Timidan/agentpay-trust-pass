@@ -8,3 +8,4 @@ export {
 } from "./merkle.js";
 export type { Dataset, EvidenceFactValue, EvidenceRecord, ProofStep, ReportProof } from "./types.js";
 export * from "./trust/index.js";
+export * from "./payment/index.js";
