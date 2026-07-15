@@ -24,6 +24,7 @@ import type {
   AuditorRepository,
   AuthSession
 } from "./repository.js";
+import type { X402Probe } from "./probe.js";
 import { PaymentAuditService } from "./service.js";
 
 const HASH = /^[0-9a-f]{64}$/;
@@ -41,6 +42,7 @@ export type AuditorRouterDependencies = {
   repository: AuditorRepository;
   auth: AuditorAuth;
   service?: PaymentAuditService;
+  probe?: X402Probe;
 };
 
 export function createAuditorRouter(dependencies: AuditorRouterDependencies): Router {
@@ -242,6 +244,15 @@ export function createAuditorRouter(dependencies: AuditorRouterDependencies): Ro
     }
     response.status(204).send();
   });
+
+  const probe = dependencies.probe;
+  if (probe) {
+    router.post("/probes", async (request, response) => {
+      const principal = authenticateRequest(request, auth).principal;
+      requireAgentScope(principal, "checks:write", "Agent token cannot probe x402 services");
+      response.json(await probe.probe(bodyRecord(request)));
+    });
+  }
 
   if (dependencies.service) {
     const service = dependencies.service;

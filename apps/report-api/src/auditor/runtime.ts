@@ -3,6 +3,7 @@ import type { Router } from "express";
 import { AuditorAuth } from "./auth.js";
 import { NodeRpcClient } from "./casperRpc.js";
 import { createAuditorRouter } from "./routes.js";
+import { X402Probe } from "./probe.js";
 import { PaymentAuditService } from "./service.js";
 import { openSqliteRepository, type SqliteAuditorRepository } from "./sqliteRepository.js";
 
@@ -21,6 +22,7 @@ export type AuditorRuntime = {
   auth: AuditorAuth;
   service: PaymentAuditService;
   rpc: NodeRpcClient;
+  probe: X402Probe;
   close(): void;
 };
 
@@ -39,8 +41,9 @@ export function createAuditorRuntime(options: AuditorRuntimeOptions): AuditorRun
       settlementLoader: rpc,
       now: options.now
     });
-    const router = createAuditorRouter({ repository, auth, service });
-    return { router, repository, auth, service, rpc, close: () => repository.close() };
+    const probe = new X402Probe({ allowHttp: isLoopbackOrigin(auth.publicOrigin), now: options.now });
+    const router = createAuditorRouter({ repository, auth, service, probe });
+    return { router, repository, auth, service, rpc, probe, close: () => repository.close() };
   } catch (error) {
     repository.close();
     throw error;
@@ -72,4 +75,9 @@ function validPort(value: string): number {
     throw new TypeError("REPORT_API_PORT must be an integer from 1 to 65535");
   }
   return port;
+}
+
+function isLoopbackOrigin(value: string): boolean {
+  const hostname = new URL(value).hostname;
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
 }
