@@ -13,6 +13,11 @@ export {
   verifyAuthorizationSignature
 } from "./authorization.js";
 export {
+  evaluatePayment,
+  operatorPolicyHash,
+  providerDecisionHash
+} from "./policy.js";
+export {
   decodePaymentRequiredHeader,
   normalizeOriginalRequest,
   normalizePaymentRequired
@@ -20,3 +25,4 @@ export {
 export type * from "./types.js";
 export type { CasperAlgorithm, ParsedCasperPublicKey } from "./casperSignature.js";
 export type { TransferAuthorizationDigestInput } from "./authorization.js";
+export type { PaymentEvaluationInput } from "./policy.js";
