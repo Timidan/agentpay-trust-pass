@@ -1,7 +1,22 @@
 export { artifactHash, canonicalJson } from "./canonical.js";
 export {
+  operatorActionMessage,
+  parseCasperPublicKey,
+  parseCasperSignature,
+  publicKeyToAccountAddress,
+  verifyCasperMessageSignature
+} from "./casperSignature.js";
+export {
+  authorizationDigest,
+  buildAuthorizationIntent,
+  transferWithAuthorizationDigest,
+  verifyAuthorizationSignature
+} from "./authorization.js";
+export {
   decodePaymentRequiredHeader,
   normalizeOriginalRequest,
   normalizePaymentRequired
 } from "./normalize.js";
 export type * from "./types.js";
+export type { CasperAlgorithm, ParsedCasperPublicKey } from "./casperSignature.js";
+export type { TransferAuthorizationDigestInput } from "./authorization.js";
