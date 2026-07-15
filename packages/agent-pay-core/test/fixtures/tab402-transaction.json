@@ -1,0 +1,241 @@
+{
+  "_fixture": {
+    "source": "https://node.testnet.casper.network/rpc",
+    "capturedAt": "2026-07-15T21:10:00.000Z",
+    "transactionHash": "2458f77bcd56ae960c02d0dfba616c63f3008c7ee7e87bcfd861c4da87e774b4",
+    "omittedFields": [
+      "result.execution_info.execution_result.Version2.effects"
+    ]
+  },
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "api_version": "2.0.0",
+    "transaction": {
+      "Version1": {
+        "hash": "2458f77bcd56ae960c02d0dfba616c63f3008c7ee7e87bcfd861c4da87e774b4",
+        "payload": {
+          "initiator_addr": {
+            "PublicKey": "01aff8a88e9d562dad2befec259a8818371d6d092328e8490bb6fc9644041c7c03"
+          },
+          "timestamp": "2026-07-09T16:22:23.519Z",
+          "ttl": "30m",
+          "chain_name": "casper-test",
+          "pricing_mode": {
+            "PaymentLimited": {
+              "payment_amount": 7000000000,
+              "gas_price_tolerance": 1,
+              "standard_payment": true
+            }
+          },
+          "fields": {
+            "args": {
+              "Named": [
+                [
+                  "from",
+                  {
+                    "cl_type": "Key",
+                    "bytes": "00e27bfb95afa9b87a76e76d993928d8d4a1d119aea0f202cf4bf2cc036d534b28",
+                    "parsed": "account-hash-e27bfb95afa9b87a76e76d993928d8d4a1d119aea0f202cf4bf2cc036d534b28"
+                  }
+                ],
+                [
+                  "to",
+                  {
+                    "cl_type": "Key",
+                    "bytes": "00b728a64f7e93d583c1b6f291ff26f4fd2f257d51ed1bb788c417b4b5225436d8",
+                    "parsed": "account-hash-b728a64f7e93d583c1b6f291ff26f4fd2f257d51ed1bb788c417b4b5225436d8"
+                  }
+                ],
+                [
+                  "amount",
+                  {
+                    "cl_type": "U256",
+                    "bytes": "0400e1f505",
+                    "parsed": "100000000"
+                  }
+                ],
+                [
+                  "valid_after",
+                  {
+                    "cl_type": "U64",
+                    "bytes": "64c84f6a00000000",
+                    "parsed": 1783613540
+                  }
+                ],
+                [
+                  "valid_before",
+                  {
+                    "cl_type": "U64",
+                    "bytes": "e8cb4f6a00000000",
+                    "parsed": 1783614440
+                  }
+                ],
+                [
+                  "nonce",
+                  {
+                    "cl_type": {
+                      "List": "U8"
+                    },
+                    "bytes": "20000000c611162ab90e14f33f6593f83674d4438285999b9f68fa33bcd8d69ea784b333",
+                    "parsed": [
+                      198,
+                      17,
+                      22,
+                      42,
+                      185,
+                      14,
+                      20,
+                      243,
+                      63,
+                      101,
+                      147,
+                      248,
+                      54,
+                      116,
+                      212,
+                      67,
+                      130,
+                      133,
+                      153,
+                      155,
+                      159,
+                      104,
+                      250,
+                      51,
+                      188,
+                      216,
+                      214,
+                      158,
+                      167,
+                      132,
+                      179,
+                      51
+                    ]
+                  }
+                ],
+                [
+                  "public_key",
+                  {
+                    "cl_type": "PublicKey",
+                    "bytes": "01aff8a88e9d562dad2befec259a8818371d6d092328e8490bb6fc9644041c7c03",
+                    "parsed": "01aff8a88e9d562dad2befec259a8818371d6d092328e8490bb6fc9644041c7c03"
+                  }
+                ],
+                [
+                  "signature",
+                  {
+                    "cl_type": {
+                      "List": "U8"
+                    },
+                    "bytes": "4100000001ff9acfc7380b0b83bdfae8873bb3e3bc01dcd3818e8dfc83083c4c456c40dbc39de26e4dc3f13d509f8084a497dad472d2afd99a3932c47c83b2a459e01f970b",
+                    "parsed": [
+                      1,
+                      255,
+                      154,
+                      207,
+                      199,
+                      56,
+                      11,
+                      11,
+                      131,
+                      189,
+                      250,
+                      232,
+                      135,
+                      59,
+                      179,
+                      227,
+                      188,
+                      1,
+                      220,
+                      211,
+                      129,
+                      142,
+                      141,
+                      252,
+                      131,
+                      8,
+                      60,
+                      76,
+                      69,
+                      108,
+                      64,
+                      219,
+                      195,
+                      157,
+                      226,
+                      110,
+                      77,
+                      195,
+                      241,
+                      61,
+                      80,
+                      159,
+                      128,
+                      132,
+                      164,
+                      151,
+                      218,
+                      212,
+                      114,
+                      210,
+                      175,
+                      217,
+                      154,
+                      57,
+                      50,
+                      196,
+                      124,
+                      131,
+                      178,
+                      164,
+                      89,
+                      224,
+                      31,
+                      151,
+                      11
+                    ]
+                  }
+                ]
+              ]
+            },
+            "entry_point": {
+              "Custom": "transfer_with_authorization"
+            },
+            "scheduling": "Standard",
+            "target": {
+              "Stored": {
+                "id": {
+                  "ByPackageHash": {
+                    "addr": "50ec5690bde5e72f5152cb5154119eb706961e376b19050534a95a13ead8baaf",
+                    "version": null
+                  }
+                },
+                "runtime": "VmCasperV1"
+              }
+            }
+          }
+        },
+        "approvals": [
+          {
+            "signer": "01aff8a88e9d562dad2befec259a8818371d6d092328e8490bb6fc9644041c7c03",
+            "signature": "01632435e5277afee2fc5ad6d6f59877de8e13b7a6501efd560319fe9046165bb0a93f2a7e2868cec968ce56b6b20c4b1ad0bd8ecd90011b751612c39df3c19e00"
+          }
+        ]
+      }
+    },
+    "execution_info": {
+      "block_hash": "300867a5dfecc546b09f07ec22e8cd4aa81596035b9cd2ed4321b9608a0561ec",
+      "block_height": 8449194,
+      "execution_result": {
+        "Version2": {
+          "initiator": {
+            "PublicKey": "01aff8a88e9d562dad2befec259a8818371d6d092328e8490bb6fc9644041c7c03"
+          },
+          "error_message": null
+        }
+      }
+    }
+  }
+}
