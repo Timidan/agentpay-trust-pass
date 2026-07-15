@@ -4,6 +4,7 @@ import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { canonicalJson, type OperatorPolicy, type ProviderDecision, type PurchaseReceipt, type SettlementProof } from "@agent-pay/core";
 import type {
   AgentTokenRecord,
+  AgentTokenRevocation,
   AnchorJob,
   AuditorRepository,
   AuthChallenge,
@@ -16,7 +17,7 @@ import type {
   StoredPaymentCheck
 } from "./repository.js";
 
-const CURRENT_SCHEMA_VERSION = 1;
+const CURRENT_SCHEMA_VERSION = 2;
 const DECIMAL_INTEGER = /^(0|[1-9][0-9]*)$/;
 const UTC_DAY = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
 
@@ -222,12 +223,80 @@ class SqliteRepository implements SqliteAuditorRepository {
     return row ? tokenFromRow(row) : null;
   }
 
-  revokeAgentToken(id: string, revokedAt: string): boolean {
-    return this.changed(
-      "UPDATE agent_tokens SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL",
-      isoTimestamp(revokedAt, "agentToken.revokedAt"),
-      id
+  latestAgentTokenRevision(operatorPublicKey: string): number {
+    const row = this.row(
+      `SELECT COALESCE(MAX(revision), 0) AS revision FROM (
+         SELECT revision FROM agent_tokens WHERE operator_key = ?
+         UNION ALL
+         SELECT revision FROM agent_token_revocations WHERE operator_key = ?
+       )`,
+      normalizeKey(operatorPublicKey),
+      normalizeKey(operatorPublicKey)
     );
+    return numberColumn(row, "revision");
+  }
+
+  revokeAgentToken(revocation: AgentTokenRevocation): boolean {
+    const operatorKey = normalizeKey(revocation.operatorPublicKey);
+    const revokedAt = isoTimestamp(revocation.revokedAt, "agentTokenRevocation.revokedAt");
+    const revision = positiveInteger(revocation.revision, "agentTokenRevocation.revision");
+    const actionHash = normalizeHash(revocation.actionHash, "agentTokenRevocation.actionHash");
+
+    this.database.exec("BEGIN IMMEDIATE");
+    try {
+      const token = this.maybeRow(
+        "SELECT operator_key, revoked_at FROM agent_tokens WHERE id = ?",
+        revocation.tokenId
+      );
+      const expectedRevision = this.latestAgentTokenRevision(operatorKey) + 1;
+      if (
+        !token ||
+        stringColumn(token, "operator_key") !== operatorKey ||
+        token.revoked_at !== null ||
+        revision !== expectedRevision
+      ) {
+        this.database.exec("ROLLBACK");
+        return false;
+      }
+      const inserted = this.insert(
+        `INSERT OR IGNORE INTO agent_token_revocations
+          (token_id, operator_key, revision, action_hash, revoked_at, json)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        revocation.tokenId,
+        operatorKey,
+        revision,
+        actionHash,
+        revokedAt,
+        canonicalJson({ ...revocation, operatorPublicKey: operatorKey, actionHash, revokedAt })
+      );
+      if (!inserted) {
+        this.database.exec("ROLLBACK");
+        return false;
+      }
+      const updated = this.changed(
+        "UPDATE agent_tokens SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL",
+        revokedAt,
+        revocation.tokenId
+      );
+      if (!updated) {
+        this.database.exec("ROLLBACK");
+        return false;
+      }
+      this.database.exec("COMMIT");
+      return true;
+    } catch (error) {
+      try {
+        this.database.exec("ROLLBACK");
+      } catch {
+        // SQLite may already have rolled back the transaction.
+      }
+      throw error;
+    }
+  }
+
+  getAgentTokenRevocation(tokenId: string): AgentTokenRevocation | null {
+    const row = this.maybeRow("SELECT json FROM agent_token_revocations WHERE token_id = ?", tokenId);
+    return row ? jsonColumn<AgentTokenRevocation>(row) : null;
   }
 
   saveCheck(check: StoredPaymentCheck): boolean {
@@ -505,22 +574,27 @@ class SqliteRepository implements SqliteAuditorRepository {
         applied_at TEXT NOT NULL
       ) STRICT
     `);
-    if (this.schemaVersion() >= CURRENT_SCHEMA_VERSION) return;
-
-    this.database.exec("BEGIN IMMEDIATE");
-    try {
-      this.database.exec(MIGRATION_1);
-      this.database.prepare(
-        "INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)"
-      ).run(CURRENT_SCHEMA_VERSION, this.nowIso());
-      this.database.exec("COMMIT");
-    } catch (error) {
+    const existingVersion = this.schemaVersion();
+    if (existingVersion > CURRENT_SCHEMA_VERSION) {
+      throw new Error(`Auditor database schema ${existingVersion} is newer than supported version ${CURRENT_SCHEMA_VERSION}`);
+    }
+    for (const migration of MIGRATIONS) {
+      if (migration.version <= existingVersion) continue;
+      this.database.exec("BEGIN IMMEDIATE");
       try {
-        this.database.exec("ROLLBACK");
-      } catch {
-        // The migration transaction may already have been rolled back.
+        this.database.exec(migration.sql);
+        this.database.prepare(
+          "INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)"
+        ).run(migration.version, this.nowIso());
+        this.database.exec("COMMIT");
+      } catch (error) {
+        try {
+          this.database.exec("ROLLBACK");
+        } catch {
+          // The migration transaction may already have been rolled back.
+        }
+        throw error;
       }
-      throw error;
     }
   }
 
@@ -713,6 +787,23 @@ const MIGRATION_1 = `
   ) STRICT;
   CREATE INDEX anchor_jobs_due_idx ON anchor_jobs(status, next_attempt_at);
 `;
+
+const MIGRATION_2 = `
+  CREATE TABLE agent_token_revocations (
+    token_id TEXT PRIMARY KEY REFERENCES agent_tokens(id) ON DELETE RESTRICT,
+    operator_key TEXT NOT NULL,
+    revision INTEGER NOT NULL,
+    action_hash TEXT NOT NULL UNIQUE,
+    revoked_at TEXT NOT NULL,
+    json TEXT NOT NULL,
+    UNIQUE(operator_key, revision)
+  ) STRICT;
+`;
+
+const MIGRATIONS = [
+  { version: 1, sql: MIGRATION_1 },
+  { version: 2, sql: MIGRATION_2 }
+] as const;
 
 function tokenFromRow(row: Row): AgentTokenRecord {
   return { ...jsonColumn<AgentTokenRecord>(row), revokedAt: nullableStringColumn(row, "revoked_at") };

@@ -47,9 +47,19 @@ export type AgentTokenRecord = {
   allowedPayerPublicKeys: string[];
   revision: number;
   actionHash: string;
+  signature: string;
   createdAt: string;
   expiresAt: string | null;
   revokedAt: string | null;
+};
+
+export type AgentTokenRevocation = {
+  tokenId: string;
+  operatorPublicKey: string;
+  revision: number;
+  actionHash: string;
+  signature: string;
+  revokedAt: string;
 };
 
 export type CheckStatus =
@@ -162,7 +172,9 @@ export interface AuditorRepository {
   saveAgentToken(token: AgentTokenRecord): boolean;
   getAgentToken(id: string): AgentTokenRecord | null;
   findAgentTokenByHash(tokenHash: string): AgentTokenRecord | null;
-  revokeAgentToken(id: string, revokedAt: string): boolean;
+  latestAgentTokenRevision(operatorPublicKey: string): number;
+  revokeAgentToken(revocation: AgentTokenRevocation): boolean;
+  getAgentTokenRevocation(tokenId: string): AgentTokenRevocation | null;
 
   saveCheck(check: StoredPaymentCheck): boolean;
   updateCheck(check: StoredPaymentCheck): boolean;

@@ -55,7 +55,7 @@ describe("openSqliteRepository", () => {
     const receipt = makeReceipt(check, policy, providerDecision, settlement, observation);
     const anchorJob = makeAnchorJob(receipt.receiptId);
 
-    expect(first.schemaVersion()).toBe(1);
+    expect(first.schemaVersion()).toBe(2);
     expect(first.saveChallenge(challenge)).toBe(true);
     expect(first.saveSession(session)).toBe(true);
     expect(first.savePolicy(policy)).toBe(true);
@@ -70,7 +70,7 @@ describe("openSqliteRepository", () => {
     repositories.splice(repositories.indexOf(first), 1);
 
     const reopened = open(databasePath);
-    expect(reopened.schemaVersion()).toBe(1);
+    expect(reopened.schemaVersion()).toBe(2);
     expect(reopened.getChallenge(challenge.id)).toEqual(challenge);
     expect(reopened.findSessionByTokenHash(session.tokenHash)).toEqual(session);
     expect(reopened.getCurrentPolicy(OPERATOR)).toEqual(policy);
@@ -100,9 +100,19 @@ describe("openSqliteRepository", () => {
     expect(repository.revokeSession(session.id, NOW)).toBe(true);
     expect(repository.revokeSession(session.id, NOW)).toBe(false);
     expect(repository.findSessionByTokenHash(session.tokenHash)?.revokedAt).toBe(NOW);
-    expect(repository.revokeAgentToken(token.id, NOW)).toBe(true);
-    expect(repository.revokeAgentToken(token.id, NOW)).toBe(false);
+    const revocation = {
+      tokenId: token.id,
+      operatorPublicKey: OPERATOR,
+      revision: 2,
+      actionHash: "e".repeat(64),
+      signature: `01${"f".repeat(128)}`,
+      revokedAt: NOW
+    };
+    expect(repository.revokeAgentToken(revocation)).toBe(true);
+    expect(repository.revokeAgentToken(revocation)).toBe(false);
     expect(repository.findAgentTokenByHash(token.tokenHash)?.revokedAt).toBe(NOW);
+    expect(repository.getAgentTokenRevocation(token.id)).toEqual(revocation);
+    expect(repository.latestAgentTokenRevision(OPERATOR)).toBe(2);
   });
 
   it("keeps signed revisions and check idempotency keys immutable", async () => {
@@ -314,6 +324,7 @@ function makeAgentToken(): AgentTokenRecord {
     allowedPayerPublicKeys: [PAYER],
     revision: 1,
     actionHash: "d".repeat(64),
+    signature: `01${"e".repeat(128)}`,
     createdAt: NOW,
     expiresAt: null,
     revokedAt: null
