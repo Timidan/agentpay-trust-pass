@@ -4,6 +4,7 @@ import { secp256k1 } from "@noble/curves/secp256k1";
 import { sha256 } from "@noble/hashes/sha256";
 import {
   authorizationDigest,
+  buildAuthorizationWindow,
   publicKeyToAccountAddress,
   transferWithAuthorizationDigest as coreTransferDigest,
   type AuthorizationIntent
@@ -188,8 +189,9 @@ export function buildX402PaymentSignature(input: {
 }): BuiltPaymentSignature {
   enforceX402SpendPolicy(input.requirement, input.policy);
   const now = input.now ?? Math.floor(Date.now() / 1_000);
-  const validAfter = now - 600;
-  const validBefore = now + (input.requirement.maxTimeoutSeconds || 300);
+  const window = buildAuthorizationWindow(now, input.requirement.maxTimeoutSeconds || 300);
+  const validAfter = Number(window.validAfter);
+  const validBefore = Number(window.validBefore);
   const nonce = input.nonce ?? secp256k1.utils.randomPrivateKey().slice(0, 32);
   const nonceHex = toHex(nonce);
   const digest = transferWithAuthorizationDigest({

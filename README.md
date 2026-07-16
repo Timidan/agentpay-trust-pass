@@ -1,39 +1,47 @@
-# AgentPay Trust Pass
+# AgentPay
 
-**A paid-evidence Trust Pass for Casper tokens and wallets.** AgentPay buys live on-chain evidence over the x402 payment rail, verifies it against a committed Merkle root, scores it with a deterministic policy, and records a **CLEAR / CAUTION / DANGER** verdict on the Casper blockchain. The result is a copyable receipt, not just an API response.
+**Check a Casper x402 charge before an agent signs it, then prove what settled.** AgentPay intercepts an HTTP 402 payment request, checks the service, payee, token, amount, authorization, and operator policy, and returns **PAY**, **REVIEW**, or **BLOCK**. A PAY decision never sends money: the buyer signs locally, submits the payment itself, and gives AgentPay only the resulting transaction hash to verify.
 
-The Trust Pass is proof of *what the agent checked, paid for, verified, and decided*, on-chain. It is not proof that an answer is objectively true. Flags are automated evidence, not financial advice. Signals that cannot be read are reported as **not checked**, never guessed.
+After payment, AgentPay compares the executed Casper transfer with the exact approved terms, records the service response, and issues a tamper-evident receipt. An optional Casper registry anchor commits that receipt hash using a dedicated recorder account. AgentPay never receives or stores a buyer private key.
+
+The qualified paid-evidence product remains a built-in AgentPay service: it buys live Casper evidence over x402, verifies its Merkle proof, scores it deterministically, and records the result. It now runs through the same pre-payment and settlement checks available to any x402 service.
 
 ---
 
 ## What it does
 
-Every check runs the same four-stop rail, always in order. Nothing unlocks early, and nothing is paid for blind.
+Every x402 purchase runs the same four steps. AgentPay approves terms; the buyer remains in control of signing and submission.
 
 ```
-  1. Quote            2. Settle x402         3. Verify              4. Record
-  ---------           --------------         --------              --------
-  Build a report      Pay the fee in CSPR    Re-derive the         Write the verdict,
-  from live Casper    over x402; the         Merkle root from      report hash, and
-  RPC + CSPR.trade    report stays behind    the released          receipt hash to the
-  and commit a        HTTP 402 until a       evidence and match    AgentPayRegistry
-  dataset root.       signed payload pays.   the quoted root.      contract on Casper.
+  1. Capture 402       2. Check terms         3. Sign and pay        4. Verify + receipt
+  -------------       --------------         ---------------        ------------------
+  Normalize the       Apply provider,        The buyer signs        Match the executed
+  service request     payee, asset, amount,  locally only after     Casper transfer and
+  and x402 charge.    spend, and token rules. AgentPay says PAY.    record the response.
 ```
 
-A verdict is only trustworthy if you can re-run it. Because the dataset root is committed at quote time and the payment, proof, and decision are all on-chain, anyone can replay the check and confirm the desk reported what it actually observed.
+Receipts bind the original request, normalized payment terms, policy revision, provider decision, authorization, settlement proof, and observed response. `agentpay receipt verify` checks a receipt offline.
 
 ### Three ways to use it
 
 | Surface | Route / entry | What it does |
 |---|---|---|
-| **Token check** | web `/check` | Paste a token package hash, or a symbol resolved via CSPR.trade. Scores mint authority, holder concentration, and contract age against the token policy. |
-| **Counterparty check** | web `/counterparty` | Paste a Casper account (account-hash or public key). Scores existence, CSPR balance, and key control against the account policy. |
-| **Evidence desk** | web `/app` | An operator console that observes the rail: the live verdict, a numbered pipeline, the evidence checklist, the Merkle proof, and the on-chain receipt. |
-| **Agent API** | MCP (stdio) + HTTP bridge | Autonomous agents drive the same rail with their own Casper keys. The web UI only observes; AgentPay never holds an agent's key. |
+| **Agents** | `@agent-pay/client`, MCP, or HTTP | Capture a 402, request a decision, sign locally after PAY, then verify settlement and response. |
+| **People** | web app | Inspect a payment request, understand the decision, manage policy and providers, and verify receipts. |
+| **Developers** | `agentpay` CLI | Check payment JSON, run a complete checked call, manage policy/provider records, and verify receipts. |
+| **Evidence users** | token, counterparty, and report routes | Run the original paid Casper evidence workflow through the same payment controls. |
 
 ---
 
-## Verdicts
+## Payment decisions
+
+| Decision | Meaning |
+|---|---|
+| **PAY** | The normalized charge, authorization, provider record, and spend policy all match. The buyer may sign locally. |
+| **REVIEW** | AgentPay cannot safely decide without an operator, commonly because the provider is unknown or required evidence is unavailable. |
+| **BLOCK** | A hard rule failed, such as a denied provider, changed payee, wrong token, amount above policy, replayed authorization, or unsafe token evidence. |
+
+## Evidence verdicts
 
 Scoring is deterministic and lives in one pure package (`packages/agent-pay-core`). The same rule engine powers the web UI, the console, and the agent tools, so a verdict never depends on who asked.
 
@@ -53,10 +61,12 @@ An npm-workspaces monorepo. Each layer is independently testable.
 
 ```
 apps/web                       React 19 + Vite front end (landing, token check, wallet check, feed, agent docs, console)
-apps/report-api                Express evidence + x402 API (quote, 402 gate, verify, resolve, cards/feed)
-apps/mcp-server                MCP server over stdio + an HTTP bridge; exposes the rail as agent tools
-packages/agent-pay-core        Pure, deterministic trust rules and policy (no network, no keys)
-contracts/agent-pay-registry   Rust/Wasm Casper contract that records verdicts against a dataset root
+apps/report-api                Express payment-audit and paid-evidence API with durable SQLite state
+apps/cli                       Installable command line client for checks, calls, policy, providers, and receipts
+apps/mcp-server                MCP server over stdio + HTTP bridge for payment and evidence tools
+packages/agent-pay-client      Non-custodial HTTP client, local Casper signer, and checked-call workflow
+packages/agent-pay-core        Canonical schemas, deterministic policy, settlement checks, and receipt verification
+contracts/agent-pay-registry   Rust/Wasm append-only receipt anchors plus the qualified decision entrypoint
 ```
 
 The core is dependency-injected and has no network or key access, which is why the policy is unit-testable without a chain. The layers above wire in the real Casper RPC, the x402 facilitator, and the registry submitter.
@@ -115,6 +125,9 @@ Or call the HTTP bridge directly: `POST http://127.0.0.1:4021/tools/<name>`.
 | `record_decision` | Writes `approved` / `needs_review` / `rejected` to the Casper registry. |
 | `assess_subject` | Runs the full rail in one call for a token: quote, pay, verify, score, narrate, record. |
 | `assess_account` | The counterparty check: the same rail scoped to a Casper account. |
+| `check_x402_payment` | Normalize an x402 request and return PAY, REVIEW, or BLOCK before signing. |
+| `verify_x402_settlement` | Verify that an executed Casper transaction matches the exact approved terms. |
+| `get_payment_receipt` | Return the verifiable purchase receipt and its current Casper anchor state. |
 
 `payment_status` and `registry_status` are deliberately separate from the mutation tools, so an agent can detect missing Casper configuration before attempting settlement or a registry write. The signing key stays with the agent: generate a buyer payload with `npm run x402:buy` against a quote, then hand it to `buy_report`.
 
@@ -122,16 +135,30 @@ Or call the HTTP bridge directly: `POST http://127.0.0.1:4021/tools/<name>`.
 
 ## Configuration
 
-Reading evidence and quoting need no credentials. Settling payments and recording verdicts need a configured Casper environment (set via process env or a local `.env`; nothing secret is committed):
+Reading evidence and checking a captured 402 need no server-side buyer key. Buyer signing happens in the client or CLI. Registry anchoring uses a separate recorder key (set via process env or a local `.env`; nothing secret is committed):
 
 | Variable | Used for |
 |---|---|
 | `CASPER_RPC_URL` | Reading chain state and confirming transactions. |
-| `CASPER_SECRET_KEY_PATH` | The buyer/submitter key that signs x402 payments and records decisions. |
+| `CASPER_SECRET_KEY_PATH` | Buyer-side only: signs x402 payments and may submit the qualified legacy decision record. Never read by the payment-audit API. |
 | `X402_ASSET_PACKAGE_HASH` | The CEP-18 fee asset, as raw 64 hex chars. |
 | `PAYEE_ADDRESS` | The account that receives payment, in `00<64 hex>` form. |
 | `X402_FACILITATOR_URL` | The x402 facilitator. The proven path is the self-hosted open-source `casper-x402`; hosted CSPR.cloud is a drop-in option (add `CSPR_CLOUD_ACCESS_TOKEN` or `X402_FACILITATOR_AUTH_TOKEN`). |
 | `AGENT_PAY_REGISTRY_PACKAGE_HASH` | The deployed AgentPayRegistry, as `hash-<64 hex>` or raw 64 hex chars. |
+| `AGENT_PAY_REGISTRY_CONTRACT_HASH` | The active registry contract hash used for receipt dictionary readback. |
+| `AGENT_PAY_REGISTRY_RECORDER_ACCOUNT_HASH` | Dedicated recorder account installed in the registry contract. Must differ from the owner/buyer account. |
+| `AGENT_PAY_REGISTRY_RECORDER_KEY_PATH` | Dedicated recorder key used only by the durable receipt-anchor worker. |
+| `AGENT_PAY_API_TOKEN` | Scoped token used by agent, CLI, or MCP clients to create checks and read their receipts. |
+
+The CLI exposes the same non-custodial flow:
+
+```bash
+agentpay check --file payment-request.json --json
+agentpay call --url https://service.example/resource --key ./buyer_secret_key.pem --json
+agentpay verify-settlement --check <check-id> --tx <transaction-hash> --json
+agentpay receipt show --id <receipt-id> --json
+agentpay receipt verify --file receipt.json --json
+```
 
 AgentPay uses x402 V2 headers: the report API returns `PAYMENT-REQUIRED`, the buyer agent retries with `PAYMENT-SIGNATURE`, and a settled response includes `PAYMENT-RESPONSE`. A paid report is only released after facilitator verification, a raw 64-hex settlement hash, and an `info_get_transaction` confirmation that the hash executed.
 
@@ -162,31 +189,37 @@ npm run build:contract
 
 This is not a plain `cargo build`. Casper's Wasm engine rejects the `bulk-memory` operations recent Rust toolchains emit by default, so [`build-contract.sh`](contracts/agent-pay-registry/scripts/build-contract.sh) recompiles `core`/`alloc` with those features disabled (`-Z build-std`), then lowers the residual `sign-ext`/nontrapping-fptoint operators back to MVP with `wasm-opt`. It requires **binaryen** (`wasm-opt`) on `PATH` (`npm i -g binaryen`) and fails loudly if any non-MVP opcode survives.
 
-Create and fund a Testnet key (the generated directory is git-ignored):
+Create separate Testnet owner/buyer and registry-recorder keys (the generated directories are git-ignored):
 
 ```bash
 cargo install casper-client
 casper-client keygen .agentpay-testnet-key
-npm run submission:funding   # prints the account address, balance, and faucet link
+casper-client keygen .agentpay-registry-recorder-key
+npm run submission:funding
+casper-client account-address --public-key .agentpay-registry-recorder-key/public_key_hex
 ```
 
-Fund the printed account (faucet: https://testnet.cspr.live/tools/faucet), then point `CASPER_SECRET_KEY_PATH` at `.agentpay-testnet-key/secret_key.pem`. Deploy and capture the install/package hashes:
+Fund both printed accounts (faucet: https://testnet.cspr.live/tools/faucet). Set `CASPER_SECRET_KEY_PATH` to the owner key, `AGENT_PAY_REGISTRY_RECORDER_KEY_PATH` to the recorder key, and `AGENT_PAY_REGISTRY_RECORDER_ACCOUNT_HASH` to the recorder account printed above. Deploy and capture the install, package, and active contract hashes:
 
 ```bash
 npm run submission:deploy-registry
 ```
 
-The registry contract (`contracts/agent-pay-registry/src/contract.rs`) exposes `record_decision_with_root` and `get_dataset_root`. Readiness and evidence tooling (`npm run submission:check`, `submission:evidence`, `submission:proof`) audit the full paid path end to end. Never paste private key material into env files, chat, docs, or source.
+The registry contract exposes append-only `record_purchase_receipt`, owner-only `set_recorder`, receipt readback, and the access-controlled qualified `record_decision_with_root` entrypoint. Readiness tooling requires the dedicated recorder values before reporting v2 ready. Never paste private key material into env files, chat, docs, or source.
 
 ---
 
-## Proven on Casper Testnet
+## Verified Casper Testnet evidence
 
-One full settle-verify-record run has been captured live using the self-hosted `casper-x402` facilitator:
+The original paid-evidence flow and the hardened payment-auditor flow were both captured with the self-hosted open-source `casper-x402` facilitator. The latest complete checked purchase binds one pre-payment decision, exact settlement, service response, immutable receipt, and receipt anchor:
 
-- Registry package: `hash-73ce206e78b8bc6d5c4ada857c629cd0b9c0dda320d091cd6bdd7c3fa7651d97`
-- x402 settlement tx: `36cec4739b3576b86c694cc710f54b7d00eb7403779e593b927ead053e939236`
-- Decision record tx: `da99d2cd3f23fbd9e9369c57d9a7442219ea746812a143e29fdbd28b7b43216b`
+- Registry v2 install: `2c53ec7d38757c7c252fa16acc4c099d1c53136c852f908821989ac42f0fa4e6`
+- Registry v2 package: `hash-050b717617b9c79535983d9e0cc2ba21dd379ce3450498601dba64324a2dcd1a`
+- Registry v2 contract: `hash-b5e129dca5548f1bbe225db73042d08ab5b35cc976c3ac955bf2fe2a8cd92ee3`
+- Checked x402 settlement: `2491e2cfc3fc2c299ebdfb25725a8c8a194918b813f8c7596eec13bce3cd7911`
+- Purchase receipt hash: `0f253ef7ce564e046d23abf42c8cabdad7b1deeab2fa4fafd2e3619f93cdf231`
+- Receipt anchor transaction: `eb30265877e0bbb549efa6f09dbd8beb29efc31191724ce082fca45b6dddddfc`
+- Qualification decision record: `da99d2cd3f23fbd9e9369c57d9a7442219ea746812a143e29fdbd28b7b43216b`
 
 ---
 
@@ -195,7 +228,7 @@ One full settle-verify-record run has been captured live using the self-hosted `
 The maintained, authoritative list of what runs live today is [docs/live-capabilities.md](docs/live-capabilities.md). Treat it as the product boundary before adding a claim anywhere. In short:
 
 - **Live without credentials:** health, live evidence quoting, x402 readiness, the 402 gate, Merkle verification, verdict cards and feed (in-memory), and the full MCP tool surface.
-- **Live with configured Testnet credentials:** buying reports after x402 settlement, confirming settlement on-chain, checking registry readiness, and recording decisions. Proven for one self-hosted Testnet run.
+- **Live with configured Testnet credentials:** checked x402 calls, exact settlement verification, receipt finalization, readback-confirmed receipt anchoring, paid reports, and the qualification decision path.
 - **Not claimed:** broad token-risk analysis is not default behavior. Mint authority, holder distribution, and liquidity depth are reported as *not checked* unless a real token-state source is wired in. The feed is in-memory, hosted CSPR.cloud settlement is not yet exercised end to end, and there is no mainnet deployment.
 
 The app ships no committed business-evidence rows and no invented payment or transaction receipts.

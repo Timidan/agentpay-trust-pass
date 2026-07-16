@@ -119,8 +119,30 @@ describe("/card routes", () => {
       .expect(200);
 
     expect(svgRes.headers["content-type"]).toMatch(/image\/svg\+xml/);
+    expect(svgRes.headers["content-security-policy"]).toBe("default-src 'none'; sandbox");
+    expect(svgRes.headers["x-content-type-options"]).toBe("nosniff");
     const svgBody = svgRes.text ?? svgRes.body?.toString?.() ?? "";
     expect(svgBody).toContain("DANGER");
+  });
+
+  it("escapes script-like card text before returning SVG", async () => {
+    const app = createReportApp();
+    const postRes = await request(app)
+      .post("/card")
+      .send({
+        ...dangerVerdict,
+        flags: [{ code: "UNTRUSTED", message: "</text><script>alert(1)</script>" }]
+      })
+      .expect(200);
+
+    const svgRes = await request(app)
+      .get(`/card/${postRes.body.id as string}.svg`)
+      .buffer(true)
+      .expect(200);
+    const svgBody = svgRes.text ?? svgRes.body?.toString?.() ?? "";
+
+    expect(svgBody).not.toContain("<script>");
+    expect(svgBody).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
   });
 
   it("GET /card/:id.png returns 200 for a known id", async () => {
@@ -160,5 +182,18 @@ describe("/card routes", () => {
     const first = await request(app).post("/card").send(dangerVerdict).expect(200);
     const second = await request(app).post("/card").send(dangerVerdict).expect(200);
     expect(first.body.id).toBe(second.body.id);
+  });
+
+  it("rejects malformed or oversized card payloads", async () => {
+    const app = createReportApp();
+
+    await request(app)
+      .post("/card")
+      .send({ ...dangerVerdict, aspect: "UNKNOWN" })
+      .expect(400, { error: "invalid_card" });
+    await request(app)
+      .post("/card")
+      .send({ ...dangerVerdict, flags: [{ code: "A", message: "x".repeat(501) }] })
+      .expect(400, { error: "invalid_card" });
   });
 });

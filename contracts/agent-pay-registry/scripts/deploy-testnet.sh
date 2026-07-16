@@ -7,7 +7,7 @@ AGENT_PAY_CARGO_COMMAND="${AGENT_PAY_CARGO_COMMAND:-cargo}"
 AGENT_PAY_CONTRACT_TOOLCHAIN="${AGENT_PAY_CONTRACT_TOOLCHAIN:-nightly-2025-06-23}"
 CASPER_NODE_ADDRESS="${CASPER_NODE_ADDRESS:-https://node.testnet.casper.network/rpc}"
 CASPER_CHAIN_NAME="${CASPER_CHAIN_NAME:-casper-test}"
-AGENT_PAY_INSTALL_PAYMENT_AMOUNT="${AGENT_PAY_INSTALL_PAYMENT_AMOUNT:-25000000000}"
+AGENT_PAY_INSTALL_PAYMENT_AMOUNT="${AGENT_PAY_INSTALL_PAYMENT_AMOUNT:-150000000000}"
 AGENT_PAY_REGISTRY_WASM="${AGENT_PAY_REGISTRY_WASM:-$REPO_ROOT/contracts/agent-pay-registry/target/wasm32-unknown-unknown/release/agent_pay_registry_contract.wasm}"
 
 if ! command -v "$CASPER_CLIENT_COMMAND" >/dev/null 2>&1; then
@@ -21,7 +21,12 @@ if [ -z "${CASPER_SECRET_KEY_PATH:-}" ]; then
 fi
 
 if [ ! -f "$CASPER_SECRET_KEY_PATH" ]; then
-  echo "CASPER_SECRET_KEY_PATH does not exist: $CASPER_SECRET_KEY_PATH" >&2
+  echo "CASPER_SECRET_KEY_PATH points to a missing or unreadable owner key" >&2
+  exit 2
+fi
+
+if [[ ! "${AGENT_PAY_REGISTRY_RECORDER_ACCOUNT_HASH:-}" =~ ^account-hash-[0-9a-f]{64}$ ]]; then
+  echo "AGENT_PAY_REGISTRY_RECORDER_ACCOUNT_HASH must be account-hash-<64 lowercase hex chars>" >&2
   exit 2
 fi
 
@@ -43,4 +48,5 @@ exec "$CASPER_CLIENT_COMMAND" put-deploy \
   --chain-name "$CASPER_CHAIN_NAME" \
   --secret-key "$CASPER_SECRET_KEY_PATH" \
   --payment-amount "$AGENT_PAY_INSTALL_PAYMENT_AMOUNT" \
-  --session-path "$AGENT_PAY_REGISTRY_WASM"
+  --session-path "$AGENT_PAY_REGISTRY_WASM" \
+  --session-arg "recorder:account_hash='$AGENT_PAY_REGISTRY_RECORDER_ACCOUNT_HASH'"

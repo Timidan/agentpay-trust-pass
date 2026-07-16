@@ -1,6 +1,6 @@
 # AgentPay Real Product Constraints
 
-Date: 2026-06-29
+Date: 2026-07-16
 
 ## Product Rule
 
@@ -12,8 +12,10 @@ Current runtime source set:
 - Token-subject evidence: package-hash validation plus live latest-block context from `CASPER_RPC_URL`; mint authority, supply renouncement, holder distribution, LP holders, and liquidity depth remain not checked until a real token-state source is wired in.
 - CSPR.trade MCP: DEX pair surface from `CSPR_TRADE_MCP_URL`.
 - x402 facilitator: payment verification and settlement through `X402_FACILITATOR_URL`, using `PAYMENT-REQUIRED`, `PAYMENT-SIGNATURE`, and `PAYMENT-RESPONSE` headers. The proven Testnet run used the self-hosted open-source `casper-x402` facilitator at `http://127.0.0.1:4022`; the hosted CSPR.cloud facilitator remains an optional drop-in path that has not been exercised end-to-end in this repo.
-- AgentPayRegistry submitter: Casper decision recording through `casper-client put-deploy` against the deployed `record_decision_with_root` entry point.
-- AgentPayRegistry readiness: non-mutating checks for `AGENT_PAY_REGISTRY_PACKAGE_HASH` shape, record script availability, `CASPER_SECRET_KEY_PATH`, `casper-client`, and `CASPER_RPC_URL` reachability.
+- Payment auditor: authenticated `/v1/checks` evaluates normalized x402 terms before signing; the API stores no buyer key and cannot submit a buyer payment.
+- Settlement verifier: Casper `info_get_transaction` evidence is matched against the exact approved payer, payee, asset, amount, network, and authorization before one immutable receipt can be finalized.
+- AgentPayRegistry submitters: the qualified decision path uses an owner or recorder account; the purchase-receipt path uses only `AGENT_PAY_REGISTRY_RECORDER_KEY_PATH` and refuses reuse of `CASPER_SECRET_KEY_PATH`.
+- AgentPayRegistry readiness: separate status for the qualified decision path and hardened receipt anchors, including package hash, active contract hash, dedicated recorder key, script policy, `casper-client`, and RPC reachability.
 
 If a required service is not configured, AgentPay must surface that state directly. It must not invent receipts, transactions, or settled payments.
 
@@ -41,12 +43,12 @@ AgentPay positioning:
 
 - Not another trading agent.
 - Not another generic payment API.
-- Product thesis: agents should pay for Casper product evidence, verify the evidence cryptographically, then record a trust decision on Casper.
+- Product thesis: AgentPay checks a Casper x402 charge before the buyer signs, then proves that the executed transfer and service response matched the approved terms.
 
 Complexity bar:
 
 - Stronger than a thin UI over one API because it spans live source ingestion, payment gating, proof verification, MCP tools, and an on-chain decision boundary.
-- Strongest when presented as a paid evidence rail, not generic payment plumbing: the current evidence includes one real self-hosted x402 settlement and one confirmed AgentPayRegistry decision on Casper Testnet.
+- Strongest when presented as a non-custodial pre-payment checker: the current evidence includes a real checked x402 purchase, exact settlement verification, an immutable response receipt, and readback-confirmed receipt anchoring on Casper Testnet.
 
 Iteration comparison on 2026-06-10:
 
@@ -64,7 +66,7 @@ Iteration comparison on 2026-06-10:
 - This iteration tightens AgentPay settlement integrity by refusing to release paid evidence unless facilitator settlement returns a Casper transaction/deploy hash in raw `64 hex chars` form and Casper JSON-RPC confirms executed `info_get_transaction` results.
 - This iteration tightens AgentPay registry integrity by refusing to return a decision receipt while Casper JSON-RPC still reports an empty `execution_info` response.
 - This iteration replaces the registry deployment placeholder with a buildable `agent_pay_registry_contract.wasm` target and concrete `casper-client put-deploy` scripts for installation and `record_decision_with_root` calls.
-- Current Testnet evidence in the local submission env and DoraHacks draft includes registry package `hash-73ce206e78b8bc6d5c4ada857c629cd0b9c0dda320d091cd6bdd7c3fa7651d97`, registry install `c399eca336b515aaeda96c7b567f7dd61cb16d63c0cea7416923b5346db10b86`, self-hosted x402 settlement `36cec4739b3576b86c694cc710f54b7d00eb7403779e593b927ead053e939236`, and decision record `da99d2cd3f23fbd9e9369c57d9a7442219ea746812a143e29fdbd28b7b43216b`.
+- Current Testnet evidence includes registry v2 package `hash-050b717617b9c79535983d9e0cc2ba21dd379ce3450498601dba64324a2dcd1a`, install `2c53ec7d38757c7c252fa16acc4c099d1c53136c852f908821989ac42f0fa4e6`, checked x402 settlement `2491e2cfc3fc2c299ebdfb25725a8c8a194918b813f8c7596eec13bce3cd7911`, receipt anchor `eb30265877e0bbb549efa6f09dbd8beb29efc31191724ce082fca45b6dddddfc`, and the qualification decision record `da99d2cd3f23fbd9e9369c57d9a7442219ea746812a143e29fdbd28b7b43216b`.
 - This iteration adds `npm run submission:check`, a local readiness audit that remains red until required Testnet, x402, reachable GitHub/walkthrough evidence is present and Casper hashes are confirmed as executed.
 
 ## MVP Requirement
@@ -81,19 +83,22 @@ MVP must include:
 - Merkle proof verification over the released evidence record.
 - Agent-visible `registry_status` that proves the configured AgentPay registry path is ready, or returns the exact missing package/script/key/client/RPC reason.
 - Casper decision recording only through a configured real submitter, with the verified `datasetRoot` included in the submitter payload and the returned hash confirmed as executed against Casper JSON-RPC.
+- Pre-payment PAY / REVIEW / BLOCK decisions that bind the original HTTP request, normalized x402 terms, provider decision, policy revision, and optional Casper authorization before any local signer is invoked.
+- Exact post-payment settlement verification, response observation, one immutable purchase receipt, offline receipt verification, and honest off-chain/pending/anchored/failed anchor state.
+- HTTP, MCP, shared-client, and CLI access to the same payment-audit behavior without sending buyer private keys to AgentPay.
 - README and smoke script that do not imply completion where credentials or deployed contracts are still required.
 
 Current proven evidence:
 
-- AgentPayRegistry is installed on Casper Testnet at package hash `hash-73ce206e78b8bc6d5c4ada857c629cd0b9c0dda320d091cd6bdd7c3fa7651d97`.
-- Registry install hash `c399eca336b515aaeda96c7b567f7dd61cb16d63c0cea7416923b5346db10b86` is confirmed executed.
-- x402 settlement hash `36cec4739b3576b86c694cc710f54b7d00eb7403779e593b927ead053e939236` is confirmed executed from the self-hosted facilitator path.
-- Decision record hash `da99d2cd3f23fbd9e9369c57d9a7442219ea746812a143e29fdbd28b7b43216b` is confirmed executed and carries the paid-flow receipt hash.
+- Registry v2 install `2c53ec7d38757c7c252fa16acc4c099d1c53136c852f908821989ac42f0fa4e6` is confirmed executed at Testnet block 8,518,390.
+- Registry v2 package `hash-050b717617b9c79535983d9e0cc2ba21dd379ce3450498601dba64324a2dcd1a` and contract `hash-b5e129dca5548f1bbe225db73042d08ab5b35cc976c3ac955bf2fe2a8cd92ee3` expose the expected receipt, recorder, and legacy decision entrypoints.
+- Checked x402 settlement `2491e2cfc3fc2c299ebdfb25725a8c8a194918b813f8c7596eec13bce3cd7911` is confirmed executed through the self-hosted facilitator path.
+- Receipt anchor `eb30265877e0bbb549efa6f09dbd8beb29efc31191724ce082fca45b6dddddfc` is confirmed executed at block 8,518,465. Dictionary readback binds receipt `0f253ef7ce564e046d23abf42c8cabdad7b1deeab2fa4fafd2e3619f93cdf231` to policy `2c1941b0c6880bbd2b7622a66a88f4c2e48d24edc0609770b689d44b1b054571`, the exact settlement, and recorder `account-hash-0a6c747e7b07f063349ef66909a82c84e29095eaf7774df62428d09e49aa8b80`.
+- Qualification decision record `da99d2cd3f23fbd9e9369c57d9a7442219ea746812a143e29fdbd28b7b43216b` remains confirmed executed.
 
 Submission blockers remaining:
 
 - Publish the GitHub repository and attach a public walkthrough video to DoraHacks.
-- Re-run `npm run submission:check` from an environment with network access so the local gate can reconfirm the captured Testnet hashes.
 - Do not claim hosted CSPR.cloud settlement as proven unless a separate hosted run is captured; it is currently only a drop-in configuration path.
 
 Local readiness command:
@@ -102,7 +107,7 @@ Local readiness command:
 npm run submission:check
 ```
 
-Expected before external credentials/deployment: non-zero exit with explicit missing evidence. Expected before DoraHacks submission: zero exit with every check passing.
+Current result: every local and Casper evidence gate passes; the command remains non-zero only because the public GitHub and walkthrough URLs have not been supplied. Expected before DoraHacks submission: zero exit with every check passing.
 
 Deferred:
 

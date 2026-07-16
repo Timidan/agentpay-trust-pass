@@ -52,6 +52,11 @@ export type ObservationResult = {
   receipt: PurchaseReceipt;
 };
 
+export type PaymentReceiptRecord = {
+  receipt: PurchaseReceipt;
+  anchorState: PurchaseReceipt["anchor"];
+};
+
 export interface AgentPayApi {
   check(input: CheckPaymentInput): Promise<CheckPaymentResult>;
   verifySettlement(checkId: string, transactionHash: string): Promise<VerifySettlementResult>;
@@ -124,10 +129,14 @@ export class AgentPayHttpClient implements AgentPayApi {
     });
   }
 
-  async getReceipt(receiptId: string): Promise<PurchaseReceipt> {
-    const result = await this.request<{ receipt: PurchaseReceipt }>(`/v1/receipts/${encodeURIComponent(receiptId)}`, {
+  getReceiptRecord(receiptId: string): Promise<PaymentReceiptRecord> {
+    return this.request<PaymentReceiptRecord>(`/v1/receipts/${encodeURIComponent(receiptId)}`, {
       method: "GET"
     });
+  }
+
+  async getReceipt(receiptId: string): Promise<PurchaseReceipt> {
+    const result = await this.getReceiptRecord(receiptId);
     return result.receipt;
   }
 
@@ -190,6 +199,13 @@ export function verifyX402Settlement(
 
 export function getPaymentReceipt(api: AgentPayApi, receiptId: string): Promise<PurchaseReceipt> {
   return api.getReceipt(receiptId);
+}
+
+export function getPaymentReceiptRecord(
+  api: Pick<AgentPayHttpClient, "getReceiptRecord">,
+  receiptId: string
+): Promise<PaymentReceiptRecord> {
+  return api.getReceiptRecord(receiptId);
 }
 
 async function parseJson(response: Response, maximum: number): Promise<unknown> {

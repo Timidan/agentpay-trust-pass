@@ -3,6 +3,7 @@ export {
   AgentPayHttpClient,
   checkX402Payment,
   getPaymentReceipt,
+  getPaymentReceiptRecord,
   verifyX402Settlement
 } from "./api.js";
 export type {
@@ -11,6 +12,7 @@ export type {
   CheckPaymentInput,
   CheckPaymentResult,
   ObservationResult,
+  PaymentReceiptRecord,
   PaymentCheck,
   ResponseObservationInput,
   VerifySettlementResult

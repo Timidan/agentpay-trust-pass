@@ -329,7 +329,7 @@ export function createAuditorRouter(dependencies: AuditorRouterDependencies): Ro
       if (typeof request.query.share === "string") {
         const receipt = service.getSharedReceipt(request.params.id, request.query.share);
         if (!receipt) throw new AuthError("receipt_not_found", "Purchase receipt was not found", 404);
-        response.json({ receipt });
+        response.json({ receipt, anchorState: service.getReceiptAnchorState(receipt.receiptId) });
         return;
       }
       const principal = authenticateRequest(request, auth).principal;
@@ -339,7 +339,7 @@ export function createAuditorRouter(dependencies: AuditorRouterDependencies): Ro
       if (!check) throw new AuthError("receipt_not_found", "Purchase receipt was not found", 404);
       requireCheckOwnership(principal, check.operatorPublicKey, check.agentTokenId);
       requireAgentScope(principal, "receipts:read", "Agent token cannot read purchase receipts");
-      response.json({ receipt });
+      response.json({ receipt, anchorState: service.getReceiptAnchorState(receipt.receiptId) });
     });
 
     router.post("/receipts/:id/shares", (request, response) => {

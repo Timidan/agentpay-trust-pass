@@ -292,8 +292,12 @@ describe("openSqliteRepository", () => {
     const receipt = makeReceipt(check, policy, providerDecision, settlement, observation);
     const anchorJob = makeAnchorJob(receipt.receiptId);
     repository.saveCheck(check);
-    repository.saveReceipt(receipt);
-    repository.saveAnchorJob(anchorJob);
+    repository.saveSettlement(settlement);
+    expect(repository.saveObservationAndReceipt(observation, receipt, anchorJob)).toEqual({
+      ok: true,
+      created: true
+    });
+    expect(repository.listDueAnchorJobs(NOW, 10)).toEqual([anchorJob]);
 
     const updated: AnchorJob = {
       ...anchorJob,

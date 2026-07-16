@@ -234,7 +234,8 @@ export interface AuditorRepository {
   getResponseObservation(checkId: string): ResponseObservation | null;
   saveObservationAndReceipt(
     observation: ResponseObservation,
-    receipt: PurchaseReceipt
+    receipt: PurchaseReceipt,
+    anchorJob?: AnchorJob
   ): ObservationReceiptResult;
 
   saveReceipt(receipt: PurchaseReceipt): boolean;
@@ -248,4 +249,5 @@ export interface AuditorRepository {
   saveAnchorJob(job: AnchorJob): boolean;
   updateAnchorJob(job: AnchorJob): boolean;
   getAnchorJob(id: string): AnchorJob | null;
+  listDueAnchorJobs(now: string, limit: number): AnchorJob[];
 }

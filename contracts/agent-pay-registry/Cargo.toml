@@ -20,3 +20,7 @@ bench = false
 casper-contract = { version = "5.1.1", default-features = false, optional = true }
 casper-types = { version = "6.0.1", optional = true }
 wee_alloc = { version = "0.4.5", optional = true }
+
+[dev-dependencies]
+casper-engine-test-support = "8.1.1"
+casper-types = "6.1.0"

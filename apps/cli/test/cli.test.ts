@@ -73,7 +73,10 @@ describe("agentpay CLI", () => {
     await withApi({}, async (apiUrl) => {
       const shown = await runCli(["receipt", "show", "--id", "receipt-1", "--json"], apiUrl);
       expect(shown.code).toBe(0);
-      expect(JSON.parse(shown.stdout)).toMatchObject({ receipt: { receiptId: "receipt-1" } });
+      expect(JSON.parse(shown.stdout)).toMatchObject({
+        receipt: { receiptId: "receipt-1" },
+        anchorState: { status: "anchored", transactionHash: "a".repeat(64) }
+      });
 
       const file = await inputFile({ receiptId: "not-a-valid-receipt" });
       const verified = await runCli(["receipt", "verify", "--file", file, "--json"], apiUrl);
@@ -144,9 +147,13 @@ describe("agentpay CLI", () => {
   it("runs the complete checked-call sequence with a local signer", async () => {
     await withCheckedCallServices(async ({ apiUrl, serviceUrl }) => {
       const key = await secretKeyFile();
-      const result = await runCli(["call", "--url", serviceUrl, "--key", key, "--json"], apiUrl);
+      const result = await runCli(
+        ["call", "--url", serviceUrl, "--method", "POST", "--body", "{}", "--key", key, "--json"],
+        apiUrl,
+        { configuredTokens: false }
+      );
 
-      expect(result.code).toBe(0);
+      expect(result.code, `${result.stdout}\n${result.stderr}`).toBe(0);
       expect(JSON.parse(result.stdout)).toMatchObject({
         settlement: { proof: { verdict: "match" } },
         receipt: { receiptId: "receipt-checked" },
@@ -178,6 +185,16 @@ async function withApi<T>(behavior: ApiBehavior, fn: (url: string) => Promise<T>
 }
 
 async function handleRequest(request: IncomingMessage, response: ServerResponse, behavior: ApiBehavior): Promise<void> {
+  if (request.url === "/v1/auth/challenges") {
+    await consume(request);
+    sendJson(response, 201, { challengeId: "challenge-1", message: "AgentPay CLI test challenge" });
+    return;
+  }
+  if (request.url === "/v1/auth/sessions") {
+    await consume(request);
+    sendJson(response, 201, { token: TOKEN, expiresAt: "2026-07-16T01:00:00.000Z" });
+    return;
+  }
   if (request.headers.authorization !== `Bearer ${TOKEN}`) {
     sendJson(response, 401, { code: "invalid_credentials" });
     return;
@@ -237,7 +254,10 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
     return;
   }
   if (request.url === "/v1/receipts/receipt-1") {
-    sendJson(response, 200, { receipt: { receiptId: "receipt-1", checkId: "check-1" } });
+    sendJson(response, 200, {
+      receipt: { receiptId: "receipt-1", checkId: "check-1" },
+      anchorState: { status: "anchored", transactionHash: "a".repeat(64) }
+    });
     return;
   }
   if (request.url === "/v1/policies/current") {
@@ -247,11 +267,6 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
   }
   if (request.url === "/v1/provider-decisions" && request.method === "GET") {
     sendJson(response, 200, { decisions: behavior.decisions ?? [] });
-    return;
-  }
-  if (request.url === "/v1/auth/challenges") {
-    await consume(request);
-    sendJson(response, 201, { challengeId: "challenge-1", message: "AgentPay CLI test challenge" });
     return;
   }
   if (request.url === "/v1/policies/revisions") {
@@ -269,7 +284,8 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
 
 async function runCli(
   args: string[],
-  apiUrl: string
+  apiUrl: string,
+  options: { configuredTokens?: boolean } = {}
 ): Promise<{ code: number; stdout: string; stderr: string }> {
   return new Promise((resolveResult, reject) => {
     const child = spawn(process.execPath, ["--import", "tsx", "apps/cli/src/main.ts", ...args], {
@@ -277,8 +293,8 @@ async function runCli(
       env: {
         ...process.env,
         AGENT_PAY_API_URL: apiUrl,
-        AGENT_PAY_API_TOKEN: TOKEN,
-        AGENT_PAY_OPERATOR_SESSION_TOKEN: TOKEN,
+        AGENT_PAY_API_TOKEN: options.configuredTokens === false ? "" : TOKEN,
+        AGENT_PAY_OPERATOR_SESSION_TOKEN: options.configuredTokens === false ? "" : TOKEN,
         NO_COLOR: "1"
       },
       stdio: ["ignore", "pipe", "pipe"]
@@ -345,6 +361,10 @@ async function withCheckedCallServices(
   let paid = false;
   let paymentRequired: Record<string, unknown>;
   const service = createServer((request, response) => {
+    if (request.method !== "POST" || request.headers["content-type"] !== "application/json") {
+      sendJson(response, 415, { error: "json_required" });
+      return;
+    }
     if (!request.headers["payment-signature"]) {
       sendJson(response, 402, { error: "payment_required" }, {
         "payment-required": Buffer.from(JSON.stringify(paymentRequired), "utf8").toString("base64")

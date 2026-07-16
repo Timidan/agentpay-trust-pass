@@ -8,6 +8,21 @@ describe("AgentPayHttpClient transport", () => {
     expect(() => new AgentPayHttpClient({ baseUrl: "http://[::1]:4021", token: TOKEN })).not.toThrow();
   });
 
+  it("returns dynamic anchor state without changing the compatible receipt lookup", async () => {
+    const payload = {
+      receipt: { receiptId: "receipt-1", checkId: "check-1" },
+      anchorState: { status: "anchored", transactionHash: "a".repeat(64) }
+    };
+    const client = new AgentPayHttpClient({
+      baseUrl: "http://127.0.0.1:4021",
+      token: TOKEN,
+      fetchImpl: vi.fn(async () => Response.json(payload))
+    });
+
+    await expect(client.getReceiptRecord("receipt-1")).resolves.toEqual(payload);
+    await expect(client.getReceipt("receipt-1")).resolves.toEqual(payload.receipt);
+  });
+
   it("cancels an API response once it exceeds the configured limit", async () => {
     let cancelled = false;
     let pullCount = 0;

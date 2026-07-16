@@ -73,6 +73,15 @@ describe("payment check routes", () => {
     });
   });
 
+  it("evaluates evidence freshness after asynchronous evidence collection completes", async () => {
+    const context = createContext({ pinned: true, advanceClockDuringEvidence: true });
+
+    const response = await postCheck(context.app, checkBody(), "fresh-after-rpc").expect(201);
+
+    expect(response.body.check.decision.verdict).toBe("pay");
+    expect(reasonCodes(response.body.check)).not.toContain("evidence_unavailable");
+  });
+
   it("blocks a payment when the 402 amount changes after authorization construction", async () => {
     const context = createContext({ pinned: true });
     const body = checkBody();
@@ -195,16 +204,19 @@ type ContextOptions = {
   dailyCap?: string;
   databasePath?: string;
   installControls?: boolean;
+  advanceClockDuringEvidence?: boolean;
 };
 
 function createContext(options: ContextOptions = {}) {
   const repository = openSqliteRepository(options.databasePath ?? ":memory:", { now: () => new Date(NOW) });
   openRepositories.push(repository);
   let evidenceCallCount = 0;
+  let serviceTime = Date.parse(NOW);
   const evidenceLoader = {
     async loadPaymentAssetEvidence(): Promise<PaymentAssetEvidence> {
       evidenceCallCount += 1;
-      return paymentEvidence();
+      if (options.advanceClockDuringEvidence) serviceTime += 50;
+      return paymentEvidence(new Date(serviceTime).toISOString());
     }
   };
   if (options.installControls !== false) {
@@ -226,7 +238,7 @@ function createContext(options: ContextOptions = {}) {
     if (options.pinned) repository.saveProviderDecision(providerPin());
   }
   const auth = new AuditorAuth({ repository, publicOrigin: ORIGIN, now: () => new Date(NOW) });
-  const service = new PaymentAuditService({ repository, evidenceLoader, now: () => new Date(NOW) });
+  const service = new PaymentAuditService({ repository, evidenceLoader, now: () => new Date(serviceTime) });
   const app = createReportApp({ auditorRouter: createAuditorRouter({ repository, auth, service }) });
   return { app, auth, repository, evidenceCalls: () => evidenceCallCount };
 }
@@ -327,7 +339,7 @@ function providerPin(): ProviderDecision {
   return value;
 }
 
-function paymentEvidence(): PaymentAssetEvidence {
+function paymentEvidence(observedAt = NOW): PaymentAssetEvidence {
   return {
     network: "casper:casper-test",
     packageHash: ASSET,
@@ -344,7 +356,7 @@ function paymentEvidence(): PaymentAssetEvidence {
     apiVersion: "2.0.0",
     observedBlockHash: null,
     observedBlockHeight: null,
-    observedAt: NOW,
+    observedAt,
     missing: [],
     sourceErrors: [],
     evidenceHash: "6".repeat(64)

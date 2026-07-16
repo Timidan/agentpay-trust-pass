@@ -9,7 +9,7 @@ describe("AgentPay Casper funding status", () => {
     const status: CasperFundingStatus = {
       accountHash: `account-hash-${"a".repeat(64)}`,
       balanceMotes: "0",
-      requiredMotes: "25100000000",
+      requiredMotes: "155000000000",
       funded: false,
       faucetUrl: "https://testnet.cspr.live/tools/faucet",
       publicKeyPath: ".agentpay-testnet-key/public_key_hex",
@@ -18,7 +18,7 @@ describe("AgentPay Casper funding status", () => {
     };
 
     expect(formatCasperFundingStatus(status)).toContain(`Account: account-hash-${"a".repeat(64)}`);
-    expect(formatCasperFundingStatus(status)).toContain("Required: 25100000000 motes (25.1 CSPR)");
+    expect(formatCasperFundingStatus(status)).toContain("Required: 155000000000 motes (155 CSPR)");
     expect(formatCasperFundingStatus(status)).toContain("Faucet: https://testnet.cspr.live/tools/faucet");
     expect(formatCasperFundingStatus(status)).toContain("Funded: no");
   });
@@ -44,7 +44,7 @@ describe("AgentPay Casper funding status", () => {
         `#!/usr/bin/env node
 const args = process.argv.slice(2);
 if (args[0] !== "query-balance") process.exit(2);
-console.log(JSON.stringify({ result: { balance: "25100000000" } }));
+console.log(JSON.stringify({ result: { balance: "155000000000" } }));
 `
       );
       await chmod(clientPath, 0o700);

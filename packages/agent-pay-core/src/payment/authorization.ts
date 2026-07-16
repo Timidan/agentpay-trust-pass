@@ -16,6 +16,7 @@ import type { AuthorizationIntent, PaymentTerms } from "./types.js";
 const HEX_64 = /^[0-9a-f]{64}$/;
 const ADDRESS = /^(?:(?:00|01)[0-9a-f]{64}|02[0-9a-f]{66})$/;
 const POSITIVE_INTEGER = /^(0|[1-9][0-9]*)$/;
+const AUTHORIZATION_CLOCK_SKEW_SECONDS = 5;
 
 const TRANSFER_WITH_AUTHORIZATION_TYPES = {
   TransferWithAuthorization: [
@@ -81,13 +82,14 @@ export function buildAuthorizationIntent(input: {
     throw new TypeError("nowEpochSeconds must be a non-negative safe integer");
   }
   const payerPublicKey = parseCasperPublicKey(input.payerPublicKey).publicKeyHex;
+  const window = buildAuthorizationWindow(input.nowEpochSeconds, input.terms.maxTimeoutSeconds);
   const intentWithoutDigest = {
     payerPublicKey,
     from: publicKeyToAccountAddress(payerPublicKey),
     to: input.terms.payTo,
     amount: input.terms.amount,
-    validAfter: String(input.nowEpochSeconds - 600),
-    validBefore: String(input.nowEpochSeconds + input.terms.maxTimeoutSeconds),
+    validAfter: window.validAfter,
+    validBefore: window.validBefore,
     nonce: normalizeNonce(input.nonce),
     network: input.terms.network,
     asset: input.terms.asset,
@@ -98,6 +100,30 @@ export function buildAuthorizationIntent(input: {
   return {
     ...intentWithoutDigest,
     digest: authorizationDigest(intentWithoutDigest)
+  };
+}
+
+export function buildAuthorizationWindow(
+  nowEpochSeconds: number,
+  maxTimeoutSeconds: number
+): { validAfter: string; validBefore: string } {
+  if (!Number.isSafeInteger(nowEpochSeconds) || nowEpochSeconds < 0) {
+    throw new TypeError("nowEpochSeconds must be a non-negative safe integer");
+  }
+  if (!Number.isSafeInteger(maxTimeoutSeconds) || maxTimeoutSeconds <= 0) {
+    throw new TypeError("maxTimeoutSeconds must be a positive safe integer");
+  }
+
+  // Preserve a small clock-skew allowance without exceeding the negotiated total window.
+  const skew = Math.min(
+    AUTHORIZATION_CLOCK_SKEW_SECONDS,
+    maxTimeoutSeconds - 1,
+    nowEpochSeconds
+  );
+  const validAfter = nowEpochSeconds - skew;
+  return {
+    validAfter: String(validAfter),
+    validBefore: String(validAfter + maxTimeoutSeconds)
   };
 }
 

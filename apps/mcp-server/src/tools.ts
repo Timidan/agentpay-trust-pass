@@ -173,7 +173,7 @@ export const toolDefinitions: ToolDefinition[] = [
   },
   {
     name: "get_payment_receipt",
-    description: "Get the independently verifiable receipt for a completed payment check.",
+    description: "Get the independently verifiable receipt and its current Casper anchor status.",
     inputSchema: {
       type: "object",
       required: ["receiptId"],
@@ -264,7 +264,7 @@ export async function verifyX402SettlementTool(input: {
 
 export async function getPaymentReceiptTool(input: { agentPayApiUrl?: string; receiptId: string }) {
   const receiptId = nonEmptyString(input?.receiptId, "get_payment_receipt requires receiptId");
-  return paymentAuditClient(input.agentPayApiUrl).getReceipt(receiptId);
+  return paymentAuditClient(input.agentPayApiUrl).getReceiptRecord(receiptId);
 }
 
 const RECORD_DECISIONS = new Set(["approved", "rejected", "needs_review"]);

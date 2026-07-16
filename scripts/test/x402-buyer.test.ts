@@ -108,8 +108,8 @@ describe("x402 buyer payment payload", () => {
       from: signer.accountAddress,
       to: requirement.payTo,
       value: "10000",
-      validAfter: String(1_700_000_000 - 600),
-      validBefore: String(1_700_000_000 + 300),
+      validAfter: String(1_700_000_000 - 5),
+      validBefore: String(1_700_000_000 + 295),
       nonce: "11".repeat(32)
     });
     expect(decoded.payload.signature).toMatch(/^02[0-9a-f]{128}$/);

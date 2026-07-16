@@ -1,6 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   auditorRuntimeOptionsFromEnv,
@@ -8,6 +9,17 @@ import {
 } from "../../src/auditor/runtime.js";
 
 describe("auditor runtime", () => {
+  it("uses one repository-root database path regardless of the launch directory", () => {
+    const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
+
+    expect(auditorRuntimeOptionsFromEnv({}).databasePath).toBe(
+      resolve(repoRoot, "data", "agentpay.sqlite")
+    );
+    expect(auditorRuntimeOptionsFromEnv({ AGENTPAY_DATABASE_PATH: "data/custom.sqlite" }).databasePath).toBe(
+      resolve(repoRoot, "data", "custom.sqlite")
+    );
+  });
+
   it("maps deployment environment values without inheriting buyer-key configuration", () => {
     const options = auditorRuntimeOptionsFromEnv({
       REPORT_API_HOST: "127.0.0.1",

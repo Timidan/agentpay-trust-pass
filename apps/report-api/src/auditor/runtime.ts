@@ -1,13 +1,17 @@
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Router } from "express";
 import { AuditorAuth } from "./auth.js";
 import { NodeRpcClient } from "./casperRpc.js";
 import { createAuditorRouter } from "./routes.js";
 import { X402Probe } from "./probe.js";
+import { createReceiptAnchorPublisherFromEnv, type ReceiptAnchorPublisher } from "./registry.js";
 import { PaymentAuditService } from "./service.js";
 import { openSqliteRepository, type SqliteAuditorRepository } from "./sqliteRepository.js";
 
 const DEFAULT_CASPER_RPC_URL = "https://node.testnet.casper.network/rpc";
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
+const DEFAULT_DATABASE_PATH = resolve(REPO_ROOT, "data", "agentpay.sqlite");
 
 export type AuditorRuntimeOptions = {
   databasePath: string;
@@ -23,6 +27,7 @@ export type AuditorRuntime = {
   service: PaymentAuditService;
   rpc: NodeRpcClient;
   probe: X402Probe;
+  anchorPublisher: ReceiptAnchorPublisher | null;
   close(): void;
 };
 
@@ -35,15 +40,33 @@ export function createAuditorRuntime(options: AuditorRuntimeOptions): AuditorRun
       publicOrigin: normalizeOrigin(options.publicOrigin),
       now: options.now
     });
+    const anchorPublisher = createReceiptAnchorPublisherFromEnv({
+      repository,
+      rpc,
+      rpcUrl: options.rpcUrl
+    });
     const service = new PaymentAuditService({
       repository,
       evidenceLoader: rpc,
       settlementLoader: rpc,
+      anchorPublisher: anchorPublisher ?? undefined,
       now: options.now
     });
     const probe = new X402Probe({ allowHttp: isLoopbackOrigin(auth.publicOrigin), now: options.now });
     const router = createAuditorRouter({ repository, auth, service, probe });
-    return { router, repository, auth, service, rpc, probe, close: () => repository.close() };
+    return {
+      router,
+      repository,
+      auth,
+      service,
+      rpc,
+      probe,
+      anchorPublisher,
+      close: () => {
+        anchorPublisher?.close();
+        repository.close();
+      }
+    };
   } catch (error) {
     repository.close();
     throw error;
@@ -56,7 +79,9 @@ export function auditorRuntimeOptionsFromEnv(
   const port = validPort(env.REPORT_API_PORT ?? "4021");
   const host = env.REPORT_API_HOST?.trim() || "127.0.0.1";
   return {
-    databasePath: env.AGENTPAY_DATABASE_PATH?.trim() || resolve(process.cwd(), "data", "agentpay.sqlite"),
+    databasePath: env.AGENTPAY_DATABASE_PATH?.trim()
+      ? resolve(REPO_ROOT, env.AGENTPAY_DATABASE_PATH.trim())
+      : DEFAULT_DATABASE_PATH,
     rpcUrl: env.CASPER_RPC_URL?.trim() || DEFAULT_CASPER_RPC_URL,
     publicOrigin:
       env.AGENTPAY_PUBLIC_ORIGIN?.trim() ||

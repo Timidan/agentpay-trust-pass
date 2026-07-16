@@ -13,6 +13,67 @@ export type VerdictCardData = {
   policyHash: string;
 };
 
+const CARD_ASPECTS = new Set<VerdictCardData["aspect"]>(["CLEAR", "CAUTION", "DANGER"]);
+const HEX_HASH_PATTERN = /^[0-9a-f]{64}$/i;
+const SUBJECT_HASH_PATTERN = /^[0-9a-f]{8,64}$/i;
+
+function isBoundedString(value: unknown, maxLength: number): value is string {
+  return typeof value === "string" && value.length > 0 && value.length <= maxLength;
+}
+
+export function parseVerdictCardData(value: unknown): VerdictCardData | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return null;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  if (
+    typeof candidate.aspect !== "string" ||
+    !CARD_ASPECTS.has(candidate.aspect as VerdictCardData["aspect"]) ||
+    typeof candidate.subjectShortHash !== "string" ||
+    !SUBJECT_HASH_PATTERN.test(candidate.subjectShortHash) ||
+    typeof candidate.decisionTxHash !== "string" ||
+    !HEX_HASH_PATTERN.test(candidate.decisionTxHash) ||
+    typeof candidate.policyHash !== "string" ||
+    !HEX_HASH_PATTERN.test(candidate.policyHash) ||
+    !Array.isArray(candidate.flags) ||
+    candidate.flags.length > 20 ||
+    !Array.isArray(candidate.notChecked) ||
+    candidate.notChecked.length > 20
+  ) {
+    return null;
+  }
+
+  const flags: VerdictCardData["flags"] = [];
+  for (const flag of candidate.flags) {
+    if (typeof flag !== "object" || flag === null || Array.isArray(flag)) {
+      return null;
+    }
+    const item = flag as Record<string, unknown>;
+    if (!isBoundedString(item.code, 64) || !isBoundedString(item.message, 500)) {
+      return null;
+    }
+    flags.push({ code: item.code, message: item.message });
+  }
+
+  const notChecked: string[] = [];
+  for (const item of candidate.notChecked) {
+    if (!isBoundedString(item, 200)) {
+      return null;
+    }
+    notChecked.push(item);
+  }
+
+  return {
+    aspect: candidate.aspect as VerdictCardData["aspect"],
+    subjectShortHash: candidate.subjectShortHash,
+    flags,
+    notChecked,
+    decisionTxHash: candidate.decisionTxHash,
+    policyHash: candidate.policyHash
+  };
+}
+
 // ------------------------------------------------------------------ //
 //  Signal-box palette (hex, from apps/web/src/styles.css)            //
 //  DANGER = hsl(353 74% 44%)  → #c5253b                              //

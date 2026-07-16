@@ -19,7 +19,8 @@ const REPO_ROOT = resolve(SCRIPT_DIR, "..");
 const DEFAULT_ENV_FILE = ".env.submission.local";
 const DEFAULT_CASPER_CLIENT_COMMAND = "casper-client";
 const DEFAULT_DEPLOY_SCRIPT = "contracts/agent-pay-registry/scripts/deploy-testnet.sh";
-const REGISTRY_PACKAGE_NAME = "agentpay_registry_package";
+const REGISTRY_PACKAGE_NAME = "agentpay_registry_v2_package";
+const REGISTRY_CONTRACT_NAME = "agentpay_registry_v2";
 const HEX_64 = "[0-9a-fA-F]{64}";
 
 export type RegistryDeployCliOptions = {
@@ -32,6 +33,7 @@ export type RegistryDeployCliOptions = {
 export type RegistryDeployCaptureResult = {
   registryInstallHash: string;
   registryPackageHash: string;
+  registryContractHash: string;
   envPath: string;
   updatedKeys: string[];
 };
@@ -49,6 +51,9 @@ export async function deployAndCaptureAgentPayRegistry(
   const rpcUrl = requiredEnv(env, "CASPER_RPC_URL");
   const clientCommand = env.CASPER_CLIENT_COMMAND ?? DEFAULT_CASPER_CLIENT_COMMAND;
   const secretKeyPath = resolveFromRepo(requiredEnv(env, "CASPER_SECRET_KEY_PATH"));
+  const recorderAccountHash = normalizeRecorderAccountHash(
+    requiredEnv(env, "AGENT_PAY_REGISTRY_RECORDER_ACCOUNT_HASH")
+  );
   const accountIdentifier = await casperAccountIdentifierFromEnv(env);
   if (!accountIdentifier.ok) {
     throw new Error(accountIdentifier.message);
@@ -69,11 +74,15 @@ export async function deployAndCaptureAgentPayRegistry(
   if (!funding.funded) {
     throw new Error(`Casper Testnet account is not funded for registry deployment: ${funding.message}`);
   }
+  if (funding.accountHash?.toLowerCase() === recorderAccountHash) {
+    throw new Error("The registry recorder account must be separate from the deploying owner account");
+  }
 
   const deployOutput = await runDeployScript(deployScript, {
     ...env,
     CASPER_CLIENT_COMMAND: clientCommand,
     CASPER_SECRET_KEY_PATH: secretKeyPath,
+    AGENT_PAY_REGISTRY_RECORDER_ACCOUNT_HASH: recorderAccountHash,
     CASPER_NODE_ADDRESS: env.CASPER_NODE_ADDRESS ?? rpcUrl,
     CASPER_CHAIN_NAME: env.CASPER_CHAIN_NAME ?? "casper-test"
   });
@@ -89,7 +98,7 @@ export async function deployAndCaptureAgentPayRegistry(
     pollIntervalMs
   });
 
-  const registryPackageHash = await waitForRegistryPackageHash({
+  const registryHashes = await waitForRegistryHashes({
     clientCommand,
     rpcUrl,
     accountIdentifier: accountIdentifier.value,
@@ -101,13 +110,15 @@ export async function deployAndCaptureAgentPayRegistry(
     envFile,
     updates: {
       AGENT_PAY_REGISTRY_INSTALL_HASH: registryInstallHash,
-      AGENT_PAY_REGISTRY_PACKAGE_HASH: registryPackageHash
+      AGENT_PAY_REGISTRY_PACKAGE_HASH: registryHashes.packageHash,
+      AGENT_PAY_REGISTRY_CONTRACT_HASH: registryHashes.contractHash
     }
   });
 
   return {
     registryInstallHash,
-    registryPackageHash,
+    registryPackageHash: registryHashes.packageHash,
+    registryContractHash: registryHashes.contractHash,
     envPath: evidence.envPath,
     updatedKeys: evidence.updatedKeys
   };
@@ -166,6 +177,11 @@ export function extractRegistryPackageHash(accountPayload: unknown): string | nu
   return findNamedKeyPackageHash(payload, REGISTRY_PACKAGE_NAME);
 }
 
+export function extractRegistryContractHash(accountPayload: unknown): string | null {
+  const payload = typeof accountPayload === "string" ? parseJsonMaybe(accountPayload) : accountPayload;
+  return findNamedKeyPackageHash(payload, REGISTRY_CONTRACT_NAME);
+}
+
 async function runDeployScript(deployScript: string, env: NodeJS.ProcessEnv): Promise<string> {
   try {
     const { stdout, stderr } = await execFileAsync("bash", [deployScript], {
@@ -190,27 +206,33 @@ async function waitForCasperExecution(input: {
   for (let attempt = 1; attempt <= input.maxAttempts; attempt += 1) {
     latestStatus = await confirmCasperHashExecution(input.rpcUrl, input.hash);
     if (latestStatus === "executed") return;
+    if (latestStatus === "failed") {
+      throw new Error(`Registry install failed on Casper: ${input.hash}`);
+    }
     if (attempt < input.maxAttempts) await sleep(input.pollIntervalMs);
   }
 
   throw new Error(`Registry install hash was not confirmed as executed on Casper; latest status: ${latestStatus}`);
 }
 
-async function waitForRegistryPackageHash(input: {
+async function waitForRegistryHashes(input: {
   clientCommand: string;
   rpcUrl: string;
   accountIdentifier: string;
   maxAttempts: number;
   pollIntervalMs: number;
-}): Promise<string> {
+}): Promise<{ packageHash: string; contractHash: string }> {
   for (let attempt = 1; attempt <= input.maxAttempts; attempt += 1) {
     const accountOutput = await getAccount(input.clientCommand, input.rpcUrl, input.accountIdentifier);
     const packageHash = extractRegistryPackageHash(accountOutput);
-    if (packageHash) return packageHash;
+    const contractHash = extractRegistryContractHash(accountOutput);
+    if (packageHash && contractHash) return { packageHash, contractHash };
     if (attempt < input.maxAttempts) await sleep(input.pollIntervalMs);
   }
 
-  throw new Error(`Could not find ${REGISTRY_PACKAGE_NAME} in the deploying account's Casper named keys`);
+  throw new Error(
+    `Could not find ${REGISTRY_PACKAGE_NAME} and ${REGISTRY_CONTRACT_NAME} in the deploying account's Casper named keys`
+  );
 }
 
 async function getAccount(clientCommand: string, rpcUrl: string, accountIdentifier: string): Promise<string> {
@@ -382,6 +404,16 @@ function normalizeAccountIdentifier(value: string): string {
   if (/^[0-9a-f]{64}$/i.test(value)) return `account-hash-${value.toLowerCase()}`;
   if (/^(account-hash|entity-account)-[0-9a-f]{64}$/i.test(value)) return value.toLowerCase();
   return value;
+}
+
+function normalizeRecorderAccountHash(value: string): string {
+  const normalized = normalizeAccountIdentifier(value.trim());
+  if (!/^account-hash-[0-9a-f]{64}$/.test(normalized)) {
+    throw new Error(
+      "AGENT_PAY_REGISTRY_RECORDER_ACCOUNT_HASH must be account-hash-<64 hex chars> or 64 hex chars"
+    );
+  }
+  return normalized;
 }
 
 async function assertReadable(path: string, label: string): Promise<void> {

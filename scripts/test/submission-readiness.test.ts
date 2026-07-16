@@ -1,8 +1,9 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  confirmCasperHashExecution,
   evaluateSubmissionReadiness,
   formatSubmissionReadinessMarkdown,
   loadSubmissionEnv,
@@ -12,6 +13,12 @@ import {
 
 const TEST_GITHUB_URL = "https://github.com/agentpay/protocol";
 const TEST_VIDEO_URL = "https://media.agentpay.dev/walkthrough";
+const originalFetch = globalThis.fetch;
+
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+  vi.restoreAllMocks();
+});
 
 describe("AgentPay submission readiness evaluator", () => {
   it("keeps the submission not ready when external proof is missing", () => {
@@ -48,7 +55,7 @@ describe("AgentPay submission readiness evaluator", () => {
       status: "missing",
       message: "casper-client is required for Testnet deploys"
     });
-    expect(report.blockers).toContain("Deploy AgentPayRegistry on Casper Testnet and set AGENT_PAY_REGISTRY_PACKAGE_HASH.");
+    expect(report.blockers).toContain("Deploy AgentPayRegistry v2 and configure its package, contract, and dedicated recorder values.");
   });
 
   it("requires executed Casper confirmations rather than formatted hashes alone", () => {
@@ -61,6 +68,7 @@ describe("AgentPay submission readiness evaluator", () => {
       },
       confirmations: {
         registryInstall: "unverified",
+        receiptAnchor: "missing",
         decisionRecord: "pending",
         x402Settlement: "executed"
       }
@@ -78,6 +86,72 @@ describe("AgentPay submission readiness evaluator", () => {
       label: "Decision record confirmation",
       status: "fail",
       message: "AGENT_PAY_DECISION_TX_HASH is still pending on Casper"
+    });
+  });
+
+  it("reports Casper 2.0 execution errors as failed", async () => {
+    globalThis.fetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        result: {
+          transaction: { hash: "a".repeat(64) },
+          execution_info: {
+            execution_result: {
+              Version2: {
+                error_message: "ApiError::InvalidArgument [3]"
+              }
+            }
+          }
+        }
+      })
+    })) as unknown as typeof fetch;
+
+    await expect(confirmCasperHashExecution(
+      "https://node.testnet.casper.network/rpc",
+      "a".repeat(64)
+    )).resolves.toBe("failed");
+  });
+
+  it("reports legacy execution failures as failed", async () => {
+    globalThis.fetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        result: {
+          deploy: { hash: "a".repeat(64) },
+          execution_info: [
+            {
+              result: {
+                Failure: {
+                  error_message: "Contract reverted"
+                }
+              }
+            }
+          ]
+        }
+      })
+    })) as unknown as typeof fetch;
+
+    await expect(confirmCasperHashExecution(
+      "https://node.testnet.casper.network/rpc",
+      "a".repeat(64)
+    )).resolves.toBe("failed");
+  });
+
+  it("surfaces a failed confirmation distinctly in readiness output", () => {
+    const report = evaluateSubmissionReadiness(baseInput({
+      env: {
+        AGENT_PAY_REGISTRY_INSTALL_HASH: "b".repeat(64)
+      },
+      confirmations: {
+        registryInstall: "failed"
+      }
+    }));
+
+    expect(report.checks).toContainEqual({
+      id: "registry_install_confirmation",
+      label: "Registry install confirmation",
+      status: "fail",
+      message: "AGENT_PAY_REGISTRY_INSTALL_HASH failed during Casper execution"
     });
   });
 
@@ -123,7 +197,11 @@ describe("AgentPay submission readiness evaluator", () => {
         CASPER_SECRET_KEY_PATH: "/home/user/.casper/secret_key.pem",
         CASPER_PUBLIC_KEY_PATH: "/home/user/.casper/public_key_hex",
         AGENT_PAY_REGISTRY_PACKAGE_HASH: `hash-${"a".repeat(64)}`,
+        AGENT_PAY_REGISTRY_CONTRACT_HASH: `hash-${"1".repeat(64)}`,
+        AGENT_PAY_REGISTRY_RECORDER_ACCOUNT_HASH: `account-hash-${"2".repeat(64)}`,
+        AGENT_PAY_REGISTRY_RECORDER_KEY_PATH: "/home/user/.casper/registry_secret_key.pem",
         AGENT_PAY_REGISTRY_INSTALL_HASH: "b".repeat(64),
+        AGENT_PAY_RECEIPT_ANCHOR_HASH: "3".repeat(64),
         AGENT_PAY_DECISION_TX_HASH: "c".repeat(64),
         AGENT_PAY_SETTLEMENT_TX_HASH: "d".repeat(64),
         X402_ASSET_PACKAGE_HASH: "e".repeat(64),
@@ -133,7 +211,8 @@ describe("AgentPay submission readiness evaluator", () => {
         SUBMISSION_DEMO_VIDEO_URL: TEST_VIDEO_URL
       },
       secrets: {
-        casperSecretKeyReadable: true
+        casperSecretKeyReadable: true,
+        registryRecorderKeyReadable: true
       },
       funding: {
         casperAccount: {
@@ -145,6 +224,7 @@ describe("AgentPay submission readiness evaluator", () => {
       },
       confirmations: {
         registryInstall: "executed",
+        receiptAnchor: "executed",
         decisionRecord: "executed",
         x402Settlement: "executed"
       },
@@ -176,7 +256,7 @@ describe("AgentPay submission readiness evaluator", () => {
     expect(markdown).toContain("# AgentPay Submission Readiness");
     expect(markdown).toContain("Status: NOT READY");
     expect(markdown).toContain("| README documentation | pass | README.md is present |");
-    expect(markdown).toContain("- Deploy AgentPayRegistry on Casper Testnet and set AGENT_PAY_REGISTRY_PACKAGE_HASH.");
+    expect(markdown).toContain("- Deploy AgentPayRegistry v2 and configure its package, contract, and dedicated recorder values.");
   });
 
   it("requires the live capability ledger to stay in the submission gate", () => {
@@ -308,6 +388,7 @@ function baseInput(overrides: Partial<SubmissionReadinessInput> = {}): Submissio
     },
     confirmations: {
       registryInstall: "missing",
+      receiptAnchor: "missing",
       decisionRecord: "missing",
       x402Settlement: "missing",
       ...overrides.confirmations

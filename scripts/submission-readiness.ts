@@ -41,7 +41,7 @@ const PROHIBITED_SOURCE_PATTERNS = [
 ];
 
 type CheckStatus = "pass" | "missing" | "fail";
-export type ConfirmationStatus = "missing" | "executed" | "pending" | "unverified";
+export type ConfirmationStatus = "missing" | "executed" | "failed" | "pending" | "unverified";
 type PublicLinkStatus = "missing" | "reachable" | "unreachable" | "unchecked";
 type AccountFundingStatus = "missing" | "sufficient" | "insufficient" | "unverified";
 
@@ -64,6 +64,7 @@ export type SubmissionReadinessInput = {
   env: Record<string, string | undefined>;
   secrets: {
     casperSecretKeyReadable: boolean;
+    registryRecorderKeyReadable?: boolean;
   };
   funding: {
     casperAccount: {
@@ -75,6 +76,7 @@ export type SubmissionReadinessInput = {
   };
   confirmations: {
     registryInstall: ConfirmationStatus;
+    receiptAnchor: ConfirmationStatus;
     decisionRecord: ConfirmationStatus;
     x402Settlement: ConfirmationStatus;
   };
@@ -130,12 +132,22 @@ export function evaluateSubmissionReadiness(input: SubmissionReadinessInput): Su
     secretKeyCheck(input),
     accountFundingCheck(input),
     packageHashCheck(input.env.AGENT_PAY_REGISTRY_PACKAGE_HASH),
+    contractHashCheck(input.env.AGENT_PAY_REGISTRY_CONTRACT_HASH),
+    recorderAccountCheck(input.env.AGENT_PAY_REGISTRY_RECORDER_ACCOUNT_HASH),
+    recorderKeyCheck(input),
     confirmationCheck({
       id: "registry_install_confirmation",
       label: "Registry install confirmation",
       envName: "AGENT_PAY_REGISTRY_INSTALL_HASH",
       value: input.env.AGENT_PAY_REGISTRY_INSTALL_HASH,
       status: input.confirmations.registryInstall
+    }),
+    confirmationCheck({
+      id: "receipt_anchor_confirmation",
+      label: "Purchase receipt anchor confirmation",
+      envName: "AGENT_PAY_RECEIPT_ANCHOR_HASH",
+      value: input.env.AGENT_PAY_RECEIPT_ANCHOR_HASH,
+      status: input.confirmations.receiptAnchor
     }),
     x402ConfigurationCheck(input.env),
     confirmationCheck({
@@ -246,6 +258,7 @@ export function parseEnvFile(content: string): Record<string, string> {
 export async function createSubmissionReadinessReport(env: NodeJS.ProcessEnv = process.env): Promise<SubmissionReadinessReport> {
   const casperRpcUrl = env.CASPER_RPC_URL;
   const registryInstall = await confirmationFromEnv(casperRpcUrl, env.AGENT_PAY_REGISTRY_INSTALL_HASH);
+  const receiptAnchor = await confirmationFromEnv(casperRpcUrl, env.AGENT_PAY_RECEIPT_ANCHOR_HASH);
   const decisionRecord = await confirmationFromEnv(casperRpcUrl, env.AGENT_PAY_DECISION_TX_HASH);
   const x402Settlement = await confirmationFromEnv(casperRpcUrl, env.AGENT_PAY_SETTLEMENT_TX_HASH);
   const githubRepository = await publicLinkStatus(env.SUBMISSION_GITHUB_URL);
@@ -267,13 +280,17 @@ export async function createSubmissionReadinessReport(env: NodeJS.ProcessEnv = p
     },
     env,
     secrets: {
-      casperSecretKeyReadable: env.CASPER_SECRET_KEY_PATH ? await readable(env.CASPER_SECRET_KEY_PATH) : false
+      casperSecretKeyReadable: env.CASPER_SECRET_KEY_PATH ? await readable(env.CASPER_SECRET_KEY_PATH) : false,
+      registryRecorderKeyReadable: env.AGENT_PAY_REGISTRY_RECORDER_KEY_PATH
+        ? await readable(env.AGENT_PAY_REGISTRY_RECORDER_KEY_PATH)
+        : false
     },
     funding: {
       casperAccount: await casperAccountFundingFromEnv(env)
     },
     confirmations: {
       registryInstall,
+      receiptAnchor,
       decisionRecord,
       x402Settlement
     },
@@ -413,6 +430,65 @@ function packageHashCheck(value: string | undefined): SubmissionReadinessCheck {
   };
 }
 
+function contractHashCheck(value: string | undefined): SubmissionReadinessCheck {
+  if (!value) {
+    return {
+      id: "registry_contract_hash",
+      label: "Deployed registry contract hash",
+      status: "missing",
+      message: "AGENT_PAY_REGISTRY_CONTRACT_HASH is required"
+    };
+  }
+  const valid = /^(hash-)?[0-9a-f]{64}$/.test(value);
+  return {
+    id: "registry_contract_hash",
+    label: "Deployed registry contract hash",
+    status: valid ? "pass" : "fail",
+    message: valid
+      ? "AGENT_PAY_REGISTRY_CONTRACT_HASH has Casper contract-hash shape"
+      : "AGENT_PAY_REGISTRY_CONTRACT_HASH must be hash-<64 lowercase hex chars> or 64 lowercase hex chars"
+  };
+}
+
+function recorderAccountCheck(value: string | undefined): SubmissionReadinessCheck {
+  if (!value) {
+    return {
+      id: "registry_recorder_account",
+      label: "Registry recorder account",
+      status: "missing",
+      message: "AGENT_PAY_REGISTRY_RECORDER_ACCOUNT_HASH is required"
+    };
+  }
+  const valid = /^account-hash-[0-9a-f]{64}$/.test(value);
+  return {
+    id: "registry_recorder_account",
+    label: "Registry recorder account",
+    status: valid ? "pass" : "fail",
+    message: valid
+      ? "AGENT_PAY_REGISTRY_RECORDER_ACCOUNT_HASH has canonical account-hash shape"
+      : "AGENT_PAY_REGISTRY_RECORDER_ACCOUNT_HASH must be account-hash-<64 lowercase hex chars>"
+  };
+}
+
+function recorderKeyCheck(input: SubmissionReadinessInput): SubmissionReadinessCheck {
+  if (!input.env.AGENT_PAY_REGISTRY_RECORDER_KEY_PATH) {
+    return {
+      id: "registry_recorder_key",
+      label: "Registry recorder key",
+      status: "missing",
+      message: "AGENT_PAY_REGISTRY_RECORDER_KEY_PATH is required"
+    };
+  }
+  return {
+    id: "registry_recorder_key",
+    label: "Registry recorder key",
+    status: input.secrets.registryRecorderKeyReadable ? "pass" : "fail",
+    message: input.secrets.registryRecorderKeyReadable
+      ? "AGENT_PAY_REGISTRY_RECORDER_KEY_PATH is readable"
+      : "AGENT_PAY_REGISTRY_RECORDER_KEY_PATH does not exist or is not readable"
+  };
+}
+
 function x402ConfigurationCheck(env: Record<string, string | undefined>): SubmissionReadinessCheck {
   if (!env.X402_ASSET_PACKAGE_HASH) {
     return {
@@ -509,6 +585,14 @@ function confirmationCheck(input: {
       message: `${input.envName} is still pending on Casper`
     };
   }
+  if (input.status === "failed") {
+    return {
+      id: input.id,
+      label: input.label,
+      status: "fail",
+      message: `${input.envName} failed during Casper execution`
+    };
+  }
   return {
     id: input.id,
     label: input.label,
@@ -571,8 +655,17 @@ function blockersFor(checks: SubmissionReadinessCheck[]): string[] {
   const byId = new Map(checks.map((check) => [check.id, check]));
   const blockers: string[] = [];
 
-  if (byId.get("registry_package_hash")?.status !== "pass" || byId.get("registry_install_confirmation")?.status !== "pass") {
-    blockers.push("Deploy AgentPayRegistry on Casper Testnet and set AGENT_PAY_REGISTRY_PACKAGE_HASH.");
+  if (
+    byId.get("registry_package_hash")?.status !== "pass" ||
+    byId.get("registry_contract_hash")?.status !== "pass" ||
+    byId.get("registry_recorder_account")?.status !== "pass" ||
+    byId.get("registry_recorder_key")?.status !== "pass" ||
+    byId.get("registry_install_confirmation")?.status !== "pass"
+  ) {
+    blockers.push("Deploy AgentPayRegistry v2 and configure its package, contract, and dedicated recorder values.");
+  }
+  if (byId.get("receipt_anchor_confirmation")?.status !== "pass") {
+    blockers.push("Anchor one finalized AgentPay purchase receipt on Casper and confirm its execution hash.");
   }
   if (byId.get("x402_configuration")?.status !== "pass" || byId.get("x402_settlement_confirmation")?.status !== "pass") {
     blockers.push("Run one real x402-paid AgentPay settlement and confirm the Casper settlement hash.");
@@ -679,19 +772,30 @@ async function queryCasper(rpcUrl: string, method: string, params: unknown): Pro
 
 function executionState(payload: unknown): ConfirmationStatus {
   if (!payload) return "unverified";
-  const executionInfo = findProperty(payload, "execution_info");
+  const executionInfo = findProperty(payload, "execution_info")
+    ?? findProperty(payload, "execution_results");
   // Casper 1.x style: execution_info as an array (empty = pending).
   if (Array.isArray(executionInfo)) {
+    if (executionInfo.some(isFailedExecution)) return "failed";
     return executionInfo.length > 0 ? "executed" : "pending";
   }
   // Casper 2.0 style: execution_info is an object carrying execution_result once finalized.
   if (executionInfo && typeof executionInfo === "object") {
-    return findProperty(executionInfo, "execution_result") ? "executed" : "pending";
+    if (isFailedExecution(executionInfo)) return "failed";
+    const result = findProperty(executionInfo, "execution_result");
+    return result !== undefined && result !== null ? "executed" : "pending";
   }
   // Transaction/deploy exists but is not yet executed (execution_info null) => pending;
   // nothing found at all => unverified.
   const found = findProperty(payload, "transaction") ?? findProperty(payload, "deploy");
   return found ? "pending" : "unverified";
+}
+
+function isFailedExecution(value: unknown): boolean {
+  const failure = findProperty(value, "Failure");
+  if (failure !== undefined && failure !== null) return true;
+  const errorMessage = findProperty(value, "error_message");
+  return typeof errorMessage === "string" && errorMessage.trim().length > 0;
 }
 
 function findProperty(value: unknown, key: string): unknown {
@@ -842,7 +946,7 @@ function normalizeAccountIdentifier(value: string): string {
 }
 
 function requiredCasperDeployMotes(env: Record<string, string | undefined>): bigint {
-  return parseMotes(env.AGENT_PAY_INSTALL_PAYMENT_AMOUNT, 25_000_000_000n) + parseMotes(env.AGENT_PAY_RECORD_PAYMENT_AMOUNT, 100_000_000n);
+  return parseMotes(env.AGENT_PAY_INSTALL_PAYMENT_AMOUNT, 150_000_000_000n) + parseMotes(env.AGENT_PAY_RECORD_PAYMENT_AMOUNT, 5_000_000_000n);
 }
 
 function parseMotes(value: string | undefined, fallback: bigint): bigint {

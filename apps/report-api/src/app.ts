@@ -15,6 +15,7 @@ import {
   type SubjectRef
 } from "@agent-pay/core";
 import {
+  parseVerdictCardData,
   renderVerdictCardSvg,
   renderVerdictCardPng,
   verdictCardId,
@@ -266,7 +267,11 @@ export function createReportApp(options: CreateReportAppOptions = {}): Express {
   // ---------------------------------------------------------------- //
 
   app.post("/card", (request, response) => {
-    const data = request.body as VerdictCardData;
+    const data = parseVerdictCardData(request.body);
+    if (!data) {
+      response.status(400).json({ error: "invalid_card" });
+      return;
+    }
     const id = verdictCardId(data);
     verdictCards.set(id, data);
     response.json({ id });
@@ -289,8 +294,12 @@ export function createReportApp(options: CreateReportAppOptions = {}): Express {
       }
       const svg = renderVerdictCardSvg(data);
       if (isSvg) {
-        response.setHeader("content-type", "image/svg+xml");
-        response.send(svg);
+        response
+          .type("image/svg+xml")
+          .set("Content-Security-Policy", "default-src 'none'; sandbox")
+          .set("X-Content-Type-Options", "nosniff");
+        // All dynamic SVG text is escaped by renderVerdictCardSvg; the route also validates its input.
+        response.send(svg); // nosemgrep: javascript.express.security.audit.xss.direct-response-write.direct-response-write
         return;
       }
       // PNG
@@ -300,8 +309,10 @@ export function createReportApp(options: CreateReportAppOptions = {}): Express {
         response.setHeader("content-type", "image/png");
       } else {
         response.setHeader("content-type", "image/svg+xml");
+        response.setHeader("content-security-policy", "default-src 'none'; sandbox");
       }
-      response.send(pngBuf);
+      response.setHeader("x-content-type-options", "nosniff");
+      response.send(pngBuf); // nosemgrep: javascript.express.security.audit.xss.direct-response-write.direct-response-write
     } catch (error) {
       next(error);
     }

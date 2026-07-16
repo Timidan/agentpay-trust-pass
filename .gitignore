@@ -2,9 +2,11 @@
 .env.local
 .env.*.local
 .agentpay-testnet-key/
+.agentpay-registry-recorder-key/
 node_modules/
 dist/
 coverage/
+data/
 .turbo/
 .vite/
 target/

@@ -9,7 +9,7 @@ fi
 CASPER_CLIENT_COMMAND="${CASPER_CLIENT_COMMAND:-casper-client}"
 CASPER_NODE_ADDRESS="${CASPER_NODE_ADDRESS:-https://node.testnet.casper.network/rpc}"
 CASPER_CHAIN_NAME="${CASPER_CHAIN_NAME:-casper-test}"
-AGENT_PAY_RECORD_PAYMENT_AMOUNT="${AGENT_PAY_RECORD_PAYMENT_AMOUNT:-100000000}"
+AGENT_PAY_RECORD_PAYMENT_AMOUNT="${AGENT_PAY_RECORD_PAYMENT_AMOUNT:-5000000000}"
 
 if ! command -v "$CASPER_CLIENT_COMMAND" >/dev/null 2>&1; then
   echo "CASPER_CLIENT_COMMAND must point to casper-client" >&2
@@ -21,8 +21,8 @@ if [ -z "${CASPER_SECRET_KEY_PATH:-}" ]; then
   exit 2
 fi
 
-if [ ! -f "$CASPER_SECRET_KEY_PATH" ]; then
-  echo "CASPER_SECRET_KEY_PATH does not exist: $CASPER_SECRET_KEY_PATH" >&2
+if [ ! -r "$CASPER_SECRET_KEY_PATH" ]; then
+  echo "CASPER_SECRET_KEY_PATH must point to a readable owner or recorder key" >&2
   exit 2
 fi
 
@@ -42,23 +42,23 @@ REPORT_HASH="$3"
 PAYMENT_RECEIPT_HASH="$4"
 DECISION="$5"
 
-if [[ "$DATASET_ID" == *"'"* ]]; then
-  echo "dataset id cannot contain apostrophes" >&2
+if [[ ! "$DATASET_ID" =~ ^[A-Za-z0-9_.:-]{1,128}$ ]]; then
+  echo "dataset id must use 1-128 letters, numbers, dots, colons, underscores, or hyphens" >&2
   exit 2
 fi
 
-if [[ ! "$DATASET_ROOT" =~ ^[0-9a-fA-F]{64}$ ]]; then
-  echo "dataset root must be 64 hex chars" >&2
+if [[ ! "$DATASET_ROOT" =~ ^[0-9a-f]{64}$ ]]; then
+  echo "dataset root must be 64 lowercase hex chars" >&2
   exit 2
 fi
 
-if [[ ! "$REPORT_HASH" =~ ^[0-9a-fA-F]{64}$ ]]; then
-  echo "report hash must be 64 hex chars" >&2
+if [[ ! "$REPORT_HASH" =~ ^[0-9a-f]{64}$ ]]; then
+  echo "report hash must be 64 lowercase hex chars" >&2
   exit 2
 fi
 
-if [[ ! "$PAYMENT_RECEIPT_HASH" =~ ^[0-9a-fA-F]{64}$ ]]; then
-  echo "payment receipt hash must be 64 hex chars" >&2
+if [[ ! "$PAYMENT_RECEIPT_HASH" =~ ^[0-9a-f]{64}$ ]]; then
+  echo "payment receipt hash must be 64 lowercase hex chars" >&2
   exit 2
 fi
 

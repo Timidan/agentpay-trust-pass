@@ -113,7 +113,10 @@ describe("MCP tool layer", () => {
           receipt: null
         });
       }
-      return Response.json({ receipt: { receiptId: "receipt-1", checkId: "check-1" } });
+      return Response.json({
+        receipt: { receiptId: "receipt-1", checkId: "check-1" },
+        anchorState: { status: "pending", transactionHash: "a".repeat(64) }
+      });
     });
 
     const authorization = {
@@ -148,7 +151,10 @@ describe("MCP tool layer", () => {
       transactionHash: "f".repeat(64)
     })).resolves.toMatchObject({ proof: { verdict: "match" } });
     await expect(getPaymentReceiptTool({ receiptId: "receipt-1" }))
-      .resolves.toMatchObject({ receiptId: "receipt-1" });
+      .resolves.toMatchObject({
+        receipt: { receiptId: "receipt-1" },
+        anchorState: { status: "pending", transactionHash: "a".repeat(64) }
+      });
 
     expect(requests.map((request) => new URL(request.url).pathname)).toEqual([
       "/v1/checks",

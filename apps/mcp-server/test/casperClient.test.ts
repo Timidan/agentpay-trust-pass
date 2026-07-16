@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage } from "node:http";
-import { mkdtemp, rm, writeFile, chmod } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
@@ -20,6 +20,10 @@ describe("AgentPay registry recorder", () => {
     await expect(getRegistryStatus()).resolves.toMatchObject({
       status: "configuration_required",
       reason: "agent_pay_registry_package_hash_required",
+      receiptAnchors: {
+        status: "configuration_required",
+        reason: "registry_recorder_key_required"
+      },
       checks: expect.arrayContaining([
         {
           name: "registry_package",
@@ -125,6 +129,39 @@ describe("AgentPay registry recorder", () => {
     }
   });
 
+  it("requires explicit operator opt-in before using a custom record script", async () => {
+    const script = await createExecutableScript();
+    const secretKeyPath = await createSecretKeyFile();
+    delete process.env.AGENT_PAY_ALLOW_CUSTOM_RECORD_SCRIPTS;
+    process.env.AGENT_PAY_REGISTRY_PACKAGE_HASH = `hash-${"a".repeat(64)}`;
+    process.env.AGENT_PAY_RECORD_SCRIPT = script;
+    process.env.CASPER_SECRET_KEY_PATH = secretKeyPath;
+    process.env.CASPER_RPC_URL = "https://node.testnet.casper.network/rpc";
+
+    try {
+      await expect(getRegistryStatus()).resolves.toMatchObject({
+        status: "configuration_required",
+        checks: expect.arrayContaining([
+          {
+            name: "record_script",
+            status: "missing",
+            message: "custom record scripts require AGENT_PAY_ALLOW_CUSTOM_RECORD_SCRIPTS=1"
+          }
+        ])
+      });
+      await expect(recordAgentPayDecision({
+        datasetId: "agent-pay-live-runtime",
+        datasetRoot: "a".repeat(64),
+        reportHash: "b".repeat(64),
+        paymentReceiptHash: "c".repeat(64),
+        decision: "approved"
+      })).rejects.toThrow("AGENT_PAY_ALLOW_CUSTOM_RECORD_SCRIPTS=1");
+    } finally {
+      await rm(script, { force: true });
+      await rm(secretKeyPath, { force: true });
+    }
+  });
+
   it("confirms a submitted transaction hash through Casper JSON-RPC", async () => {
     const transactionHash = "7".repeat(64);
     const blockHash = "8".repeat(64);
@@ -155,6 +192,7 @@ describe("AgentPay registry recorder", () => {
     process.env.AGENT_PAY_RECORD_SCRIPT = submitter.path;
     process.env.CASPER_RPC_URL = rpc.url;
     process.env.CASPER_SECRET_KEY_PATH = secretKeyPath;
+    process.env.AGENT_PAY_API_TOKEN = "must-not-cross-the-registry-subprocess-boundary";
     process.env.CASPER_CONFIRMATION_ATTEMPTS = "1";
     process.env.CASPER_CONFIRMATION_DELAY_MS = "0";
 
@@ -180,6 +218,7 @@ describe("AgentPay registry recorder", () => {
           attempts: 1
         }
       });
+      expect(await readFile(submitter.capturePath, "utf8")).toBe("unset");
     } finally {
       await rpc.close();
       await submitter.close();
@@ -301,19 +340,30 @@ describe("AgentPay registry recorder", () => {
   });
 });
 
-async function createSubmitter(output: string): Promise<{ path: string; close: () => Promise<void> }> {
+async function createSubmitter(output: string): Promise<{
+  path: string;
+  capturePath: string;
+  close: () => Promise<void>;
+}> {
+  process.env.AGENT_PAY_ALLOW_CUSTOM_RECORD_SCRIPTS = "1";
   const dir = await mkdtemp(join(tmpdir(), "agent-pay-submitter-"));
   const scriptPath = join(dir, "submit.sh");
-  await writeFile(scriptPath, `#!/usr/bin/env bash\nset -euo pipefail\necho "${output}"\n`);
+  const capturePath = join(dir, "inherited-token.txt");
+  await writeFile(
+    scriptPath,
+    `#!/usr/bin/env bash\nset -euo pipefail\nprintf '%s' "\${AGENT_PAY_API_TOKEN-unset}" > ${JSON.stringify(capturePath)}\necho "${output}"\n`
+  );
   await chmod(scriptPath, 0o700);
 
   return {
     path: scriptPath,
+    capturePath,
     close: () => rm(dir, { recursive: true, force: true })
   };
 }
 
 async function createExecutableScript(): Promise<string> {
+  process.env.AGENT_PAY_ALLOW_CUSTOM_RECORD_SCRIPTS = "1";
   const dir = await mkdtemp(join(tmpdir(), "agent-pay-registry-status-"));
   const scriptPath = join(dir, "record.sh");
   await writeFile(scriptPath, "#!/usr/bin/env bash\nset -euo pipefail\n");

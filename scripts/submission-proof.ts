@@ -9,7 +9,14 @@ type ProofStatus = "pass" | "fail";
 type FacilitatorKind = "hosted" | "self-hosted";
 
 export type DemoProofEdge = {
-  id: "facilitator" | "registryPackage" | "registryInstall" | "x402Settlement" | "decisionRecord";
+  id:
+    | "facilitator"
+    | "registryPackage"
+    | "registryContract"
+    | "registryInstall"
+    | "receiptAnchor"
+    | "x402Settlement"
+    | "decisionRecord";
   label: string;
   status: ProofStatus;
   value: string | null;
@@ -35,6 +42,7 @@ type DemoProofBundleInput = {
   env: Record<string, string | undefined>;
   confirmations: {
     registryInstall: ConfirmationStatus;
+    receiptAnchor: ConfirmationStatus;
     x402Settlement: ConfirmationStatus;
     decisionRecord: ConfirmationStatus;
   };
@@ -69,6 +77,7 @@ export function buildDemoProofBundle(input: DemoProofBundleInput): DemoProofBund
       explorerUrl: null
     },
     registryPackageEdge(env.AGENT_PAY_REGISTRY_PACKAGE_HASH, explorerBase),
+    registryContractEdge(env.AGENT_PAY_REGISTRY_CONTRACT_HASH, explorerBase),
     confirmationEdge({
       id: "registryInstall",
       label: "Registry install",
@@ -76,6 +85,14 @@ export function buildDemoProofBundle(input: DemoProofBundleInput): DemoProofBund
       value: env.AGENT_PAY_REGISTRY_INSTALL_HASH,
       confirmation: input.confirmations.registryInstall,
       explorerUrl: explorerLink(explorerBase, "deploy", env.AGENT_PAY_REGISTRY_INSTALL_HASH)
+    }),
+    confirmationEdge({
+      id: "receiptAnchor",
+      label: "Purchase receipt anchor",
+      envName: "AGENT_PAY_RECEIPT_ANCHOR_HASH",
+      value: env.AGENT_PAY_RECEIPT_ANCHOR_HASH,
+      confirmation: input.confirmations.receiptAnchor,
+      explorerUrl: explorerLink(explorerBase, "deploy", env.AGENT_PAY_RECEIPT_ANCHOR_HASH)
     }),
     confirmationEdge({
       id: "x402Settlement",
@@ -115,6 +132,7 @@ export async function createDemoProofBundle(options: CreateDemoProofBundleOption
   const confirmHashExecution = options.confirmHashExecution ?? confirmCasperHashExecution;
   const confirmations = {
     registryInstall: await confirmationFromEnv(env, "AGENT_PAY_REGISTRY_INSTALL_HASH", confirmHashExecution),
+    receiptAnchor: await confirmationFromEnv(env, "AGENT_PAY_RECEIPT_ANCHOR_HASH", confirmHashExecution),
     x402Settlement: await confirmationFromEnv(env, "AGENT_PAY_SETTLEMENT_TX_HASH", confirmHashExecution),
     decisionRecord: await confirmationFromEnv(env, "AGENT_PAY_DECISION_TX_HASH", confirmHashExecution)
   };
@@ -183,8 +201,39 @@ function registryPackageEdge(value: string | undefined, explorerBase: string): D
   };
 }
 
+function registryContractEdge(value: string | undefined, explorerBase: string): DemoProofEdge {
+  if (!value) {
+    return {
+      id: "registryContract",
+      label: "Registry contract",
+      status: "fail",
+      value: null,
+      message: "AGENT_PAY_REGISTRY_CONTRACT_HASH is required",
+      explorerUrl: null
+    };
+  }
+  if (!/^(hash-)?[0-9a-f]{64}$/.test(value)) {
+    return {
+      id: "registryContract",
+      label: "Registry contract",
+      status: "fail",
+      value,
+      message: "AGENT_PAY_REGISTRY_CONTRACT_HASH must be hash-<64 lowercase hex chars> or 64 lowercase hex chars",
+      explorerUrl: null
+    };
+  }
+  return {
+    id: "registryContract",
+    label: "Registry contract",
+    status: "pass",
+    value,
+    message: "AGENT_PAY_REGISTRY_CONTRACT_HASH has Casper contract-hash shape",
+    explorerUrl: `${explorerBase}/contract/${value}`
+  };
+}
+
 function confirmationEdge(input: {
-  id: "registryInstall" | "x402Settlement" | "decisionRecord";
+  id: "registryInstall" | "receiptAnchor" | "x402Settlement" | "decisionRecord";
   label: string;
   envName: string;
   value: string | undefined;

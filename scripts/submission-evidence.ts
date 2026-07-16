@@ -1,5 +1,5 @@
 import { constants } from "node:fs";
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseEnvFile } from "./submission-readiness";
@@ -15,7 +15,11 @@ const FIELD_TO_ENV = new Map<string, string>([
   ["--casper-public-key-path", "CASPER_PUBLIC_KEY_PATH"],
   ["--casper-account-identifier", "CASPER_ACCOUNT_IDENTIFIER"],
   ["--registry-package-hash", "AGENT_PAY_REGISTRY_PACKAGE_HASH"],
+  ["--registry-contract-hash", "AGENT_PAY_REGISTRY_CONTRACT_HASH"],
+  ["--registry-recorder-account-hash", "AGENT_PAY_REGISTRY_RECORDER_ACCOUNT_HASH"],
+  ["--registry-recorder-key-path", "AGENT_PAY_REGISTRY_RECORDER_KEY_PATH"],
   ["--registry-install-hash", "AGENT_PAY_REGISTRY_INSTALL_HASH"],
+  ["--receipt-anchor-hash", "AGENT_PAY_RECEIPT_ANCHOR_HASH"],
   ["--x402-asset-package-hash", "X402_ASSET_PACKAGE_HASH"],
   ["--payee-address", "PAYEE_ADDRESS"],
   ["--settlement-tx-hash", "AGENT_PAY_SETTLEMENT_TX_HASH"],
@@ -31,7 +35,11 @@ const KEY_ORDER = [
   "CASPER_PUBLIC_KEY_PATH",
   "CASPER_ACCOUNT_IDENTIFIER",
   "AGENT_PAY_REGISTRY_PACKAGE_HASH",
+  "AGENT_PAY_REGISTRY_CONTRACT_HASH",
+  "AGENT_PAY_REGISTRY_RECORDER_ACCOUNT_HASH",
+  "AGENT_PAY_REGISTRY_RECORDER_KEY_PATH",
   "AGENT_PAY_REGISTRY_INSTALL_HASH",
+  "AGENT_PAY_RECEIPT_ANCHOR_HASH",
   "X402_ASSET_PACKAGE_HASH",
   "PAYEE_ADDRESS",
   "AGENT_PAY_SETTLEMENT_TX_HASH",
@@ -68,6 +76,7 @@ export async function writeSubmissionEvidence(options: EvidenceCliOptions): Prom
       throw new Error(validationError);
     }
   }
+  await validateKeySeparation(next);
 
   await mkdir(dirname(envPath), { recursive: true });
   await writeFile(envPath, formatEnvFile(next));
@@ -121,12 +130,12 @@ async function validateEvidenceValue(key: string, value: string): Promise<string
   if (key === "CASPER_CLIENT_COMMAND") {
     return value.includes("\n") ? "CASPER_CLIENT_COMMAND cannot contain a newline" : null;
   }
-  if (key === "CASPER_SECRET_KEY_PATH") {
+  if (key === "CASPER_SECRET_KEY_PATH" || key === "AGENT_PAY_REGISTRY_RECORDER_KEY_PATH") {
     try {
       await access(value, constants.R_OK);
       return null;
     } catch {
-      return `CASPER_SECRET_KEY_PATH does not exist or is not readable: ${value}`;
+      return `${key} does not exist or is not readable: ${value}`;
     }
   }
   if (key === "CASPER_PUBLIC_KEY_PATH") {
@@ -142,10 +151,15 @@ async function validateEvidenceValue(key: string, value: string): Promise<string
       ? null
       : "CASPER_ACCOUNT_IDENTIFIER must be account-hash-<64 hex chars>, entity-account-<64 hex chars>, or 64 hex chars";
   }
-  if (key === "AGENT_PAY_REGISTRY_PACKAGE_HASH") {
+  if (key === "AGENT_PAY_REGISTRY_PACKAGE_HASH" || key === "AGENT_PAY_REGISTRY_CONTRACT_HASH") {
     return /^(hash-)?[0-9a-f]{64}$/i.test(value)
       ? null
-      : "AGENT_PAY_REGISTRY_PACKAGE_HASH must be hash-<64 hex chars> or 64 hex chars";
+      : `${key} must be hash-<64 hex chars> or 64 hex chars`;
+  }
+  if (key === "AGENT_PAY_REGISTRY_RECORDER_ACCOUNT_HASH") {
+    return /^(account-hash-)?[0-9a-f]{64}$/i.test(value)
+      ? null
+      : "AGENT_PAY_REGISTRY_RECORDER_ACCOUNT_HASH must be account-hash-<64 hex chars> or 64 hex chars";
   }
   if (key === "X402_ASSET_PACKAGE_HASH") {
     return /^[0-9a-f]{64}$/i.test(value) ? null : "X402_ASSET_PACKAGE_HASH must be 64 hex chars";
@@ -155,6 +169,7 @@ async function validateEvidenceValue(key: string, value: string): Promise<string
   }
   if (
     key === "AGENT_PAY_REGISTRY_INSTALL_HASH" ||
+    key === "AGENT_PAY_RECEIPT_ANCHOR_HASH" ||
     key === "AGENT_PAY_SETTLEMENT_TX_HASH" ||
     key === "AGENT_PAY_DECISION_TX_HASH"
   ) {
@@ -167,6 +182,16 @@ async function validateEvidenceValue(key: string, value: string): Promise<string
     return validUrl(value, { httpsOnly: true }) ? null : "SUBMISSION_DEMO_VIDEO_URL must be an HTTPS URL";
   }
   return null;
+}
+
+async function validateKeySeparation(env: Record<string, string | undefined>): Promise<void> {
+  const owner = env.CASPER_SECRET_KEY_PATH;
+  const recorder = env.AGENT_PAY_REGISTRY_RECORDER_KEY_PATH;
+  if (!owner || !recorder) return;
+  const [ownerPath, recorderPath] = await Promise.all([realpath(owner), realpath(recorder)]);
+  if (ownerPath === recorderPath) {
+    throw new Error("AGENT_PAY_REGISTRY_RECORDER_KEY_PATH must be separate from CASPER_SECRET_KEY_PATH");
+  }
 }
 
 async function readExistingEnv(envPath: string): Promise<Record<string, string>> {

@@ -191,16 +191,17 @@ async function callCommand(options: CliOptions): Promise<CommandResult> {
   if (options.body !== undefined && options["body-file"] !== undefined) {
     throw new CliError("invalid_input", "call accepts only one of --body or --body-file");
   }
-  const body = options["body-file"] === undefined
+  const bodyText = options["body-file"] === undefined
     ? options.body
     : await readText(options["body-file"], "Could not read the requested request-body file");
+  const body = bodyText === undefined ? undefined : parseJsonOrText(bodyText);
   const result = await checkedX402Call({
     url,
     method,
     body,
     headers: parseHeaders(options.header ?? []),
     signer,
-    api: agentClient(options),
+    api: await callAgentClient(options, signer),
     maxResponseBytes: options["max-response-bytes"] === undefined
       ? undefined
       : positiveInteger(options["max-response-bytes"], "max response bytes"),
@@ -277,8 +278,8 @@ async function providerCommand(
 async function receiptCommand(action: "show" | "verify", options: CliOptions): Promise<CommandResult> {
   if (action === "show") {
     const receiptId = required(options.id, "receipt show requires --id");
-    const receipt = await agentClient(options).getReceipt(receiptId);
-    return { value: { receipt }, exitCode: 0, summary: `Receipt ${receiptId}` };
+    const record = await agentClient(options).getReceiptRecord(receiptId);
+    return { value: record, exitCode: 0, summary: `Receipt ${receiptId}` };
   }
   const input = await readJson(required(options.file, "receipt verify requires --file"));
   const receipt = isRecord(input) && "receipt" in input ? input.receipt : input;
@@ -291,8 +292,26 @@ async function receiptCommand(action: "show" | "verify", options: CliOptions): P
 }
 
 function agentClient(options: CliOptions): AgentPayHttpClient {
-  const token = options.token ?? process.env.AGENT_PAY_API_TOKEN;
-  if (!token) throw new CliError("configuration_required", "An AgentPay agent token is required");
+  const token = configuredApiToken(options);
+  if (!token) throw new CliError("configuration_required", "An AgentPay bearer token is required");
+  return createAgentClient(options, token);
+}
+
+async function callAgentClient(options: CliOptions, signer: CasperSigner): Promise<AgentPayHttpClient> {
+  const token = configuredApiToken(options) ?? await operatorClient(options).createSession(signer);
+  return createAgentClient(options, token);
+}
+
+function configuredApiToken(options: CliOptions): string | undefined {
+  return [
+    options.token,
+    process.env.AGENT_PAY_API_TOKEN,
+    options["session-token"],
+    process.env.AGENT_PAY_OPERATOR_SESSION_TOKEN
+  ].find((value) => value?.trim())?.trim();
+}
+
+function createAgentClient(options: CliOptions, token: string): AgentPayHttpClient {
   try {
     return new AgentPayHttpClient({ baseUrl: apiUrl(options), token });
   } catch {

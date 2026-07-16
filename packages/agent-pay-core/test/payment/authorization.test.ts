@@ -58,8 +58,8 @@ describe("x402 authorization binding", () => {
       payerPublicKey,
       to: terms.payTo,
       amount: terms.amount,
-      validAfter: "1699999400",
-      validBefore: "1700000300",
+      validAfter: "1699999995",
+      validBefore: "1700000295",
       nonce: "11".repeat(32),
       network: terms.network,
       asset: terms.asset,
@@ -100,8 +100,8 @@ describe("x402 authorization binding", () => {
     ["from", { from: `00${"7".repeat(64)}` }],
     ["to", { to: `00${"6".repeat(64)}` }],
     ["amount", { amount: "10001" }],
-    ["validAfter", { validAfter: "1699999401" }],
-    ["validBefore", { validBefore: "1700000301" }],
+    ["validAfter", { validAfter: "1699999996" }],
+    ["validBefore", { validBefore: "1700000296" }],
     ["nonce", { nonce: "44".repeat(32) }],
     ["asset", { asset: "5".repeat(64) }],
     ["network", { network: "casper:casper-test-other" }],
@@ -118,5 +118,19 @@ describe("x402 authorization binding", () => {
     const changed = { ...intent, ...change } as typeof intent;
 
     expect(authorizationDigest(changed)).not.toBe(intent.digest);
+  });
+
+  it("keeps clock skew inside the negotiated authorization window", () => {
+    const privateKey = new Uint8Array(32).fill(7);
+    const intent = buildAuthorizationIntent({
+      terms: { ...terms, maxTimeoutSeconds: 1 },
+      payerPublicKey: `01${Buffer.from(ed25519.getPublicKey(privateKey)).toString("hex")}`,
+      nowEpochSeconds: 1_700_000_000,
+      nonce: "66".repeat(32)
+    });
+
+    expect(intent.validAfter).toBe("1700000000");
+    expect(intent.validBefore).toBe("1700000001");
+    expect(Number(intent.validBefore) - Number(intent.validAfter)).toBe(1);
   });
 });

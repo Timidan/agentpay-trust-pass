@@ -1,13 +1,14 @@
 import { execFile } from "node:child_process";
 import { constants } from "node:fs";
-import { access } from "node:fs/promises";
+import { access, realpath } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { ToolConfigError } from "./errors.js";
+import { ToolConfigError, ToolInputError } from "./errors.js";
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_RECORD_SCRIPT = "contracts/agent-pay-registry/scripts/record-decision-testnet.sh";
+const DEFAULT_RECEIPT_RECORD_SCRIPT = "contracts/agent-pay-registry/scripts/record-receipt-testnet.sh";
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
 
 export type RecordDecisionInput = {
@@ -53,6 +54,15 @@ export type RegistryStatus = {
     latestBlockHeight: number | null;
     latestBlockHash: string | null;
   } | null;
+  receiptAnchors: ReceiptAnchorStatus;
+};
+
+export type ReceiptAnchorStatus = {
+  status: "ready" | "configuration_required";
+  reason: string | null;
+  contractHash: string | null;
+  recorderKeyConfigured: boolean;
+  recordScript: string;
 };
 
 export type AgentPayRegistryConfirmation = {
@@ -69,7 +79,9 @@ export async function getRegistryStatus(): Promise<RegistryStatus> {
   const checks: RegistryStatusCheck[] = [];
   const registryPackageHash = process.env.AGENT_PAY_REGISTRY_PACKAGE_HASH ?? null;
   const rpcUrl = process.env.CASPER_RPC_URL ?? null;
-  const script = recordScriptPath();
+  const scriptConfig = recordScriptConfiguration();
+  const script = scriptConfig.path;
+  const receiptAnchors = await getReceiptAnchorStatus();
 
   if (!registryPackageHash) {
     checks.push({
@@ -101,11 +113,12 @@ export async function getRegistryStatus(): Promise<RegistryStatus> {
     checks.push({
       name: "casper_rpc",
       status: "pass",
-      message: rpcUrl
+      message: describeRpcUrl(rpcUrl)
     });
   }
 
   try {
+    if (!scriptConfig.allowed) throw new Error();
     await access(script, constants.X_OK);
     checks.push({
       name: "record_script",
@@ -116,7 +129,9 @@ export async function getRegistryStatus(): Promise<RegistryStatus> {
     checks.push({
       name: "record_script",
       status: "missing",
-      message: "record script must exist and be executable"
+      message: scriptConfig.allowed
+        ? "record script must exist and be executable"
+        : "custom record scripts require AGENT_PAY_ALLOW_CUSTOM_RECORD_SCRIPTS=1"
     });
   }
 
@@ -143,7 +158,7 @@ export async function getRegistryStatus(): Promise<RegistryStatus> {
     }
   }
 
-  if (isDefaultRecordScript(script) && !(await canResolveCasperClientCommand())) {
+  if (scriptConfig.isDefault && !(await canResolveCasperClientCommand())) {
     checks.push({
       name: "casper_client",
       status: "missing",
@@ -153,7 +168,7 @@ export async function getRegistryStatus(): Promise<RegistryStatus> {
     checks.push({
       name: "casper_client",
       status: "pass",
-      message: isDefaultRecordScript(script)
+      message: scriptConfig.isDefault
         ? "configured Casper client available"
         : "custom record script configured"
     });
@@ -161,7 +176,7 @@ export async function getRegistryStatus(): Promise<RegistryStatus> {
 
   const blockingConfiguration = checks.find((check) => check.status !== "pass");
   if (blockingConfiguration || !rpcUrl) {
-    return registryStatus("configuration_required", registryReason(blockingConfiguration), checks, registryPackageHash, script, null);
+    return registryStatus("configuration_required", registryReason(blockingConfiguration), checks, registryPackageHash, script, null, receiptAnchors);
   }
 
   let rpcStatus: RegistryStatus["rpc"];
@@ -173,7 +188,7 @@ export async function getRegistryStatus(): Promise<RegistryStatus> {
       status: "fail",
       message: error instanceof Error ? error.message : "Casper RPC status check failed"
     });
-    return registryStatus("rpc_unavailable", "casper_rpc_status_check_failed", checks, registryPackageHash, script, null);
+    return registryStatus("rpc_unavailable", "casper_rpc_status_check_failed", checks, registryPackageHash, script, null, receiptAnchors);
   }
 
   checks.push({
@@ -182,10 +197,11 @@ export async function getRegistryStatus(): Promise<RegistryStatus> {
     message: rpcStatus.chainspecName ?? rpcStatus.url
   });
 
-  return registryStatus("ready", null, checks, registryPackageHash, script, rpcStatus);
+  return registryStatus("ready", null, checks, registryPackageHash, script, rpcStatus, receiptAnchors);
 }
 
 export async function recordAgentPayDecision(input: RecordDecisionInput): Promise<RecordDecisionResult> {
+  validateRecordDecisionInput(input);
   const registryPackageHash = process.env.AGENT_PAY_REGISTRY_PACKAGE_HASH;
   if (!registryPackageHash) {
     throw new ToolConfigError("AGENT_PAY_REGISTRY_PACKAGE_HASH is required to record an AgentPay decision");
@@ -218,32 +234,93 @@ export async function recordAgentPayDecision(input: RecordDecisionInput): Promis
 
 async function submitRecordDecisionDeploy(input: RecordDecisionInput): Promise<SubmittedHash> {
   const script = recordScriptPath();
-  const { stdout } = await execFileAsync(script, [
-    input.datasetId,
-    input.datasetRoot,
-    input.reportHash,
-    input.paymentReceiptHash,
-    input.decision
-  ]);
+  let stdout: string;
+  try {
+    ({ stdout } = await execFileAsync(script, [
+      input.datasetId,
+      input.datasetRoot,
+      input.reportHash,
+      input.paymentReceiptHash,
+      input.decision
+    ], {
+      encoding: "utf8",
+      env: registryChildEnv(process.env),
+      timeout: 60_000,
+      maxBuffer: 1024 * 1024
+    }));
+  } catch {
+    throw new Error("Casper registry decision submission failed");
+  }
 
   const submittedHash = parseSubmittedHash(stdout);
   if (!submittedHash) {
-    throw new Error(`Casper submission hash not found in record-decision output: ${stdout}`);
+    throw new Error("Casper registry decision submission did not return a transaction hash");
   }
   return submittedHash;
 }
 
 function recordScriptPath(): string {
-  const repoRoot = process.env.AGENT_PAY_REPO_ROOT ?? resolve(MODULE_DIR, "../../..");
-  return resolve(repoRoot, process.env.AGENT_PAY_RECORD_SCRIPT ?? DEFAULT_RECORD_SCRIPT);
+  const config = recordScriptConfiguration();
+  if (!config.allowed) {
+    throw new ToolConfigError("Custom registry scripts require AGENT_PAY_ALLOW_CUSTOM_RECORD_SCRIPTS=1");
+  }
+  return config.path;
 }
 
-function isDefaultRecordScript(script: string): boolean {
-  return script.endsWith(DEFAULT_RECORD_SCRIPT);
+function recordScriptConfiguration(): { path: string; isDefault: boolean; allowed: boolean } {
+  const defaultRepoRoot = resolve(MODULE_DIR, "../../..");
+  const repoRoot = resolve(process.env.AGENT_PAY_REPO_ROOT ?? defaultRepoRoot);
+  const requested = process.env.AGENT_PAY_RECORD_SCRIPT?.trim();
+  const path = resolve(repoRoot, requested || DEFAULT_RECORD_SCRIPT);
+  const isDefault = repoRoot === defaultRepoRoot && (!requested || requested === DEFAULT_RECORD_SCRIPT);
+  return {
+    path,
+    isDefault,
+    allowed: isDefault || process.env.AGENT_PAY_ALLOW_CUSTOM_RECORD_SCRIPTS === "1"
+  };
 }
 
 function isCasperPackageHash(value: string): boolean {
   return /^(hash-)?[0-9a-f]{64}$/i.test(value);
+}
+
+function validateRecordDecisionInput(input: RecordDecisionInput): void {
+  if (!/^[A-Za-z0-9_.:-]{1,128}$/.test(input.datasetId)) {
+    throw new ToolInputError("datasetId must use 1-128 letters, numbers, dots, colons, underscores, or hyphens");
+  }
+  for (const [name, value] of [
+    ["datasetRoot", input.datasetRoot],
+    ["reportHash", input.reportHash],
+    ["paymentReceiptHash", input.paymentReceiptHash]
+  ] as const) {
+    if (!/^[0-9a-f]{64}$/.test(value)) {
+      throw new ToolInputError(`${name} must be 64 lowercase hexadecimal characters`);
+    }
+  }
+}
+
+function registryChildEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const allowed = [
+    "PATH",
+    "HOME",
+    "LANG",
+    "LC_ALL",
+    "SSL_CERT_FILE",
+    "SSL_CERT_DIR",
+    "NODE_EXTRA_CA_CERTS",
+    "CASPER_CLIENT_COMMAND",
+    "CASPER_NODE_ADDRESS",
+    "CASPER_RPC_URL",
+    "CASPER_CHAIN_NAME",
+    "CASPER_SECRET_KEY_PATH",
+    "AGENT_PAY_REGISTRY_PACKAGE_HASH",
+    "AGENT_PAY_RECORD_PAYMENT_AMOUNT"
+  ] as const;
+  const child: NodeJS.ProcessEnv = {};
+  for (const name of allowed) {
+    if (env[name] !== undefined) child[name] = env[name];
+  }
+  return child;
 }
 
 function registryReason(check: RegistryStatusCheck | undefined): string {
@@ -283,7 +360,8 @@ function registryStatus(
   checks: RegistryStatusCheck[],
   registryPackageHash: string | null,
   recordScript: string,
-  rpc: RegistryStatus["rpc"]
+  rpc: RegistryStatus["rpc"],
+  receiptAnchors: ReceiptAnchorStatus
 ): RegistryStatus {
   return {
     status,
@@ -292,12 +370,94 @@ function registryStatus(
     checks,
     registryPackageHash,
     recordScript: describeRecordScript(recordScript),
-    rpc
+    rpc,
+    receiptAnchors
   };
 }
 
+async function getReceiptAnchorStatus(): Promise<ReceiptAnchorStatus> {
+  const defaultRepoRoot = resolve(MODULE_DIR, "../../..");
+  const repoRoot = resolve(process.env.AGENT_PAY_REPO_ROOT ?? defaultRepoRoot);
+  const requestedScript = process.env.AGENT_PAY_RECEIPT_RECORD_SCRIPT?.trim();
+  const script = resolve(
+    repoRoot,
+    requestedScript || DEFAULT_RECEIPT_RECORD_SCRIPT
+  );
+  const defaultScript = repoRoot === defaultRepoRoot &&
+    (!requestedScript || requestedScript === DEFAULT_RECEIPT_RECORD_SCRIPT);
+  const contractHash = process.env.AGENT_PAY_REGISTRY_CONTRACT_HASH ?? null;
+  const recorderKey = process.env.AGENT_PAY_REGISTRY_RECORDER_KEY_PATH;
+  const base = {
+    contractHash,
+    recorderKeyConfigured: false,
+    recordScript: defaultScript
+      ? DEFAULT_RECEIPT_RECORD_SCRIPT
+      : "custom receipt record script"
+  };
+  if (!recorderKey) {
+    return { ...base, status: "configuration_required", reason: "registry_recorder_key_required" };
+  }
+  try {
+    await access(recorderKey, constants.R_OK);
+  } catch {
+    return { ...base, status: "configuration_required", reason: "registry_recorder_key_unreadable" };
+  }
+  const buyerKey = process.env.CASPER_SECRET_KEY_PATH;
+  if (buyerKey && await sameFile(recorderKey, buyerKey)) {
+    return {
+      ...base,
+      status: "configuration_required",
+      reason: "registry_recorder_key_must_be_dedicated"
+    };
+  }
+  const withKey = { ...base, recorderKeyConfigured: true };
+  if (!process.env.AGENT_PAY_REGISTRY_PACKAGE_HASH) {
+    return { ...withKey, status: "configuration_required", reason: "agent_pay_registry_package_hash_required" };
+  }
+  if (!isCasperPackageHash(process.env.AGENT_PAY_REGISTRY_PACKAGE_HASH)) {
+    return { ...withKey, status: "configuration_required", reason: "agent_pay_registry_package_hash_invalid" };
+  }
+  if (!contractHash || !isCasperPackageHash(contractHash)) {
+    return {
+      ...withKey,
+      status: "configuration_required",
+      reason: contractHash ? "agent_pay_registry_contract_hash_invalid" : "agent_pay_registry_contract_hash_required"
+    };
+  }
+  if (!defaultScript && process.env.AGENT_PAY_ALLOW_CUSTOM_RECORD_SCRIPTS !== "1") {
+    return { ...withKey, status: "configuration_required", reason: "agent_pay_custom_record_script_not_allowed" };
+  }
+  try {
+    await access(script, constants.X_OK);
+  } catch {
+    return { ...withKey, status: "configuration_required", reason: "agent_pay_receipt_record_script_required" };
+  }
+  return { ...withKey, status: "ready", reason: null };
+}
+
 function describeRecordScript(script: string): string {
-  return isDefaultRecordScript(script) ? DEFAULT_RECORD_SCRIPT : "custom record script";
+  return script === resolve(MODULE_DIR, "../../..", DEFAULT_RECORD_SCRIPT)
+    ? DEFAULT_RECORD_SCRIPT
+    : "custom record script";
+}
+
+async function sameFile(left: string, right: string): Promise<boolean> {
+  if (resolve(left) === resolve(right)) return true;
+  try {
+    return await realpath(left) === await realpath(right);
+  } catch {
+    return false;
+  }
+}
+
+function describeRpcUrl(value: string): string {
+  try {
+    const url = new URL(value);
+    const path = url.pathname === "/" ? "" : url.pathname;
+    return `${url.protocol}//${url.host}${path}`;
+  } catch {
+    return "configured Casper RPC";
+  }
 }
 
 async function queryCasperRpcStatus(rpcUrl: string): Promise<NonNullable<RegistryStatus["rpc"]>> {
@@ -321,7 +481,7 @@ async function queryCasperRpcStatus(rpcUrl: string): Promise<NonNullable<Registr
 
   const value = body.result?.value ?? body.result;
   return {
-    url: rpcUrl,
+    url: describeRpcUrl(rpcUrl),
     apiVersion: findNamedString(value, new Set(["api_version", "apiVersion"])),
     chainspecName: findNamedString(value, new Set(["chainspec_name", "chainspecName"])),
     latestBlockHeight: findNamedNumber(value, new Set(["height", "block_height", "blockHeight"])),
@@ -379,7 +539,7 @@ async function confirmAgentPaySubmission(submittedHash: SubmittedHash): Promise<
   }
 
   throw new Error(
-    `Casper submission ${submittedHash.value} was not executed at ${rpcUrl} after ${attempts} attempts: ${lastError ?? "not found"}`
+    `Casper submission ${submittedHash.value} was not executed after ${attempts} attempts: ${lastError ?? "not found"}`
   );
 }
 
@@ -439,7 +599,7 @@ async function queryCasperSubmission(
 
   return {
     confirmation: {
-      rpcUrl,
+      rpcUrl: describeRpcUrl(rpcUrl),
       method,
       apiVersion: typeof value?.api_version === "string" ? value.api_version : null,
       executionState,

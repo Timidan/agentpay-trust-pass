@@ -6,7 +6,9 @@ import {
 } from "../submission-proof";
 
 const REGISTRY_PACKAGE_HASH = `hash-${"a".repeat(64)}`;
+const REGISTRY_CONTRACT_HASH = `hash-${"1".repeat(64)}`;
 const REGISTRY_INSTALL_HASH = "b".repeat(64);
+const RECEIPT_ANCHOR_HASH = "2".repeat(64);
 const SETTLEMENT_HASH = "c".repeat(64);
 const DECISION_HASH = "d".repeat(64);
 const DATASET_ROOT = "e".repeat(64);
@@ -18,7 +20,9 @@ describe("AgentPay demo proof bundle", () => {
         CASPER_CHAIN_NAME: "casper-test",
         X402_FACILITATOR_URL: "http://127.0.0.1:4022",
         AGENT_PAY_REGISTRY_PACKAGE_HASH: REGISTRY_PACKAGE_HASH,
+        AGENT_PAY_REGISTRY_CONTRACT_HASH: REGISTRY_CONTRACT_HASH,
         AGENT_PAY_REGISTRY_INSTALL_HASH: REGISTRY_INSTALL_HASH,
+        AGENT_PAY_RECEIPT_ANCHOR_HASH: RECEIPT_ANCHOR_HASH,
         AGENT_PAY_SETTLEMENT_TX_HASH: SETTLEMENT_HASH,
         AGENT_PAY_DECISION_TX_HASH: DECISION_HASH,
         AGENT_PAY_QUOTE_ID: "agent-pay-live-8174134-c1129a92d1394e32",
@@ -26,6 +30,7 @@ describe("AgentPay demo proof bundle", () => {
       },
       confirmations: {
         registryInstall: "executed",
+        receiptAnchor: "executed",
         x402Settlement: "executed",
         decisionRecord: "executed"
       },
@@ -51,6 +56,16 @@ describe("AgentPay demo proof bundle", () => {
       value: REGISTRY_INSTALL_HASH,
       explorerUrl: `https://testnet.cspr.live/deploy/${REGISTRY_INSTALL_HASH}`
     });
+    expect(edge(bundle, "registryContract")).toMatchObject({
+      status: "pass",
+      value: REGISTRY_CONTRACT_HASH,
+      explorerUrl: `https://testnet.cspr.live/contract/${REGISTRY_CONTRACT_HASH}`
+    });
+    expect(edge(bundle, "receiptAnchor")).toMatchObject({
+      status: "pass",
+      value: RECEIPT_ANCHOR_HASH,
+      explorerUrl: `https://testnet.cspr.live/deploy/${RECEIPT_ANCHOR_HASH}`
+    });
     expect(edge(bundle, "x402Settlement")).toMatchObject({
       status: "pass",
       value: SETTLEMENT_HASH,
@@ -73,6 +88,7 @@ describe("AgentPay demo proof bundle", () => {
       },
       confirmations: {
         registryInstall: "pending",
+        receiptAnchor: "missing",
         x402Settlement: "unverified",
         decisionRecord: "missing"
       },
@@ -108,7 +124,9 @@ describe("AgentPay demo proof bundle", () => {
         CASPER_CHAIN_NAME: "casper-test",
         X402_FACILITATOR_URL: "http://127.0.0.1:4022",
         AGENT_PAY_REGISTRY_PACKAGE_HASH: REGISTRY_PACKAGE_HASH,
+        AGENT_PAY_REGISTRY_CONTRACT_HASH: REGISTRY_CONTRACT_HASH,
         AGENT_PAY_REGISTRY_INSTALL_HASH: REGISTRY_INSTALL_HASH,
+        AGENT_PAY_RECEIPT_ANCHOR_HASH: RECEIPT_ANCHOR_HASH,
         AGENT_PAY_SETTLEMENT_TX_HASH: SETTLEMENT_HASH,
         AGENT_PAY_DECISION_TX_HASH: DECISION_HASH,
         AGENT_PAY_QUOTE_ID: "agent-pay-live-8174134-c1129a92d1394e32",
@@ -116,6 +134,7 @@ describe("AgentPay demo proof bundle", () => {
       },
       confirmations: {
         registryInstall: "executed",
+        receiptAnchor: "executed",
         x402Settlement: "executed",
         decisionRecord: "executed"
       },

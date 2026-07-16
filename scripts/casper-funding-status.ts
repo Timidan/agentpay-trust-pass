@@ -111,7 +111,7 @@ export function formatCasperFundingStatus(status: CasperFundingStatus): string {
 }
 
 function requiredCasperDeployMotes(env: Record<string, string | undefined>): bigint {
-  return parseMotes(env.AGENT_PAY_INSTALL_PAYMENT_AMOUNT, 25_000_000_000n) + parseMotes(env.AGENT_PAY_RECORD_PAYMENT_AMOUNT, 100_000_000n);
+  return parseMotes(env.AGENT_PAY_INSTALL_PAYMENT_AMOUNT, 150_000_000_000n) + parseMotes(env.AGENT_PAY_RECORD_PAYMENT_AMOUNT, 5_000_000_000n);
 }
 
 function parseMotes(value: string | undefined, fallback: bigint): bigint {

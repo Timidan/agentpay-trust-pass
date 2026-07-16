@@ -17,7 +17,7 @@ import {
 import { createReportApp } from "../../src/app.js";
 import { AuditorAuth, hashBearerToken } from "../../src/auditor/auth.js";
 import { createAuditorRouter } from "../../src/auditor/routes.js";
-import { PaymentAuditService } from "../../src/auditor/service.js";
+import { PaymentAuditService, type ReceiptAnchorScheduler } from "../../src/auditor/service.js";
 import { openSqliteRepository, type SqliteAuditorRepository } from "../../src/auditor/sqliteRepository.js";
 
 export const ORIGIN = "https://agentpay.example";
@@ -43,17 +43,31 @@ export type PaymentAuditContext = {
   setTransactionResult(value: unknown | Error): void;
 };
 
-export function createPaymentAuditContext(initialResult: unknown | Error = FINALIZED_TRANSACTION_RESULT): PaymentAuditContext {
+export type PaymentAuditContextOptions = {
+  payerPublicKey?: string;
+  providerOrigin?: string;
+  providerResourcePathPrefix?: string;
+};
+
+export function createPaymentAuditContext(
+  initialResult: unknown | Error = FINALIZED_TRANSACTION_RESULT,
+  anchorPublisher?: ReceiptAnchorScheduler,
+  options: PaymentAuditContextOptions = {}
+): PaymentAuditContext {
+  const payerPublicKey = options.payerPublicKey ?? PAYER;
   const repository = openSqliteRepository(":memory:", { now: () => new Date(NOW) });
-  repository.savePolicy(signedPolicy());
-  repository.saveProviderDecision(signedProviderDecision());
+  repository.savePolicy(signedPolicy(payerPublicKey));
+  repository.saveProviderDecision(signedProviderDecision({
+    origin: options.providerOrigin ?? "https://tab402.fly.dev",
+    resourcePathPrefix: options.providerResourcePathPrefix ?? "/v1/speak"
+  }));
   repository.saveAgentToken({
     id: "agent-token-payment-audit",
     operatorPublicKey: OPERATOR,
     agentName: "checkout-agent",
     tokenHash: hashBearerToken(AGENT_TOKEN),
     scopes: ["checks:write", "settlements:write", "observations:write", "receipts:read"],
-    allowedPayerPublicKeys: [PAYER],
+    allowedPayerPublicKeys: [payerPublicKey],
     revision: 1,
     actionHash: "1".repeat(64),
     signature: `01${"2".repeat(128)}`,
@@ -87,6 +101,7 @@ export function createPaymentAuditContext(initialResult: unknown | Error = FINAL
     repository,
     evidenceLoader: rpc,
     settlementLoader: rpc,
+    anchorPublisher,
     now: () => new Date(NOW)
   });
   const app = createReportApp({ auditorRouter: createAuditorRouter({ repository, auth, service }) });
@@ -208,7 +223,7 @@ function paymentEvidence(): PaymentAssetEvidence {
   return { ...content, evidenceHash: artifactHash(content) };
 }
 
-function signedPolicy(): OperatorPolicy {
+function signedPolicy(payerPublicKey: string): OperatorPolicy {
   const policy: OperatorPolicy = {
     policyId: "policy-payment-audit",
     operatorPublicKey: OPERATOR,
@@ -216,7 +231,7 @@ function signedPolicy(): OperatorPolicy {
     issuedAt: NOW,
     effectiveAt: NOW,
     allowedNetworks: ["casper:casper-test"],
-    allowedPayerPublicKeys: [PAYER],
+    allowedPayerPublicKeys: [payerPublicKey],
     assetDailyCaps: { [ASSET]: "1000000000" },
     maximumAuthorizationWindowSeconds: 900,
     maximumConcurrentReservations: 5,
@@ -235,17 +250,17 @@ function signedPolicy(): OperatorPolicy {
   return policy;
 }
 
-function signedProviderDecision(): ProviderDecision {
+function signedProviderDecision(input: { origin: string; resourcePathPrefix: string }): ProviderDecision {
   const decision: ProviderDecision = {
     decisionId: "provider-payment-audit",
     kind: "pin",
     operatorPublicKey: OPERATOR,
     revision: 1,
-    origin: "https://tab402.fly.dev",
+    origin: input.origin,
     payee: PAYEE,
     asset: ASSET,
     network: "casper:casper-test",
-    resourcePathPrefix: "/v1/speak",
+    resourcePathPrefix: input.resourcePathPrefix,
     perCallCeiling: "100000000",
     expiresAt: "2026-07-10T16:13:00.000Z",
     promptedByCheckId: "check-review",

@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseEnvFile } from "../submission-readiness";
 import {
   deployAndCaptureAgentPayRegistry,
+  extractRegistryContractHash,
   extractRegistryPackageHash,
   extractSubmittedHash,
   parseRegistryDeployCliArgs
@@ -12,6 +13,8 @@ import {
 
 const DEPLOY_HASH = "a".repeat(64);
 const PACKAGE_HASH = "b".repeat(64);
+const CONTRACT_HASH = "c".repeat(64);
+const RECORDER_ACCOUNT_HASH = `account-hash-${"e".repeat(64)}`;
 
 const originalFetch = globalThis.fetch;
 
@@ -40,7 +43,7 @@ describe("AgentPay registry deploy evidence capture", () => {
     expect(extractSubmittedHash(`Deploy hash: ${DEPLOY_HASH}`)).toBe(DEPLOY_HASH);
   });
 
-  it("extracts the AgentPayRegistry package hash from Casper account named keys", () => {
+  it("extracts only the AgentPayRegistry v2 hashes from Casper account named keys", () => {
     expect(extractRegistryPackageHash({
       result: {
         account: {
@@ -51,6 +54,10 @@ describe("AgentPay registry deploy evidence capture", () => {
             },
             {
               name: "agentpay_registry_package",
+              key: `hash-${"d".repeat(64)}`
+            },
+            {
+              name: "agentpay_registry_v2_package",
               key: `hash-${PACKAGE_HASH.toUpperCase()}`
             }
           ]
@@ -58,15 +65,37 @@ describe("AgentPay registry deploy evidence capture", () => {
       }
     })).toBe(`hash-${PACKAGE_HASH}`);
 
+    expect(extractRegistryContractHash({
+      result: {
+        account: {
+          named_keys: [
+            { name: "agentpay_registry", key: `hash-${"d".repeat(64)}` },
+            { name: "agentpay_registry_v2", key: `hash-${CONTRACT_HASH.toUpperCase()}` }
+          ]
+        }
+      }
+    })).toBe(`hash-${CONTRACT_HASH}`);
+
     expect(extractRegistryPackageHash({
       result: {
         account: {
           named_keys: {
-            agentpay_registry_package: PACKAGE_HASH
+            agentpay_registry_v2_package: PACKAGE_HASH
           }
         }
       }
     })).toBe(`hash-${PACKAGE_HASH}`);
+
+    expect(extractRegistryPackageHash({
+      result: {
+        account: {
+          named_keys: [
+            { name: "agentpay_registry_package", key: `hash-${PACKAGE_HASH}` },
+            { name: "agentpay_registry", key: `hash-${CONTRACT_HASH}` }
+          ]
+        }
+      }
+    })).toBeNull();
   });
 
   it("parses CLI flags while accepting argument separators", () => {
@@ -109,22 +138,88 @@ describe("AgentPay registry deploy evidence capture", () => {
         CASPER_RPC_URL: "https://node.testnet.casper.network/rpc",
         CASPER_CLIENT_COMMAND: fixture.clientPath,
         CASPER_SECRET_KEY_PATH: fixture.secretKeyPath,
-        CASPER_ACCOUNT_IDENTIFIER: `account-hash-${"d".repeat(64)}`
+        CASPER_ACCOUNT_IDENTIFIER: `account-hash-${"d".repeat(64)}`,
+        AGENT_PAY_REGISTRY_RECORDER_ACCOUNT_HASH: RECORDER_ACCOUNT_HASH
       });
 
       const env = parseEnvFile(await readFile(fixture.envFile, "utf8"));
 
       expect(result.registryInstallHash).toBe(DEPLOY_HASH);
       expect(result.registryPackageHash).toBe(`hash-${PACKAGE_HASH}`);
+      expect(result.registryContractHash).toBe(`hash-${CONTRACT_HASH}`);
       expect(result.updatedKeys).toEqual([
+        "AGENT_PAY_REGISTRY_CONTRACT_HASH",
         "AGENT_PAY_REGISTRY_INSTALL_HASH",
         "AGENT_PAY_REGISTRY_PACKAGE_HASH"
       ]);
+      expect(env.AGENT_PAY_REGISTRY_CONTRACT_HASH).toBe(`hash-${CONTRACT_HASH}`);
       expect(env.AGENT_PAY_REGISTRY_INSTALL_HASH).toBe(DEPLOY_HASH);
       expect(env.AGENT_PAY_REGISTRY_PACKAGE_HASH).toBe(`hash-${PACKAGE_HASH}`);
+      expect((await readFile(fixture.deployCapturePath, "utf8")).trim()).toBe(RECORDER_ACCOUNT_HASH);
       expect(globalThis.fetch).toHaveBeenCalledWith("https://node.testnet.casper.network/rpc", expect.objectContaining({
         method: "POST"
       }));
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  it("rejects reusing the deploying owner as the receipt recorder", async () => {
+    const fixture = await createRegistryDeployFixture();
+    const owner = `account-hash-${"d".repeat(64)}`;
+    try {
+      await expect(deployAndCaptureAgentPayRegistry({
+        envFile: fixture.envFile,
+        deployScript: fixture.deployScriptPath,
+        maxAttempts: 1,
+        pollIntervalMs: 1
+      }, {
+        CASPER_RPC_URL: "https://node.testnet.casper.network/rpc",
+        CASPER_CLIENT_COMMAND: fixture.clientPath,
+        CASPER_SECRET_KEY_PATH: fixture.secretKeyPath,
+        CASPER_ACCOUNT_IDENTIFIER: owner,
+        AGENT_PAY_REGISTRY_RECORDER_ACCOUNT_HASH: owner
+      })).rejects.toThrow("must be separate from the deploying owner");
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  it("stops on a failed Casper execution without writing deployment evidence", async () => {
+    const fixture = await createRegistryDeployFixture();
+    globalThis.fetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        result: {
+          execution_info: {
+            execution_result: {
+              Version2: {
+                error_message: "ApiError::InvalidArgument [3]"
+              }
+            }
+          }
+        }
+      })
+    })) as unknown as typeof fetch;
+
+    try {
+      await expect(deployAndCaptureAgentPayRegistry({
+        envFile: fixture.envFile,
+        deployScript: fixture.deployScriptPath,
+        maxAttempts: 3,
+        pollIntervalMs: 1
+      }, {
+        CASPER_RPC_URL: "https://node.testnet.casper.network/rpc",
+        CASPER_CLIENT_COMMAND: fixture.clientPath,
+        CASPER_SECRET_KEY_PATH: fixture.secretKeyPath,
+        CASPER_ACCOUNT_IDENTIFIER: `account-hash-${"d".repeat(64)}`,
+        AGENT_PAY_REGISTRY_RECORDER_ACCOUNT_HASH: RECORDER_ACCOUNT_HASH
+      })).rejects.toThrow("Registry install failed on Casper");
+
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+      expect(parseEnvFile(await readFile(fixture.envFile, "utf8"))).toEqual({
+        CSPR_CLOUD_ACCESS_TOKEN: "configured"
+      });
     } finally {
       await fixture.close();
     }
@@ -138,6 +233,7 @@ async function createRegistryDeployFixture(): Promise<{
   envFile: string;
   secretKeyPath: string;
   publicKeyPath: string;
+  deployCapturePath: string;
   close: () => Promise<void>;
 }> {
   const dir = await mkdtemp(join(tmpdir(), "agentpay-registry-deploy-"));
@@ -146,6 +242,7 @@ async function createRegistryDeployFixture(): Promise<{
   const envFile = join(dir, ".env.submission.local");
   const secretKeyPath = join(dir, "secret_key.pem");
   const publicKeyPath = join(dir, "public_key_hex");
+  const deployCapturePath = join(dir, "recorder-account.txt");
 
   await writeFile(secretKeyPath, "fixture signing key material");
   await writeFile(publicKeyPath, "fixture public key material");
@@ -157,9 +254,12 @@ const args = process.argv.slice(2);
 if (args[0] === "account-address") {
   console.log("account-hash-${"d".repeat(64)}");
 } else if (args[0] === "query-balance") {
-  console.log(JSON.stringify({ result: { balance: "25100000000" } }));
+  console.log(JSON.stringify({ result: { balance: "155000000000" } }));
 } else if (args[0] === "get-account") {
-  console.log(JSON.stringify({ result: { account: { named_keys: [{ name: "agentpay_registry_package", key: "hash-${PACKAGE_HASH}" }] } } }));
+  console.log(JSON.stringify({ result: { account: { named_keys: [
+    { name: "agentpay_registry_v2_package", key: "hash-${PACKAGE_HASH}" },
+    { name: "agentpay_registry_v2", key: "hash-${CONTRACT_HASH}" }
+  ] } } }));
 } else {
   console.error("unsupported casper-client command");
   process.exit(2);
@@ -170,6 +270,7 @@ if (args[0] === "account-address") {
     deployScriptPath,
     `#!/usr/bin/env bash
 set -euo pipefail
+printf '%s\n' "$AGENT_PAY_REGISTRY_RECORDER_ACCOUNT_HASH" > ${JSON.stringify(deployCapturePath)}
 echo '{"jsonrpc":"2.0","result":{"deploy_hash":"${DEPLOY_HASH}"}}'
 `
   );
@@ -183,6 +284,7 @@ echo '{"jsonrpc":"2.0","result":{"deploy_hash":"${DEPLOY_HASH}"}}'
     envFile,
     secretKeyPath,
     publicKeyPath,
+    deployCapturePath,
     close: () => rm(dir, { recursive: true, force: true })
   };
 }

@@ -9,6 +9,7 @@ export {
 export {
   authorizationDigest,
   buildAuthorizationIntent,
+  buildAuthorizationWindow,
   transferWithAuthorizationDigest,
   verifyAuthorizationSignature
 } from "./authorization.js";

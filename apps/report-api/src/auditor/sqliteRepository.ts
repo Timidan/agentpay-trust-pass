@@ -629,10 +629,14 @@ class SqliteRepository implements SqliteAuditorRepository {
 
   saveObservationAndReceipt(
     observation: ResponseObservation,
-    receipt: PurchaseReceipt
+    receipt: PurchaseReceipt,
+    anchorJob?: AnchorJob
   ): ObservationReceiptResult {
     if (observation.checkId !== receipt.checkId) {
       throw new TypeError("Observation and receipt check ids must match");
+    }
+    if (anchorJob && anchorJob.receiptId !== receipt.receiptId) {
+      throw new TypeError("Anchor job and receipt ids must match");
     }
     this.database.exec("BEGIN IMMEDIATE");
     try {
@@ -676,6 +680,22 @@ class SqliteRepository implements SqliteAuditorRepository {
           normalizeHash(receipt.receiptHash, "receipt.receiptHash"),
           isoTimestamp(receipt.createdAt, "receipt.createdAt"),
           canonicalJson(receipt)
+        );
+      }
+      if (anchorJob && !this.getAnchorJob(anchorJob.id)) {
+        this.database.prepare(
+          `INSERT INTO anchor_jobs
+            (id, receipt_id, status, attempts, next_attempt_at, transaction_hash, updated_at, json)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        ).run(
+          anchorJob.id,
+          anchorJob.receiptId,
+          anchorJob.status,
+          nonNegativeInteger(anchorJob.attempts, "anchorJob.attempts"),
+          isoTimestamp(anchorJob.nextAttemptAt, "anchorJob.nextAttemptAt"),
+          nullableHash(anchorJob.transactionHash, "anchorJob.transactionHash"),
+          isoTimestamp(anchorJob.updatedAt, "anchorJob.updatedAt"),
+          canonicalJson(anchorJob)
         );
       }
 
@@ -786,6 +806,19 @@ class SqliteRepository implements SqliteAuditorRepository {
   getAnchorJob(id: string): AnchorJob | null {
     const row = this.maybeRow("SELECT json FROM anchor_jobs WHERE id = ?", id);
     return row ? jsonColumn<AnchorJob>(row) : null;
+  }
+
+  listDueAnchorJobs(now: string, limit: number): AnchorJob[] {
+    const timestamp = isoTimestamp(now, "anchorJobs.now");
+    if (!Number.isSafeInteger(limit) || limit <= 0 || limit > 1_000) {
+      throw new TypeError("anchorJobs.limit must be an integer from 1 to 1000");
+    }
+    return this.database.prepare(
+      `SELECT json FROM anchor_jobs
+       WHERE status IN ('pending', 'submitted') AND next_attempt_at <= ?
+       ORDER BY next_attempt_at ASC, updated_at ASC
+       LIMIT ?`
+    ).all(timestamp, limit).map((row) => jsonColumn<AnchorJob>(row));
   }
 
   private migrate(): void {

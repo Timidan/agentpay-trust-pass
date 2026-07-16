@@ -57,9 +57,13 @@ describe("local Casper signer compatibility", () => {
 
     expect(signer.publicKeyHex).toBe("02031b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f");
     expect(signer.accountAddress).toBe("0028bbf7efd9be97339596ef441ff27d1e32195e90ddb17253c13951d23e5137a5");
-    expect(built.digestHex).toBe("ad17765af57d2e3aa89095df8f2801c40eda675e18739406b04f90117c44dd23");
+    expect(built.authorization).toMatchObject({
+      validAfter: "1699999995",
+      validBefore: "1700000295"
+    });
+    expect(built.digestHex).toBe("652ee74b54ab4e8835f43bbcfbffe403c854e206cce0194dbde88b0407831ad9");
     expect(payload.payload.signature).toBe(
-      "0265450de7efd345f29bc6da45b17f5e64e240e77b8d8fdd95b838c7d4a4844f7312383f3317d08175d3a1f35bb572b3d3c5be8b5c981344fa1e45aeb3015642c6"
+      "028f48dd0aced7dd865444d1d597bc21ab0c7d26fff264487b161e838d9bc888da3c71679ef35d678d7c42ce086a6106fb46bdbd8342d1ae01a8757ffe87f456c2"
     );
   });
 });

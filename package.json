@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "bash scripts/dev.sh",
     "test:scripts": "vitest run scripts/test/*.test.ts",
-    "test": "npm run test:scripts && npm run test --workspaces --if-present && cargo test --manifest-path contracts/agent-pay-registry/Cargo.toml",
+    "test": "npm run test:scripts && npm run test --workspaces --if-present && npm run build:contract && cargo test --manifest-path contracts/agent-pay-registry/Cargo.toml",
     "smoke": "bash scripts/smoke.sh",
     "submission:check": "tsx scripts/submission-readiness.ts",
     "submission:deploy-registry": "tsx scripts/submission-deploy-registry.ts",

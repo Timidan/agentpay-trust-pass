@@ -19,6 +19,7 @@ import {
   type SettlementProof
 } from "@agent-pay/core";
 import { AuthError, hashBearerToken } from "./auth.js";
+import { createReceiptAnchorJob, type ReceiptAnchorPublisher } from "./registry.js";
 import type {
   AuditorRepository,
   ReceiptShareRecord,
@@ -48,8 +49,11 @@ export type PaymentAuditServiceOptions = {
   repository: AuditorRepository;
   evidenceLoader: PaymentEvidenceLoader;
   settlementLoader?: PaymentSettlementLoader;
+  anchorPublisher?: ReceiptAnchorScheduler;
   now?: () => Date;
 };
+
+export type ReceiptAnchorScheduler = Pick<ReceiptAnchorPublisher, "enqueue" | "wake">;
 
 export type PaymentSettlementLoader = {
   rpcUrl: string;
@@ -69,17 +73,18 @@ export class PaymentAuditService {
   private readonly repository: AuditorRepository;
   private readonly evidenceLoader: PaymentEvidenceLoader;
   private readonly settlementLoader: PaymentSettlementLoader | null;
+  private readonly anchorPublisher: ReceiptAnchorScheduler | null;
   private readonly now: () => Date;
 
   constructor(options: PaymentAuditServiceOptions) {
     this.repository = options.repository;
     this.evidenceLoader = options.evidenceLoader;
     this.settlementLoader = options.settlementLoader ?? null;
+    this.anchorPublisher = options.anchorPublisher ?? null;
     this.now = options.now ?? (() => new Date());
   }
 
   async createCheck(input: CreateCheckInput): Promise<{ created: boolean; check: StoredPaymentCheck }> {
-    const now = this.nowDate();
     const request = parseOriginalRequest(input.request);
     const normalization = normalizePaymentRequired(input.paymentRequired, request);
     if (!normalization.ok) {
@@ -112,6 +117,7 @@ export class PaymentAuditService {
         decimals: normalization.terms.extra.decimals
       }
     });
+    const now = this.nowDate();
     const policy = this.repository.getCurrentPolicy(operatorPublicKey);
     const providerDecision = selectProviderDecision(
       this.repository.listProviderDecisions(operatorPublicKey),
@@ -359,6 +365,7 @@ export class PaymentAuditService {
       throw observationConflict(existingObservation.observationHash, observation.observationHash);
     }
     if (existingObservation && existingReceipt) {
+      this.anchorPublisher?.enqueue(existingReceipt);
       return { created: false, observation: existingObservation, receipt: existingReceipt };
     }
     if (!check.policy || !check.providerDecision || !check.authorization) {
@@ -388,7 +395,8 @@ export class PaymentAuditService {
       anchor: { status: "off_chain_verified", transactionHash: null },
       createdAt: now.toISOString()
     });
-    const persisted = this.repository.saveObservationAndReceipt(observation, receipt);
+    const anchorJob = this.anchorPublisher ? createReceiptAnchorJob(receipt, now) : undefined;
+    const persisted = this.repository.saveObservationAndReceipt(observation, receipt, anchorJob);
     if (!persisted.ok) {
       if (persisted.reason === "observation_conflict") {
         throw observationConflict(
@@ -410,11 +418,20 @@ export class PaymentAuditService {
     if (!storedObservation || !storedReceipt) {
       throw new AuthError("receipt_state_invalid", "Persisted receipt could not be reloaded", 500);
     }
+    this.anchorPublisher?.wake();
     return { created: persisted.created, observation: storedObservation, receipt: storedReceipt };
   }
 
   getReceipt(receiptId: string): PurchaseReceipt | null {
     return this.repository.getReceipt(receiptId);
+  }
+
+  getReceiptAnchorState(receiptId: string): PurchaseReceipt["anchor"] {
+    const job = this.repository.getAnchorJob(`anchor-${receiptId}`);
+    if (!job) return { status: "off_chain_verified", transactionHash: null };
+    if (job.status === "confirmed") return { status: "anchored", transactionHash: job.transactionHash };
+    if (job.status === "failed") return { status: "failed", transactionHash: job.transactionHash };
+    return { status: "pending", transactionHash: job.transactionHash };
   }
 
   createReceiptShare(
