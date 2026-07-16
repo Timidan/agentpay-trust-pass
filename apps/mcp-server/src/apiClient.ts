@@ -1,4 +1,9 @@
 import type { EvidenceFactValue, EvidenceRecord, ProofStep, ReportProof } from "@agent-pay/core";
+import { AgentPayHttpClient } from "@agent-pay/client";
+
+export function createPaymentAuditClient(baseUrl: string, token: string): AgentPayHttpClient {
+  return new AgentPayHttpClient({ baseUrl, token });
+}
 
 export type SourceSummary = {
   product: string;

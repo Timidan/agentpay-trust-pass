@@ -35,7 +35,7 @@
     "vitest": "^3.2.4"
   },
   "dependencies": {
-    "@casper-ecosystem/casper-eip-712": "^1.2.1",
+    "@agent-pay/client": "workspace:*",
     "@noble/curves": "^1.9.7",
     "@noble/hashes": "^1.8.0"
   }

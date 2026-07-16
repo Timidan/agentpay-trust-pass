@@ -11,12 +11,10 @@
     "lint": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@agent-pay/client": "workspace:*",
     "@agent-pay/core": "workspace:*",
     "@agent-pay/report-api": "workspace:*",
-    "@casper-ecosystem/casper-eip-712": "^1.2.1",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@noble/curves": "^1.9.7",
-    "@noble/hashes": "^1.8.0",
     "cors": "^2.8.5",
     "express": "^5.2.1",
     "zod": "^4.4.3"

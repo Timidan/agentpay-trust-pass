@@ -97,7 +97,10 @@ describe("MCP stdio server", () => {
             "registry_status",
             "buy_report",
             "verify_report",
-            "record_decision"
+            "record_decision",
+            "check_x402_payment",
+            "verify_x402_settlement",
+            "get_payment_receipt"
           ])
         );
 

@@ -1,7 +1,14 @@
+import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import type { EvidenceRecord, ProofStep } from "@agent-pay/core";
-import { buyReport, getPaymentStatus, getQuote, verifyReport } from "./apiClient.js";
+import type { AuthorizationIntent, EvidenceRecord, OriginalRequestInput, ProofStep } from "@agent-pay/core";
+import {
+  buyReport,
+  createPaymentAuditClient,
+  getPaymentStatus,
+  getQuote,
+  verifyReport
+} from "./apiClient.js";
 import { getRegistryStatus, recordAgentPayDecision } from "./casperClient.js";
 import { ToolConfigError, ToolInputError } from "./errors.js";
 import { assessSubject, type Verdict } from "./trust/assess.js";
@@ -15,6 +22,21 @@ function resolveReportApiUrl(inputUrl?: string) {
     return inputUrl;
   }
   return process.env.REPORT_API_URL ?? DEFAULT_REPORT_API_URL;
+}
+
+function resolvePaymentAuditApiUrl(inputUrl?: string): string {
+  if (inputUrl && process.env.AGENT_PAY_ALLOW_REPORT_API_URL_OVERRIDE !== "0") return inputUrl;
+  return process.env.AGENT_PAY_API_URL ?? process.env.REPORT_API_URL ?? DEFAULT_REPORT_API_URL;
+}
+
+function paymentAuditClient(inputUrl?: string) {
+  const token = process.env.AGENT_PAY_API_TOKEN;
+  if (!token) throw new ToolConfigError("AGENT_PAY_API_TOKEN is required for payment audit tools");
+  try {
+    return createPaymentAuditClient(resolvePaymentAuditApiUrl(inputUrl), token);
+  } catch {
+    throw new ToolConfigError("AGENT_PAY_API_URL or AGENT_PAY_API_TOKEN is invalid");
+  }
 }
 
 export type ToolDefinition = {
@@ -120,6 +142,46 @@ export const toolDefinitions: ToolDefinition[] = [
         reportApiUrl: { type: "string" }
       }
     }
+  },
+  {
+    name: "check_x402_payment",
+    description: "Check x402 terms and an unsigned Casper authorization before payment. Returns PAY, REVIEW, or BLOCK.",
+    inputSchema: {
+      type: "object",
+      required: ["request", "paymentRequired", "authorization"],
+      properties: {
+        agentPayApiUrl: { type: "string" },
+        request: { type: "object" },
+        paymentRequired: { type: "object" },
+        authorization: { type: "object" },
+        idempotencyKey: { type: "string" }
+      }
+    }
+  },
+  {
+    name: "verify_x402_settlement",
+    description: "Verify that a Casper transaction settled the exact payment AgentPay approved.",
+    inputSchema: {
+      type: "object",
+      required: ["checkId", "transactionHash"],
+      properties: {
+        agentPayApiUrl: { type: "string" },
+        checkId: { type: "string" },
+        transactionHash: { type: "string" }
+      }
+    }
+  },
+  {
+    name: "get_payment_receipt",
+    description: "Get the independently verifiable receipt for a completed payment check.",
+    inputSchema: {
+      type: "object",
+      required: ["receiptId"],
+      properties: {
+        agentPayApiUrl: { type: "string" },
+        receiptId: { type: "string" }
+      }
+    }
   }
 ];
 
@@ -163,6 +225,46 @@ export async function verifyReportTool(input: {
     proof: input.proof,
     datasetRoot: input.datasetRoot
   });
+}
+
+export async function checkX402PaymentTool(input: {
+  agentPayApiUrl?: string;
+  request: OriginalRequestInput;
+  paymentRequired: unknown;
+  authorization: AuthorizationIntent;
+  idempotencyKey?: string;
+}) {
+  if (!isRecord(input?.request)) throw new ToolInputError("check_x402_payment requires request");
+  if (!isRecord(input?.paymentRequired)) throw new ToolInputError("check_x402_payment requires paymentRequired");
+  if (!isRecord(input?.authorization)) throw new ToolInputError("check_x402_payment requires authorization");
+  const idempotencyKey = input.idempotencyKey?.trim() || randomUUID();
+  return paymentAuditClient(input.agentPayApiUrl).check({
+    request: input.request,
+    paymentRequired: input.paymentRequired,
+    authorization: input.authorization,
+    idempotencyKey
+  });
+}
+
+export async function verifyX402SettlementTool(input: {
+  agentPayApiUrl?: string;
+  checkId: string;
+  transactionHash: string;
+}) {
+  const checkId = nonEmptyString(input?.checkId, "verify_x402_settlement requires checkId");
+  const transactionHash = nonEmptyString(
+    input?.transactionHash,
+    "verify_x402_settlement requires transactionHash"
+  ).toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(transactionHash)) {
+    throw new ToolInputError("verify_x402_settlement transactionHash must be 64 hexadecimal characters");
+  }
+  return paymentAuditClient(input.agentPayApiUrl).verifySettlement(checkId, transactionHash);
+}
+
+export async function getPaymentReceiptTool(input: { agentPayApiUrl?: string; receiptId: string }) {
+  const receiptId = nonEmptyString(input?.receiptId, "get_payment_receipt requires receiptId");
+  return paymentAuditClient(input.agentPayApiUrl).getReceipt(receiptId);
 }
 
 const RECORD_DECISIONS = new Set(["approved", "rejected", "needs_review"]);
@@ -272,4 +374,13 @@ export async function assessAccountTool(input: {
 function normalizeAccountInput(account: string): string {
   const raw = (account ?? "").trim();
   return /^[0-9a-f]{64}$/i.test(raw) ? `account-hash-${raw.toLowerCase()}` : raw;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function nonEmptyString(value: unknown, message: string): string {
+  if (typeof value !== "string" || !value.trim()) throw new ToolInputError(message);
+  return value.trim();
 }

@@ -4,13 +4,17 @@ import {
   assessAccountTool,
   assessSubjectTool,
   buyReportTool,
+  checkX402PaymentTool,
+  getPaymentReceiptTool,
   paymentStatusTool,
   quoteReportTool,
   recordDecisionTool,
   registryStatusTool,
   toolDefinitions,
+  verifyX402SettlementTool,
   verifyReportTool
 } from "./tools.js";
+import { AgentPayApiError } from "@agent-pay/client";
 import { ApiResponseError } from "./apiClient.js";
 import { listBridgeActivity, recordBridgeActivity } from "./activity.js";
 import { ToolConfigError, ToolInputError } from "./errors.js";
@@ -97,6 +101,30 @@ export function createMcpBridgeApp(): Express {
     }
   });
 
+  app.post("/tools/check_x402_payment", async (request, response, next) => {
+    try {
+      response.json(await checkX402PaymentTool(request.body));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/tools/verify_x402_settlement", async (request, response, next) => {
+    try {
+      response.json(await verifyX402SettlementTool(request.body));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/tools/get_payment_receipt", async (request, response, next) => {
+    try {
+      response.json(await getPaymentReceiptTool(request.body));
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.post("/tools/assess_subject", async (request, response, next) => {
     try {
       response.json(await assessSubjectTool(request.body));
@@ -114,6 +142,12 @@ export function createMcpBridgeApp(): Express {
   });
 
   app.use((error: unknown, _request: express.Request, response: express.Response, _next: express.NextFunction) => {
+    if (error instanceof AgentPayApiError) {
+      response.status(error.status >= 400 && error.status <= 599 ? error.status : 502).json(
+        error.body ?? { error: "payment_audit_unavailable", message: error.message, retryable: error.retryable }
+      );
+      return;
+    }
     if (error instanceof ApiResponseError) {
       response.status(error.status).json(error.body);
       return;

@@ -3,16 +3,41 @@ import { z } from "zod/v4";
 import {
   assessSubjectTool,
   buyReportTool,
+  checkX402PaymentTool,
+  getPaymentReceiptTool,
   paymentStatusTool,
   quoteReportTool,
   recordDecisionTool,
   registryStatusTool,
+  verifyX402SettlementTool,
   verifyReportTool
 } from "./tools.js";
 import { AGENT_PAY_SKILL_URI, agentPaySkillMarkdown } from "./agentSkill.js";
 
 const reportApiUrl = z.string().url().optional();
 const hex64 = z.string().regex(/^[0-9a-f]{64}$/i);
+const paymentRequest = z.object({
+  method: z.string(),
+  url: z.string().url(),
+  bodyHash: hex64,
+  bodyBytes: z.number().int().nonnegative(),
+  capturedAt: z.string(),
+  adapterVersion: z.string()
+});
+const authorizationIntent = z.object({
+  payerPublicKey: z.string(),
+  from: z.string(),
+  to: z.string(),
+  amount: z.string(),
+  validAfter: z.string(),
+  validBefore: z.string(),
+  nonce: hex64,
+  network: z.literal("casper:casper-test"),
+  asset: hex64,
+  tokenName: z.string(),
+  tokenVersion: z.string(),
+  digest: hex64
+});
 
 export function createAgentPayMcpServer() {
   const server = new McpServer({
@@ -144,6 +169,49 @@ export function createAgentPayMcpServer() {
       }
     },
     async (input) => textResult(await assessSubjectTool(input))
+  );
+
+  server.registerTool(
+    "check_x402_payment",
+    {
+      title: "Check x402 payment",
+      description: "Check x402 terms and an unsigned Casper authorization before payment.",
+      inputSchema: {
+        agentPayApiUrl: reportApiUrl,
+        request: paymentRequest,
+        paymentRequired: z.record(z.string(), z.unknown()),
+        authorization: authorizationIntent,
+        idempotencyKey: z.string().optional()
+      }
+    },
+    async (input) => textResult(await checkX402PaymentTool(input))
+  );
+
+  server.registerTool(
+    "verify_x402_settlement",
+    {
+      title: "Verify x402 settlement",
+      description: "Verify that a Casper transaction settled the exact payment AgentPay approved.",
+      inputSchema: {
+        agentPayApiUrl: reportApiUrl,
+        checkId: z.string().min(1),
+        transactionHash: hex64
+      }
+    },
+    async (input) => textResult(await verifyX402SettlementTool(input))
+  );
+
+  server.registerTool(
+    "get_payment_receipt",
+    {
+      title: "Get payment receipt",
+      description: "Get the independently verifiable receipt for a completed payment check.",
+      inputSchema: {
+        agentPayApiUrl: reportApiUrl,
+        receiptId: z.string().min(1)
+      }
+    },
+    async (input) => textResult(await getPaymentReceiptTool(input))
   );
 
   return server;
