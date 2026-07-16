@@ -42,11 +42,11 @@ describe("checkedX402Call", () => {
       sign: vi.fn(baseSigner.sign)
     };
     const api = paymentApi("pay");
-    const requests: Array<{ headers: Headers; body: string }> = [];
+    const requests: Array<{ headers: Headers; body: string; redirect: RequestRedirect | undefined; signal: AbortSignal | null | undefined }> = [];
     const fetchImpl = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
       const headers = new Headers(init?.headers);
       const body = typeof init?.body === "string" ? init.body : "";
-      requests.push({ headers, body });
+      requests.push({ headers, body, redirect: init?.redirect, signal: init?.signal });
       if (requests.length === 1) {
         return new Response("payment required", {
           status: 402,
@@ -76,6 +76,8 @@ describe("checkedX402Call", () => {
     expect(signer.sign).toHaveBeenCalledTimes(1);
     expect(requests[0].headers.has("payment-signature")).toBe(false);
     expect(requests[1].headers.get("payment-signature")).toMatch(/^[A-Za-z0-9+/]+=*$/);
+    expect(requests.every((request) => request.redirect === "error")).toBe(true);
+    expect(requests.every((request) => request.signal instanceof AbortSignal)).toBe(true);
     expect(JSON.stringify(api.check.mock.calls)).not.toContain("DO_NOT_SEND");
     expect(JSON.stringify(api.check.mock.calls)).not.toContain("privateKeyMaterial");
     expect(api.observe).toHaveBeenCalledWith("check-1", expect.objectContaining({

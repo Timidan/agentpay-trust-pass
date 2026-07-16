@@ -20,8 +20,9 @@ import type {
 import { signAuthorizationIntent, type CasperSigner } from "./signer.js";
 
 const DEFAULT_MAX_RESPONSE_BYTES = 10 * 1024 * 1024;
-const DEFAULT_SETTLEMENT_ATTEMPTS = 5;
-const DEFAULT_SETTLEMENT_POLL_MS = 500;
+const DEFAULT_SETTLEMENT_ATTEMPTS = 30;
+const DEFAULT_SETTLEMENT_POLL_MS = 2_000;
+const DEFAULT_REQUEST_TIMEOUT_MS = 60_000;
 const HASH = /^[0-9a-f]{64}$/i;
 
 export type CheckedX402CallInput = {
@@ -38,6 +39,7 @@ export type CheckedX402CallInput = {
   maxResponseBytes?: number;
   settlementAttempts?: number;
   settlementPollMs?: number;
+  requestTimeoutMs?: number;
 };
 
 export type CheckedX402CallResult = {
@@ -63,12 +65,18 @@ export async function checkedX402Call(input: CheckedX402CallInput): Promise<Chec
   const fetchImpl = input.fetchImpl ?? fetch;
   const now = input.now ?? (() => new Date());
   const method = input.method ?? "GET";
+  const requestTimeoutMs = positiveInteger(
+    input.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
+    "requestTimeoutMs"
+  );
   const prepared = prepareBody(method, input.body, input.headers);
   const capturedAt = validNow(now());
   const initialResponse = await fetchImpl(input.url, {
     method,
     headers: prepared.headers,
-    body: bodyInit(prepared.body)
+    body: bodyInit(prepared.body),
+    redirect: "error",
+    signal: AbortSignal.timeout(requestTimeoutMs)
   });
   if (initialResponse.status !== 402) {
     await cancelBody(initialResponse);
@@ -145,7 +153,9 @@ export async function checkedX402Call(input: CheckedX402CallInput): Promise<Chec
   const paidResponse = await fetchImpl(input.url, {
     method,
     headers: paidHeaders,
-    body: bodyInit(prepared.body)
+    body: bodyInit(prepared.body),
+    redirect: "error",
+    signal: AbortSignal.timeout(requestTimeoutMs)
   });
   const maximum = positiveInteger(input.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES, "maxResponseBytes");
   const responseBytes = await readBoundedBody(paidResponse, maximum, checkResult.check.id);

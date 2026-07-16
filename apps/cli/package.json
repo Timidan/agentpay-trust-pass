@@ -1,0 +1,27 @@
+{
+  "name": "@agent-pay/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "agentpay": "./dist/main.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "build": "rm -rf dist && tsc -p tsconfig.json --noEmit && esbuild src/main.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist/main.js",
+    "lint": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@agent-pay/client": "workspace:*",
+    "@agent-pay/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "esbuild": "0.27.7",
+    "tsx": "^4.22.4",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  }
+}

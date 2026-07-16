@@ -63,16 +63,26 @@ export type AgentPayHttpClientOptions = {
   baseUrl: string;
   token: string;
   fetchImpl?: typeof fetch;
+  timeoutMs?: number;
+  maxResponseBytes?: number;
 };
+
+const DEFAULT_TIMEOUT_MS = 15_000;
+const DEFAULT_MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 
 export class AgentPayHttpClient implements AgentPayApi {
   private readonly baseUrl: string;
   private readonly token: string;
   private readonly fetchImpl: typeof fetch;
+  private readonly timeoutMs: number;
+  private readonly maxResponseBytes: number;
 
   constructor(options: AgentPayHttpClientOptions) {
     const url = new URL(options.baseUrl);
-    if (url.protocol !== "https:" && url.hostname !== "localhost" && url.hostname !== "127.0.0.1") {
+    if (url.username || url.password || url.search || url.hash) {
+      throw new TypeError("AgentPay API URL must not include credentials, query parameters, or a fragment");
+    }
+    if (url.protocol !== "https:" && !isLocalHostname(url.hostname)) {
       throw new TypeError("AgentPay API URL must use HTTPS outside localhost");
     }
     if (!options.token || options.token.length < 32 || options.token.length > 512) {
@@ -81,6 +91,11 @@ export class AgentPayHttpClient implements AgentPayApi {
     this.baseUrl = url.toString().replace(/\/+$/, "");
     this.token = options.token;
     this.fetchImpl = options.fetchImpl ?? fetch;
+    this.timeoutMs = positiveInteger(options.timeoutMs ?? DEFAULT_TIMEOUT_MS, "AgentPay API timeout");
+    this.maxResponseBytes = positiveInteger(
+      options.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES,
+      "AgentPay API response limit"
+    );
   }
 
   check(input: CheckPaymentInput): Promise<CheckPaymentResult> {
@@ -128,12 +143,14 @@ export class AgentPayHttpClient implements AgentPayApi {
       response = await this.fetchImpl(`${this.baseUrl}${path}`, {
         method: input.method,
         headers,
-        body: input.body === undefined ? undefined : JSON.stringify(input.body)
+        body: input.body === undefined ? undefined : JSON.stringify(input.body),
+        redirect: "error",
+        signal: AbortSignal.timeout(this.timeoutMs)
       });
     } catch {
       throw new AgentPayApiError("AgentPay API request failed", 0, null, true);
     }
-    const body = await parseJson(response);
+    const body = await parseJson(response, this.maxResponseBytes);
     if (!response.ok) {
       const record = asRecord(body);
       throw new AgentPayApiError(
@@ -175,8 +192,8 @@ export function getPaymentReceipt(api: AgentPayApi, receiptId: string): Promise<
   return api.getReceipt(receiptId);
 }
 
-async function parseJson(response: Response): Promise<unknown> {
-  const text = await response.text();
+async function parseJson(response: Response, maximum: number): Promise<unknown> {
+  const text = new TextDecoder().decode(await readBoundedBody(response, maximum));
   if (!text) return null;
   try {
     return JSON.parse(text) as unknown;
@@ -185,8 +202,51 @@ async function parseJson(response: Response): Promise<unknown> {
   }
 }
 
+async function readBoundedBody(response: Response, maximum: number): Promise<Uint8Array> {
+  const contentLength = response.headers.get("content-length");
+  if (contentLength && /^[0-9]+$/.test(contentLength) && BigInt(contentLength) > BigInt(maximum)) {
+    await response.body?.cancel();
+    throw new AgentPayApiError("AgentPay API response was too large", response.status, null, false);
+  }
+  if (!response.body) return new Uint8Array();
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maximum) {
+        await reader.cancel();
+        throw new AgentPayApiError("AgentPay API response was too large", response.status, null, false);
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const body = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return body;
+}
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? value as Record<string, unknown>
     : null;
+}
+
+
+function isLocalHostname(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
+}
+
+function positiveInteger(value: number, label: string): number {
+  if (!Number.isSafeInteger(value) || value <= 0) throw new TypeError(`${label} must be a positive integer`);
+  return value;
 }
