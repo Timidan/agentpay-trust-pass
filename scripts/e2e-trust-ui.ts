@@ -26,6 +26,8 @@ try {
   page.on("console", (message) => {
     if (message.type() !== "error") return;
     const text = message.text();
+    const sourceUrl = message.location().url;
+    if (sourceUrl.startsWith("https://static.cloudflareinsights.com/beacon.min.js/")) return;
     if (!/Failed to load resource:.*\b402\b/i.test(text)) browserErrors.push(text);
   });
   page.on("response", (response) => {
