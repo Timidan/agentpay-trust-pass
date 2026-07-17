@@ -13,7 +13,7 @@ describe("agent integration display origins", () => {
     window.history.pushState({}, "", "/");
   });
 
-  it("uses the build-time report and bridge origins in user-facing instructions", async () => {
+  it("shows the published MCP package and build-time hosted endpoints", async () => {
     vi.stubEnv("VITE_REPORT_API_URL", REPORT_API_ORIGIN);
     vi.stubEnv("VITE_MCP_SERVER_URL", BRIDGE_ORIGIN);
     vi.resetModules();
@@ -26,10 +26,13 @@ describe("agent integration display origins", () => {
     expect(screen.getByText(`POST ${BRIDGE_ORIGIN}/tools/<name>`)).toBeTruthy();
 
     const codeBlocks = Array.from(document.querySelectorAll("pre code"), (node) => node.textContent ?? "");
-    expect(codeBlocks).toContainEqual(expect.stringContaining(`"REPORT_API_URL": "${REPORT_API_ORIGIN}"`));
-    expect(codeBlocks).toContainEqual(expect.stringContaining(`"AGENT_PAY_RESOURCE_BASE_URL": "${REPORT_API_ORIGIN}"`));
+    expect(codeBlocks).toContainEqual(expect.stringContaining(`"command": "npx"`));
+    expect(codeBlocks).toContainEqual(expect.stringContaining(`"args": ["--yes", "@timidan/agentpay-mcp"]`));
+    expect(codeBlocks).toContainEqual(expect.stringContaining(`"name": "payment_status", "arguments": {}`));
     expect(codeBlocks).toContainEqual(expect.stringContaining(`export AGENT_PAY_MCP_URL=${BRIDGE_ORIGIN}`));
     expect(codeBlocks).toContainEqual(expect.stringContaining("Authorization: Bearer $AGENT_PAY_MCP_TOKEN"));
+    expect(document.body.textContent).not.toContain("@agent-pay/mcp-server");
+    expect(document.body.textContent).not.toContain("CASPER_SECRET_KEY_PATH");
     expect(document.body.textContent).not.toContain("127.0.0.1");
   }, 15_000);
 

@@ -2,6 +2,7 @@ import {
   operatorPolicyHash,
   providerDecisionHash
 } from "../../../../packages/agent-pay-core/src/payment/artifacts";
+import { normalizePackageHash } from "../../../../packages/agent-pay-core/src/packageHash";
 import type {
   OperatorPolicy,
   ProviderDecision
@@ -35,7 +36,7 @@ export async function saveAssetPolicyWithWallet(
   if (timestamp !== draft.now) {
     throw new TypeError("The payment policy time must be a canonical ISO timestamp.");
   }
-  const asset = draft.asset.toLowerCase().replace(/^hash-/, "");
+  const asset = normalizePackageHash(draft.asset);
   const current = await api.getCurrentPolicy(token);
   const unsigned: OperatorPolicy = current
     ? {
@@ -111,7 +112,7 @@ export async function saveProviderRuleWithWallet(
     ...draft,
     origin: new URL(draft.origin).origin,
     payee: draft.payee.toLowerCase(),
-    asset: draft.asset.toLowerCase().replace(/^hash-/, ""),
+    asset: normalizePackageHash(draft.asset),
     revision,
     signatureMessage: "",
     signature: "",

@@ -56,8 +56,15 @@ export function TokenGate({ flow }: { flow: AuditFlow }) {
         <summary className="audit-note">Use an AgentPay token instead</summary>
         <p className="audit-note">
           Agents and developers can paste an operator session or scoped agent token. It stays in memory for this tab.
-          Never paste a private key.
+          Never paste a private key. Any Casper keypair can create a session with the CLI, which signs a one-time
+          challenge locally and prints the token:
         </p>
+        <pre className="audit-code-block audit-terminal">
+          <code>
+            <span className="audit-terminal-prompt">$ </span>npm install -g @timidan/agentpay-cli{"\n"}
+            <span className="audit-terminal-prompt">$ </span>agentpay session create --key {"<secret.pem>"} --json
+          </code>
+        </pre>
         <form
           className="audit-actions"
           onSubmit={(event) => {

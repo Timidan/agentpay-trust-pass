@@ -3,6 +3,7 @@ import {
   accountSignalsFromFacts,
   accountPolicyHash,
   hashJson,
+  normalizePackageHash,
   POLICY_VERSION,
   policyHash,
   scoreAccount,
@@ -127,7 +128,7 @@ export function parseVerdictCardSubmission(value: unknown): VerdictCardSubmissio
   const subject = asRecord(verdictReport.subject);
   const signals = asRecord(verdictReport.signals);
   const packageHash = typeof subject?.packageHash === "string"
-    ? subject.packageHash.replace(/^hash-/i, "").toLowerCase()
+    ? normalizePackageHash(subject.packageHash)
     : "";
   if (!signals || !HEX_HASH_PATTERN.test(packageHash)) return null;
 

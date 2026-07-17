@@ -1,5 +1,6 @@
 import {
   hashJson,
+  normalizePackageHash,
   type Dataset,
   type EvidenceFactValue
 } from "@agent-pay/core";
@@ -255,7 +256,7 @@ export type CsprTradeMarketState = {
 export async function fetchCsprTradeMarketState(
   packageHash: string
 ): Promise<CsprTradeMarketState> {
-  const normalized = packageHash.replace(/^hash-/, "").toLowerCase();
+  const normalized = normalizePackageHash(packageHash);
   if (!/^[0-9a-f]{64}$/.test(normalized)) {
     throw new TypeError("CSPR.trade market lookup requires a 64-character package hash");
   }

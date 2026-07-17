@@ -2,6 +2,7 @@ import {
   authorizationDigest,
   compareSettlement,
   hashJson,
+  normalizePackageHash,
   verifyAuthorizationSignature,
   type AuthorizationIntent,
   type PaymentAssetEvidence
@@ -472,7 +473,7 @@ function parseSignedAuthorization(
     validBefore,
     nonce,
     network: requirement.network,
-    asset: requirement.asset.toLowerCase().replace(/^hash-/, ""),
+    asset: normalizePackageHash(requirement.asset),
     tokenName: requirement.extra.name,
     tokenVersion: requirement.extra.version
   } satisfies Omit<AuthorizationIntent, "digest">;

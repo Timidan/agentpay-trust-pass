@@ -1,5 +1,5 @@
 import type { MouseEvent, ReactNode } from "react";
-import { ArrowSquareOut } from "@phosphor-icons/react";
+import { ArrowSquareOut, Moon, Sun } from "@phosphor-icons/react";
 import { AgentPayLogo } from "./AgentPayLogo";
 import { EXPLORER } from "../landing2/data";
 
@@ -52,11 +52,15 @@ export function SiteNav({
   current,
   sub,
   navigate,
+  theme,
+  onToggleTheme,
   actions,
 }: {
   current: SiteKey;
   sub: string;
   navigate?: Navigate;
+  theme?: "light" | "dark";
+  onToggleTheme?: () => void;
   actions?: ReactNode;
 }) {
   return (
@@ -69,7 +73,25 @@ export function SiteNav({
         </span>
       </a>
       <SiteNavLinks current={current} navigate={navigate} />
-      {actions ? <div className="site-nav-actions">{actions}</div> : null}
+      {onToggleTheme || actions ? (
+        <div className="site-nav-actions">
+          {onToggleTheme ? (
+            <button
+              type="button"
+              className="site-theme"
+              aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              onClick={onToggleTheme}
+            >
+              {theme === "dark" ? (
+                <Sun size={16} weight="bold" aria-hidden="true" />
+              ) : (
+                <Moon size={16} weight="bold" aria-hidden="true" />
+              )}
+            </button>
+          ) : null}
+          {actions}
+        </div>
+      ) : null}
     </header>
   );
 }

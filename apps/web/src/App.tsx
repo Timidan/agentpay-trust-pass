@@ -1,8 +1,6 @@
 import {
   ArrowSquareOut,
   ArrowCounterClockwise,
-  Moon,
-  Sun,
 } from "@phosphor-icons/react";
 import { useEffect, useMemo, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
@@ -32,7 +30,6 @@ import {
   type HeroMode
 } from "./components/AgentPayVerdictHero";
 import { AgentPayCheckList } from "./components/AgentPayCheckList";
-import { AgentPayLogo } from "./components/AgentPayLogo";
 import { AgentPayProofPath } from "./components/AgentPayProofPath";
 import {
   AgentPayAlert,
@@ -67,7 +64,7 @@ import {
 } from "./components/AgentPayUi";
 import IntegratePage from "./agents/IntegratePage";
 import AuditPage from "./audit/AuditPage";
-import { SiteFooter, SiteNavLinks } from "./components/SiteChrome";
+import { SiteFooter, SiteNav } from "./components/SiteChrome";
 import Landing2 from "./landing2/Landing";
 import { friendlyReason } from "./lib/friendly-errors";
 import AskPage from "./trust/AskPage";
@@ -399,7 +396,7 @@ function AppShell() {
           path="/check"
           element={
             <main className="agent-pay-app" data-theme={theme}>
-              <AskPage navigate={navigate} />
+              <AskPage navigate={navigate} theme={theme} onToggleTheme={toggleTheme} />
             </main>
           }
         />
@@ -407,7 +404,7 @@ function AppShell() {
           path="/counterparty"
           element={
             <main className="agent-pay-app" data-theme={theme}>
-              <CounterpartyPage navigate={navigate} />
+              <CounterpartyPage navigate={navigate} theme={theme} onToggleTheme={toggleTheme} />
             </main>
           }
         />
@@ -415,19 +412,19 @@ function AppShell() {
           path="/feed"
           element={
             <main className="agent-pay-app" data-theme={theme}>
-              <FeedPage navigate={navigate} />
+              <FeedPage navigate={navigate} theme={theme} onToggleTheme={toggleTheme} />
             </main>
           }
         />
         <Route
           path="/agents"
-          element={<IntegratePage onBack={() => navigate("/")} onOpenAsk={() => navigate("/check")} navigate={navigate} />}
+          element={<IntegratePage onBack={() => navigate("/")} onOpenAsk={() => navigate("/check")} navigate={navigate} theme={theme} onToggleTheme={toggleTheme} />}
         />
         <Route
           path="/audit"
           element={
             <main className="agent-pay-app" data-theme={theme}>
-              <AuditPage theme={theme} navigate={navigate} />
+              <AuditPage theme={theme} navigate={navigate} onToggleTheme={toggleTheme} />
             </main>
           }
         />
@@ -435,14 +432,14 @@ function AppShell() {
           path="/app"
           element={
             <main className={`agent-pay-app agent-pay-workspace-view console-v2 state-${state}`} data-theme={theme}>
+              <AgentPayAppHeader
+                state={state}
+                theme={theme}
+                onNav={navigate}
+                onReset={reset}
+                onToggleTheme={toggleTheme}
+              />
               <div className="console-shell">
-                <AgentPayAppHeader
-                  state={state}
-                  theme={theme}
-                  onNav={navigate}
-                  onReset={reset}
-                  onToggleTheme={toggleTheme}
-                />
                 <AgentPayConsole
                   error={error}
                   evidenceNetwork={evidenceNetwork}
@@ -462,8 +459,8 @@ function AppShell() {
                   onTamper={tamperReport}
                   onRestore={restoreReport}
                 />
-                <SiteFooter current="app" navigate={navigate} />
               </div>
+              <SiteFooter current="app" navigate={navigate} />
             </main>
           }
         />
@@ -485,7 +482,7 @@ function LandingRoute(props: {
   onOpenAudit: () => void;
 }) {
   return (
-    <main className="agent-pay-app" data-theme={props.theme}>
+    <div className="agent-pay-app" data-theme={props.theme}>
       <Landing2
         theme={props.theme}
         onToggleTheme={props.onToggleTheme}
@@ -496,7 +493,7 @@ function LandingRoute(props: {
         onOpenCounterparty={props.onOpenCounterparty}
         onOpenAudit={props.onOpenAudit}
       />
-    </main>
+    </div>
   );
 }
 
@@ -513,33 +510,26 @@ function AgentPayAppHeader({
   onReset: () => void;
   onToggleTheme: () => void;
 }) {
+  // The console shares the site nav so its links, brand, and toggle match every
+  // other page; the reset control and run-state badge ride the actions slot.
   return (
-    <header className="app-header">
-      <div className="brand-lockup">
-        <AgentPayLogo className="brand-logo" />
-        <div className="brand-copy">
-          <span className="brand-name">AgentPay</span>
-          <span className="brand-sub">Console</span>
-        </div>
-      </div>
-      <SiteNavLinks current="app" navigate={onNav} />
-      <div className="hero-nav-actions">
-        {state !== "idle" ? (
-          <AgentPayBadge state={state}>
-            {humanizeKey(state)}
-          </AgentPayBadge>
-        ) : null}
-        <AgentPayIconAction
-          label={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
-          onClick={onToggleTheme}
-        >
-          {theme === "light" ? <Moon size={17} weight="bold" aria-hidden="true" /> : <Sun size={17} weight="bold" aria-hidden="true" />}
-        </AgentPayIconAction>
-        <AgentPayIconAction label="Reset AgentPay" onClick={onReset}>
-          <ArrowCounterClockwise size={17} weight="bold" aria-hidden="true" />
-        </AgentPayIconAction>
-      </div>
-    </header>
+    <SiteNav
+      current="app"
+      sub="Console"
+      navigate={onNav}
+      theme={theme}
+      onToggleTheme={onToggleTheme}
+      actions={
+        <>
+          {state !== "idle" ? (
+            <AgentPayBadge state={state}>{humanizeKey(state)}</AgentPayBadge>
+          ) : null}
+          <AgentPayIconAction label="Reset AgentPay" onClick={onReset}>
+            <ArrowCounterClockwise size={17} weight="bold" aria-hidden="true" />
+          </AgentPayIconAction>
+        </>
+      }
+    />
   );
 }
 

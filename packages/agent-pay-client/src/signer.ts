@@ -5,6 +5,7 @@ import { sha256 } from "@noble/hashes/sha256";
 import {
   authorizationDigest,
   buildAuthorizationWindow,
+  normalizePackageHash,
   publicKeyToAccountAddress,
   transferWithAuthorizationDigest as coreTransferDigest,
   type AuthorizationIntent
@@ -283,7 +284,7 @@ function normalizeAddress(value: string): string {
 }
 
 function normalizeAsset(value: string): string {
-  return value.trim().toLowerCase().replace(/^hash-/, "");
+  return normalizePackageHash(value);
 }
 
 function parsePolicyAmount(label: string, value: string): bigint {

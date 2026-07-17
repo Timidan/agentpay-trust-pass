@@ -13,20 +13,16 @@ const PRIMARY_TOOLS = [
 const MCP_CONFIG = `{
   "mcpServers": {
     "agent-pay": {
-      "command": "pnpm",
-      "args": ["--filter", "@agent-pay/mcp-server", "stdio"],
+      "command": "npx",
+      "args": ["--yes", "@timidan/agentpay-mcp"],
       "env": {
-        "REPORT_API_URL": "${reportApiOrigin}",
-        "AGENT_PAY_API_URL": "${reportApiOrigin}",
-        "AGENT_PAY_API_TOKEN": "<scoped-agent-token>",
-        "AGENT_PAY_RESOURCE_BASE_URL": "${reportApiOrigin}",
-        "CASPER_SECRET_KEY_PATH": "/absolute/path/to/testnet_secret_key.pem"
+        "AGENT_PAY_API_TOKEN": "<scoped-agent-token>"
       }
     }
   }
 }`;
 
-const MCP_TOOL_CALL = `{ "name": "assess_subject", "arguments": { "subject": "WCSPR", "evidenceNetwork": "casper-mainnet" } }`;
+const MCP_TOOL_CALL = `{ "name": "payment_status", "arguments": {} }`;
 
 const HTTP_CALL = `export AGENT_PAY_MCP_URL=${bridgeUrl}
 export AGENT_PAY_MCP_TOKEN="replace-with-bridge-token"
@@ -39,13 +35,15 @@ type IntegratePageProps = {
   onBack: () => void;
   onOpenAsk: () => void;
   navigate?: (path: string) => void;
+  theme?: "light" | "dark";
+  onToggleTheme?: () => void;
 };
 
-export default function IntegratePage({ onBack, onOpenAsk, navigate }: IntegratePageProps) {
+export default function IntegratePage({ onBack, onOpenAsk, navigate, theme, onToggleTheme }: IntegratePageProps) {
   const nav = navigate ?? ((path: string) => (path === "/check" ? onOpenAsk() : onBack()));
   return (
     <main className="ag">
-      <SiteNav current="agents" sub="Agent integration" navigate={nav} />
+      <SiteNav current="agents" sub="Agent integration" navigate={nav} theme={theme} onToggleTheme={onToggleTheme} />
 
       <div className="ag-doc">
         <header className="ag-head">
@@ -66,8 +64,9 @@ export default function IntegratePage({ onBack, onOpenAsk, navigate }: Integrate
             <code>{MCP_CONFIG}</code>
           </pre>
           <p className="ag-note">
-            The scoped token authorizes payment checks. The Testnet key is used only when this local
-            MCP process buys a token or account report. This deployment uses <code>{reportApiOrigin}</code>.
+            Public status and proof tools work immediately. Add a scoped token for payment checks and
+            receipts. One-call paid token or wallet checks also need a local Testnet key; the skill
+            explains that optional setup.
           </p>
           <p className="ag-note">
             Or fetch the skill directly: <code>curl {reportApiOrigin}/skill.md</code>

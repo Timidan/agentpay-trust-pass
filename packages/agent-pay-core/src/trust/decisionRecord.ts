@@ -1,3 +1,5 @@
+import { normalizePackageHash as canonicalPackageHash } from "../packageHash.js";
+
 const HEX_64 = /^[0-9a-f]{64}$/i;
 const DATASET_ID = /^[A-Za-z0-9_.:-]{1,128}$/;
 
@@ -143,7 +145,7 @@ function validProof(value: DecisionRecordProof): boolean {
 }
 
 function normalizePackageHash(value: string): string | null {
-  const normalized = value.replace(/^hash-/i, "").toLowerCase();
+  const normalized = canonicalPackageHash(value);
   return HEX_64.test(normalized) ? normalized : null;
 }
 

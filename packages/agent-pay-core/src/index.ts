@@ -1,4 +1,5 @@
 export { hashJson, sha256Hex } from "./hash.js";
+export { normalizePackageHash } from "./packageHash.js";
 export {
   buildDataset,
   findReport,

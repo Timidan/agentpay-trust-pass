@@ -13,7 +13,7 @@ import {
   type CasperSigner,
   type CheckPaymentInput
 } from "@agent-pay/client";
-import { parseCasperPublicKey, verifyPurchaseReceipt } from "@agent-pay/core";
+import { normalizePackageHash, parseCasperPublicKey, verifyPurchaseReceipt } from "@agent-pay/core";
 import {
   OperatorApiError,
   OperatorClient,
@@ -464,7 +464,7 @@ function nonEmpty(value: unknown): value is string {
 }
 
 function normalizeHash(value: string, label: string): string {
-  const normalized = value.toLowerCase().replace(/^hash-/, "");
+  const normalized = normalizePackageHash(value);
   if (!/^[0-9a-f]{64}$/.test(normalized)) throw new CliError("invalid_input", `${label} must be 64 hexadecimal characters`);
   return normalized;
 }

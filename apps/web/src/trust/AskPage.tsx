@@ -51,7 +51,15 @@ const MEANINGS = [
   }
 ] as const;
 
-export default function AskPage({ navigate }: { navigate?: (path: string) => void }) {
+export default function AskPage({
+  navigate,
+  theme,
+  onToggleTheme,
+}: {
+  navigate?: (path: string) => void;
+  theme?: "light" | "dark";
+  onToggleTheme?: () => void;
+}) {
   const [subject, setSubject] = useState("");
   const [state, setState] = useState<AskState>({ status: "idle" });
   const [validationHint, setValidationHint] = useState<string | null>(null);
@@ -140,7 +148,7 @@ export default function AskPage({ navigate }: { navigate?: (path: string) => voi
 
   return (
     <div className="ask2">
-      <SiteNav current="check" sub="Token check" navigate={navigate} />
+      <SiteNav current="check" sub="Token check" navigate={navigate} theme={theme} onToggleTheme={onToggleTheme} />
 
       <div className="ask2-main">
         {state.status === "done" ? (

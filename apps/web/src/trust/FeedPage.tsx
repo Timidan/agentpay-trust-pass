@@ -16,7 +16,15 @@ function toSentenceCase(str: string): string {
   return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
 }
 
-export default function FeedPage({ navigate }: { navigate?: (path: string) => void }) {
+export default function FeedPage({
+  navigate,
+  theme,
+  onToggleTheme,
+}: {
+  navigate?: (path: string) => void;
+  theme?: "light" | "dark";
+  onToggleTheme?: () => void;
+}) {
   const [state, setState] = useState<FeedState>({ status: "loading" });
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -41,7 +49,7 @@ export default function FeedPage({ navigate }: { navigate?: (path: string) => vo
 
   return (
     <div className="ask2">
-      <SiteNav current="feed" sub="Shared results" navigate={navigate} />
+      <SiteNav current="feed" sub="Shared results" navigate={navigate} theme={theme} onToggleTheme={onToggleTheme} />
 
       {/* div, not <main>: App already wraps this page in a <main> landmark. */}
       <div className="ask2-main">

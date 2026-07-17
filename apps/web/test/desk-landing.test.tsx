@@ -28,6 +28,11 @@ afterEach(() => {
 });
 
 describe("Landing integration", () => {
+  it("uses one main landmark", () => {
+    render(<App />);
+    expect(screen.getAllByRole("main")).toHaveLength(1);
+  });
+
   it("renders the current landing by default and opens the console", () => {
     render(<App />);
     expect(screen.getByText("From the charge to a receipt on Casper.")).toBeTruthy();

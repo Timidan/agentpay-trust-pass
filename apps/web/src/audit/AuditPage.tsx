@@ -9,14 +9,16 @@ import "./audit-base.css";
 export default function AuditPage({
   theme,
   navigate,
+  onToggleTheme,
 }: {
   theme: AuditTheme;
   navigate?: (path: string) => void;
+  onToggleTheme?: () => void;
 }) {
   const flow = useAuditFlow();
   return (
     <div className="audit-page" data-theme={theme}>
-      <SiteNav current="audit" sub="Payment checker" navigate={navigate} />
+      <SiteNav current="audit" sub="Payment checker" navigate={navigate} theme={theme} onToggleTheme={onToggleTheme} />
       <ModernVariant flow={flow} theme={theme} />
       <SiteFooter current="audit" navigate={navigate} />
     </div>

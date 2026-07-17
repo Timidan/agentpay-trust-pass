@@ -23,3 +23,5 @@ export function sha256Hex(value: string): string {
 export function hashJson(value: unknown): string {
   return sha256Hex(JSON.stringify(canonicalize(value)));
 }
+
+export { normalizePackageHash } from "./packageHash.js";

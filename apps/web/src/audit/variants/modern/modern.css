@@ -736,6 +736,26 @@
   padding: 0.85rem 0.95rem;
 }
 
+/* Terminal-styled snippet: dark in both themes, like the landing code frame. */
+.av-modern .audit-terminal {
+  border-color: hsla(275, 40%, 92%, 0.14);
+  background: hsl(278 30% 8%);
+  color: hsl(271 34% 88%);
+  line-height: 1.75;
+}
+
+/* The global `code` rule paints var(--ink) — near-black on the light theme —
+   so pin the inner code to the terminal's own light ink. */
+.av-modern .audit-terminal code {
+  color: inherit;
+  font: inherit;
+}
+
+.av-modern .audit-terminal .audit-terminal-prompt {
+  color: hsl(250 70% 74%);
+  user-select: none;
+}
+
 /* ---- Links + focus ------------------------------------------------- */
 
 .av-modern a {

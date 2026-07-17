@@ -1,4 +1,4 @@
-import { scoreSubject, type SubjectSignals } from "@agent-pay/core";
+import { normalizePackageHash, scoreSubject, type SubjectSignals } from "@agent-pay/core";
 import { fetchBoundedJson } from "./httpJson.js";
 import {
   csprCloudEndpoints,
@@ -250,7 +250,7 @@ export async function fetchSubjectTokenState(
   packageHash: string,
   options: FetchSubjectTokenStateOptions = {}
 ): Promise<SubjectTokenState> {
-  const hash = packageHash.replace(/^hash-/, "");
+  const hash = normalizePackageHash(packageHash);
   const network = options.network ?? defaultEvidenceNetwork();
   const endpoints = csprCloudEndpoints(network);
   const restBase = normalizeBaseUrl(options.restBase ?? endpoints.restBase);

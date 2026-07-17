@@ -42,7 +42,15 @@ const MEANINGS = [
   }
 ] as const;
 
-export default function CounterpartyPage({ navigate }: { navigate?: (path: string) => void }) {
+export default function CounterpartyPage({
+  navigate,
+  theme,
+  onToggleTheme,
+}: {
+  navigate?: (path: string) => void;
+  theme?: "light" | "dark";
+  onToggleTheme?: () => void;
+}) {
   const [account, setAccount] = useState("");
   const [network, setNetwork] = useState<EvidenceNetwork>("casper-mainnet");
   const [state, setState] = useState<CheckState>({ status: "idle" });
@@ -89,7 +97,7 @@ export default function CounterpartyPage({ navigate }: { navigate?: (path: strin
 
   return (
     <div className="ask2">
-      <SiteNav current="counterparty" sub="Wallet check" navigate={navigate} />
+      <SiteNav current="counterparty" sub="Wallet check" navigate={navigate} theme={theme} onToggleTheme={onToggleTheme} />
 
       <div className="ask2-main">
         {state.status === "done" ? (

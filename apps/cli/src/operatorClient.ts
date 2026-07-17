@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
   artifactHash,
+  normalizePackageHash,
   operatorPolicyHash,
   providerDecisionHash,
   type OperatorPolicy,
@@ -223,7 +224,7 @@ export class OperatorClient {
       revision,
       origin: new URL(input.origin).origin,
       payee: input.payee.toLowerCase(),
-      asset: input.asset.toLowerCase().replace(/^hash-/, ""),
+      asset: normalizePackageHash(input.asset),
       network: "casper:casper-test",
       resourcePathPrefix: input.resourcePathPrefix,
       perCallCeiling: input.perCallCeiling,

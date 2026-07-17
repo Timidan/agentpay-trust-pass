@@ -13,6 +13,7 @@ import {
   publicKeyToAccountAddress
 } from "./casperSignature.js";
 import type { AuthorizationIntent, PaymentTerms } from "./types.js";
+import { normalizePackageHash as canonicalPackageHash } from "../packageHash.js";
 
 const HEX_64 = /^[0-9a-f]{64}$/;
 const ADDRESS = /^(?:(?:00|01)[0-9a-f]{64}|02[0-9a-f]{66})$/;
@@ -192,7 +193,7 @@ export function verifyAuthorizationSignature(intent: AuthorizationIntent, signat
 }
 
 function normalizePackageHash(value: string): string {
-  const normalized = value.trim().toLowerCase().replace(/^hash-/, "");
+  const normalized = canonicalPackageHash(value);
   if (!HEX_64.test(normalized)) throw new TypeError("assetPackageHash must be 64 hexadecimal characters");
   return normalized;
 }
