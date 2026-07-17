@@ -30,7 +30,10 @@ try {
   const authTrace: string[] = [];
   page.on("pageerror", (error) => browserErrors.push(error.message));
   page.on("console", (message) => {
-    if (message.type() === "error") browserErrors.push(message.text());
+    if (message.type() !== "error") return;
+    const sourceUrl = message.location().url;
+    if (sourceUrl.startsWith("https://static.cloudflareinsights.com/beacon.min.js/")) return;
+    browserErrors.push(message.text());
   });
   page.on("request", (request) => {
     if (request.url().includes("/v1/auth")) authTrace.push(`request ${request.method()} ${request.url()}`);
@@ -202,8 +205,12 @@ try {
   if (initialCheckResponse.status() !== 201) {
     throw new Error(`Initial check failed: ${await initialCheckResponse.text()}`);
   }
+  const initialCheck = await initialCheckResponse.json() as CheckResponse;
+  let reasonCodes = new Set(initialCheck.check.decision.reasons.map((reason) => reason.code));
   const decision = page.getByRole("region", { name: "Decision" });
-  await decision.getByText("REVIEW", { exact: true }).first().waitFor({ timeout: 30_000 });
+  await decision.getByText(initialCheck.check.decision.verdict.toUpperCase(), { exact: true })
+    .first()
+    .waitFor({ timeout: 30_000 });
   await decision.getByText(/buyer has not prepared the payment details needed for signing/i).first().waitFor();
 
   let providerRuleSaved = false;
@@ -211,84 +218,97 @@ try {
   let paymentDetailsPrepared = false;
   let finalVerdict = "review";
   if (authMode === "wallet") {
-    const providerAction = page.getByRole("region", { name: "Operator action" });
-    const actionChallengePromise = page.waitForResponse((response) => {
-      const url = new URL(response.url());
-      return response.request().method() === "POST" && url.pathname.endsWith("/v1/auth/challenges");
-    });
-    const providerDecisionPromise = page.waitForResponse((response) => {
-      const url = new URL(response.url());
-      return response.request().method() === "POST" && url.pathname.endsWith("/v1/provider-decisions");
-    });
-    await providerAction.getByRole("button", { name: "Approve this provider", exact: true }).click();
-    const [actionChallenge, providerDecisionResponse] = await Promise.all([
-      actionChallengePromise,
-      providerDecisionPromise
-    ]);
-    if (actionChallenge.status() !== 201) {
-      throw new Error(`Provider challenge failed: ${await actionChallenge.text()}`);
-    }
-    if (providerDecisionResponse.status() !== 201) {
-      throw new Error(`Provider approval failed: ${await providerDecisionResponse.text()}`);
-    }
-    await page.getByText(/Provider approved\. Run the check again/i).waitFor();
-    providerRuleSaved = true;
+    if (reasonCodes.has("provider_unapproved")) {
+      const providerAction = page.getByRole("region", { name: "Operator action" });
+      const actionChallengePromise = page.waitForResponse((response) => {
+        const url = new URL(response.url());
+        return response.request().method() === "POST" && url.pathname.endsWith("/v1/auth/challenges");
+      });
+      const providerDecisionPromise = page.waitForResponse((response) => {
+        const url = new URL(response.url());
+        return response.request().method() === "POST" && url.pathname.endsWith("/v1/provider-decisions");
+      });
+      await providerAction.getByRole("button", { name: "Approve this provider", exact: true }).click();
+      const [actionChallenge, providerDecisionResponse] = await Promise.all([
+        actionChallengePromise,
+        providerDecisionPromise
+      ]);
+      if (actionChallenge.status() !== 201) {
+        throw new Error(`Provider challenge failed: ${await actionChallenge.text()}`);
+      }
+      if (providerDecisionResponse.status() !== 201) {
+        throw new Error(`Provider approval failed: ${await providerDecisionResponse.text()}`);
+      }
+      await page.getByText(/Provider approved\. Run the check again/i).waitFor();
+      providerRuleSaved = true;
 
-    const recheckResponsePromise = page.waitForResponse((response) => {
-      const url = new URL(response.url());
-      return response.request().method() === "POST" && url.pathname.endsWith("/v1/checks");
-    });
-    await providerAction.getByRole("button", { name: "Run the check again", exact: true }).click();
-    const recheckResponse = await recheckResponsePromise;
-    if (recheckResponse.status() !== 201) {
-      throw new Error(`Check after provider approval failed: ${await recheckResponse.text()}`);
+      const recheckResponsePromise = page.waitForResponse((response) => {
+        const url = new URL(response.url());
+        return response.request().method() === "POST" && url.pathname.endsWith("/v1/checks");
+      });
+      await providerAction.getByRole("button", { name: "Run the check again", exact: true }).click();
+      const recheckResponse = await recheckResponsePromise;
+      if (recheckResponse.status() !== 201) {
+        throw new Error(`Check after provider approval failed: ${await recheckResponse.text()}`);
+      }
+      const recheck = await recheckResponse.json() as CheckResponse;
+      reasonCodes = new Set(recheck.check.decision.reasons.map((reason) => reason.code));
+      assert.equal(
+        reasonCodes.has("provider_unapproved"),
+        false,
+        "The signed provider approval was not applied to the new check"
+      );
     }
-    const recheck = await recheckResponse.json() as CheckResponse;
-    assert.equal(
-      recheck.check.decision.reasons.some((reason) => reason.code === "provider_unapproved"),
-      false,
-      "The signed provider approval was not applied to the new check"
-    );
 
-    const paymentRules = page.getByRole("region", { name: "Payment rules" });
-    await paymentRules.getByRole("button", { name: "Save daily limit", exact: true }).waitFor();
-    const policyChallengePromise = page.waitForResponse((response) => {
-      const url = new URL(response.url());
-      return response.request().method() === "POST" && url.pathname.endsWith("/v1/auth/challenges");
-    });
-    const policyRevisionPromise = page.waitForResponse((response) => {
-      const url = new URL(response.url());
-      return response.request().method() === "POST" && url.pathname.endsWith("/v1/policies/revisions");
-    });
-    await paymentRules.getByRole("button", { name: "Save daily limit", exact: true }).click();
-    const [policyChallenge, policyRevisionResponse] = await Promise.all([
-      policyChallengePromise,
-      policyRevisionPromise
-    ]);
-    if (policyChallenge.status() !== 201) {
-      throw new Error(`Policy challenge failed: ${await policyChallenge.text()}`);
-    }
-    if (policyRevisionResponse.status() !== 201) {
-      throw new Error(`Payment policy failed: ${await policyRevisionResponse.text()}`);
-    }
-    await paymentRules.getByText(/Daily limit saved\. Run the check again/i).waitFor();
-    paymentRulesSaved = true;
+    if (reasonCodes.has("policy_cap_missing") || reasonCodes.has("policy_daily_cap_exceeded")) {
+      const paymentRules = page.getByRole("region", { name: "Payment rules" });
+      await paymentRules.getByRole("button", { name: "Save daily limit", exact: true }).waitFor();
+      const limitInput = paymentRules.getByRole("textbox", { name: /Daily limit in/i });
+      const limitLabel = await limitInput.getAttribute("aria-label") ?? "";
+      await limitInput.fill(
+        /smallest token units/i.test(limitLabel)
+          ? (BigInt(quote.amount) * 100n).toString()
+          : "1"
+      );
+      const policyChallengePromise = page.waitForResponse((response) => {
+        const url = new URL(response.url());
+        return response.request().method() === "POST" && url.pathname.endsWith("/v1/auth/challenges");
+      });
+      const policyRevisionPromise = page.waitForResponse((response) => {
+        const url = new URL(response.url());
+        return response.request().method() === "POST" && url.pathname.endsWith("/v1/policies/revisions");
+      });
+      await paymentRules.getByRole("button", { name: "Save daily limit", exact: true }).click();
+      const [policyChallenge, policyRevisionResponse] = await Promise.all([
+        policyChallengePromise,
+        policyRevisionPromise
+      ]);
+      if (policyChallenge.status() !== 201) {
+        throw new Error(`Policy challenge failed: ${await policyChallenge.text()}`);
+      }
+      if (policyRevisionResponse.status() !== 201) {
+        throw new Error(`Payment policy failed: ${await policyRevisionResponse.text()}`);
+      }
+      await paymentRules.getByText(/Daily limit saved\. Run the check again/i).waitFor();
+      paymentRulesSaved = true;
 
-    const policyRecheckResponsePromise = page.waitForResponse((response) => {
-      const url = new URL(response.url());
-      return response.request().method() === "POST" && url.pathname.endsWith("/v1/checks");
-    });
-    await paymentRules.getByRole("button", { name: "Run the check again", exact: true }).click();
-    const policyRecheckResponse = await policyRecheckResponsePromise;
-    if (policyRecheckResponse.status() !== 201) {
-      throw new Error(`Check after payment policy failed: ${await policyRecheckResponse.text()}`);
+      const policyRecheckResponsePromise = page.waitForResponse((response) => {
+        const url = new URL(response.url());
+        return response.request().method() === "POST" && url.pathname.endsWith("/v1/checks");
+      });
+      await paymentRules.getByRole("button", { name: "Run the check again", exact: true }).click();
+      const policyRecheckResponse = await policyRecheckResponsePromise;
+      if (policyRecheckResponse.status() !== 201) {
+        throw new Error(`Check after payment policy failed: ${await policyRecheckResponse.text()}`);
+      }
+      const policyRecheck = await policyRecheckResponse.json() as CheckResponse;
+      reasonCodes = new Set(policyRecheck.check.decision.reasons.map((reason) => reason.code));
+      assert.equal(
+        reasonCodes.has("policy_cap_missing") || reasonCodes.has("policy_daily_cap_exceeded"),
+        false,
+        "The signed daily payment limit was not applied to the new check"
+      );
     }
-    const policyRecheck = await policyRecheckResponse.json() as CheckResponse;
-    assert.equal(
-      policyRecheck.check.decision.reasons.some((reason) => reason.code === "policy_cap_missing"),
-      false,
-      "The signed daily payment limit was not applied to the new check"
-    );
 
     const chargeSection = page.getByRole("region", { name: "Charge terms" });
     await chargeSection.getByRole("button", { name: "Prepare payment details", exact: true }).click();

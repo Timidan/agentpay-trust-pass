@@ -129,6 +129,51 @@ describe("payment decision presentation", () => {
     expect(saveProviderRule).toHaveBeenCalledWith("pin", 30);
   });
 
+  it("keeps provider approval available when a separate spending rule blocks the charge", () => {
+    const base = reviewFlow();
+    const saveProviderRule = vi.fn();
+    const flow = {
+      ...base,
+      decision: "block",
+      check: {
+        ...base.check,
+        data: {
+          check: {
+            ...base.check.data?.check,
+            decision: {
+              ...base.check.data?.check.decision,
+              verdict: "block",
+              reasons: [
+                reason,
+                {
+                  code: "policy_daily_cap_exceeded",
+                  result: "block",
+                  message: "Payment would exceed the signed daily cap"
+                }
+              ]
+            }
+          }
+        }
+      },
+      walletSession: {
+        status: "success",
+        data: { publicKey: `01${"a".repeat(64)}`, expiresAt: "2026-07-18T00:00:00.000Z" },
+        error: null
+      },
+      providerAction: { status: "idle", data: null, error: null },
+      providerDecisions: { status: "idle", data: null, error: null },
+      saveProviderRule,
+      loadProviderDecisions: vi.fn(),
+      recheck: vi.fn()
+    } as unknown as AuditFlow;
+
+    render(<OperatorAction flow={flow} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Approve this provider" }));
+    expect(saveProviderRule).toHaveBeenCalledWith("pin", 30);
+    expect(screen.getByText("needs your choice")).toBeTruthy();
+  });
+
   it("keeps the signed CLI command available for token sessions", () => {
     const flow = {
       ...reviewFlow(),
@@ -171,6 +216,51 @@ describe("payment decision presentation", () => {
 
     expect(saveAssetPolicy).toHaveBeenCalledWith("50000");
     expect(screen.getByText(/current charge is 0\.00001 X402/i)).toBeTruthy();
+  });
+
+  it("explains how to recover when the signed daily limit has been used", () => {
+    const base = reviewFlow();
+    const flow = {
+      ...base,
+      check: {
+        ...base.check,
+        data: {
+          check: {
+            ...base.check.data?.check,
+            decision: {
+              ...base.check.data?.check.decision,
+              verdict: "block",
+              reasons: [{
+                code: "policy_daily_cap_exceeded",
+                result: "block",
+                message: "Payment would exceed the signed daily cap"
+              }]
+            }
+          }
+        }
+      },
+      walletSession: {
+        status: "success",
+        data: { publicKey: `01${"a".repeat(64)}`, expiresAt: "2026-07-18T00:00:00.000Z" },
+        error: null
+      },
+      policy: {
+        status: "success",
+        data: { assetDailyCaps: { ["9".repeat(64)]: "10000" }, policyHash: "d".repeat(64), revision: 1 },
+        error: null
+      },
+      policyAction: { status: "idle", data: null, error: null },
+      saveAssetPolicy: vi.fn(),
+      loadPolicy: vi.fn(),
+      recheck: vi.fn()
+    } as unknown as AuditFlow;
+
+    render(<PolicyAction flow={flow} />);
+
+    expect(screen.getByText("limit reached")).toBeTruthy();
+    expect(screen.getByText(/Your current daily limit has been used/i)).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: "Daily limit in X402" }).getAttribute("value"))
+      .toBe("0.00001");
   });
 
   it("prepares exact payment details without implying that a payment was signed", () => {

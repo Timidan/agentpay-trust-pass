@@ -9,6 +9,9 @@ export function PolicyAction({ flow }: { flow: AuditFlow }) {
   const decimals = terms?.extra.decimals ?? null;
   const symbol = terms?.extra.symbol?.trim() || "token";
   const existingCap = asset ? flow.policy.data?.assetDailyCaps[asset] : undefined;
+  const limitReached = flow.check.data?.check.decision.reasons.some(
+    (reason) => reason.code === "policy_daily_cap_exceeded"
+  ) ?? false;
   const initialLimit = useMemo(
     () => displayAmount(existingCap ?? terms?.amount ?? "", decimals),
     [decimals, existingCap, terms?.amount]
@@ -31,11 +34,16 @@ export function PolicyAction({ flow }: { flow: AuditFlow }) {
     <section className="audit-section" aria-label="Payment rules" data-step-state="review">
       <div className="audit-section-head">
         <h2>Set a daily payment limit</h2>
-        <span className="audit-tag" data-state="review">rule needed</span>
+        <span className="audit-tag" data-state="review">
+          {limitReached ? "limit reached" : "rule needed"}
+        </span>
       </div>
 
       <p className="audit-note">
-        The current charge is {chargeDisplay} {symbol}. The starting limit allows one charge of this size today.
+        The current charge is {chargeDisplay} {symbol}.
+        {limitReached
+          ? " Your current daily limit has been used. Raise it only if you want to allow more payments today."
+          : " The starting limit allows one charge of this size today."}
       </p>
       <p className="audit-note">
         This rule covers only this Casper Testnet token and the connected wallet. Existing blocks and other token limits stay in place.

@@ -15,7 +15,9 @@ export function OperatorAction({ flow }: { flow: AuditFlow }) {
   const [cliKind, setCliKind] = useState<"pin" | "deny">("pin");
   const [durationDays, setDurationDays] = useState(30);
   const check = flow.check.data?.check;
-  const isReview = flow.decision === "review";
+  const needsDecision = check?.decision.reasons.some((reason) =>
+    reason.code === "provider_unapproved" || reason.code === "provider_tuple_changed"
+  ) ?? false;
   const walletConnected = flow.walletSession.status === "success";
 
   const origin = check?.request.origin ?? "<origin>";
@@ -47,15 +49,15 @@ export function OperatorAction({ flow }: { flow: AuditFlow }) {
   ].join("\n");
 
   return (
-    <section className="audit-section" aria-label="Operator action" data-step-state={isReview ? "review" : "idle"}>
+    <section className="audit-section" aria-label="Operator action" data-step-state={needsDecision ? "review" : "idle"}>
       <div className="audit-section-head">
         <h2>Choose what AgentPay should do</h2>
-        <span className="audit-tag" data-state={isReview ? "review" : "idle"}>
-          {isReview ? "needs your choice" : "not needed"}
+        <span className="audit-tag" data-state={needsDecision ? "review" : "idle"}>
+          {needsDecision ? "needs your choice" : "not needed"}
         </span>
       </div>
 
-      {!isReview ? (
+      {!needsDecision ? (
         <p className="audit-note">This check does not need a provider decision.</p>
       ) : (
         <>

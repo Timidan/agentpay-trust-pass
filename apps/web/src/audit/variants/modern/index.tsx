@@ -315,11 +315,11 @@ export default function ModernVariant({ flow, theme }: AuditVariantProps) {
             }
             const reasonCodes = new Set(flow.check.data?.check.decision.reasons.map((reason) => reason.code) ?? []);
             const needsProviderRule = reasonCodes.has("provider_unapproved") || reasonCodes.has("provider_tuple_changed");
-            const needsPaymentRules = reasonCodes.has("policy_cap_missing");
-            if (flow.decision === "review" && needsProviderRule) {
+            const needsPaymentRules = reasonCodes.has("policy_cap_missing") || reasonCodes.has("policy_daily_cap_exceeded");
+            if (needsProviderRule) {
               cards.push({ key: "provider-rule", activeKey: "operator", node: <OperatorAction flow={flow} /> });
             }
-            if (flow.decision === "review" && needsPaymentRules) {
+            if (needsPaymentRules) {
               cards.push({ key: "payment-rules", activeKey: "operator", node: <PolicyAction flow={flow} /> });
             }
             if (flow.decision === "pay") cards.push({ key: "sign", activeKey: "sign", node: <SigningHandoff flow={flow} /> });
