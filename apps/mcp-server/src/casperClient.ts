@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { constants } from "node:fs";
+import { constants, existsSync } from "node:fs";
 import { access, realpath } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -277,7 +277,7 @@ function recordScriptPath(): string {
 }
 
 function recordScriptConfiguration(): { path: string; isDefault: boolean; allowed: boolean } {
-  const defaultRepoRoot = resolve(MODULE_DIR, "../../..");
+  const defaultRepoRoot = defaultAgentPayRoot();
   const repoRoot = resolve(process.env.AGENT_PAY_REPO_ROOT ?? defaultRepoRoot);
   const requested = process.env.AGENT_PAY_RECORD_SCRIPT?.trim();
   const path = resolve(repoRoot, requested || DEFAULT_RECORD_SCRIPT);
@@ -385,7 +385,7 @@ function registryStatus(
 }
 
 async function getReceiptAnchorStatus(): Promise<ReceiptAnchorStatus> {
-  const defaultRepoRoot = resolve(MODULE_DIR, "../../..");
+  const defaultRepoRoot = defaultAgentPayRoot();
   const repoRoot = resolve(process.env.AGENT_PAY_REPO_ROOT ?? defaultRepoRoot);
   const requestedScript = process.env.AGENT_PAY_RECEIPT_RECORD_SCRIPT?.trim();
   const script = resolve(
@@ -445,9 +445,14 @@ async function getReceiptAnchorStatus(): Promise<ReceiptAnchorStatus> {
 }
 
 function describeRecordScript(script: string): string {
-  return script === resolve(MODULE_DIR, "../../..", DEFAULT_RECORD_SCRIPT)
+  return script === resolve(defaultAgentPayRoot(), DEFAULT_RECORD_SCRIPT)
     ? DEFAULT_RECORD_SCRIPT
     : "custom record script";
+}
+
+function defaultAgentPayRoot(): string {
+  if (existsSync(resolve(MODULE_DIR, DEFAULT_RECORD_SCRIPT))) return MODULE_DIR;
+  return resolve(MODULE_DIR, "../../..");
 }
 
 async function sameFile(left: string, right: string): Promise<boolean> {

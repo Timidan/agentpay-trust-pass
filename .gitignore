@@ -20,6 +20,12 @@ hackathon-skills-v1.0.tar.gz
 # CLI npm publish staging (main.js is copied in at publish time)
 apps/cli/.publish/main.js
 
+# MCP npm publish staging (generated from reviewed source at package time)
+apps/mcp-server/.publish/main.js
+apps/mcp-server/.publish/SKILL.md
+apps/mcp-server/.publish/LICENSE
+apps/mcp-server/.publish/contracts/
+
 # local audit and planning notes
 /docs/backend-security-review-2026-07-17.md
 /docs/e2e-walkthrough-2026-07-17.md

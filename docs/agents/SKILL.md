@@ -51,16 +51,21 @@ For MCP over stdio:
 {
   "mcpServers": {
     "agent-pay": {
-      "command": "pnpm",
-      "args": ["--filter", "@agent-pay/mcp-server", "stdio"],
+      "command": "npx",
+      "args": ["--yes", "@timidan/agentpay-mcp"],
       "env": {
-        "REPORT_API_URL": "$AGENT_PAY_BASE_URL",
-        "CASPER_SECRET_KEY_PATH": "/absolute/path/to/testnet_secret_key.pem"
+        "AGENT_PAY_API_TOKEN": "<scoped-agent-token>"
       }
     }
   }
 }
 ```
+
+The published package uses `https://agentpay.timidan.xyz/api` by default.
+Override `REPORT_API_URL`, `AGENT_PAY_API_URL`, and
+`AGENT_PAY_RESOURCE_BASE_URL` together to use another deployment. Add
+`CASPER_SECRET_KEY_PATH` and the registry settings only for one-call paid
+assessments; payment checks never need the MCP process to hold a buyer key.
 
 The MCP resource URI is `skill://agentpay`.
 

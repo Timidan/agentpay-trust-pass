@@ -8,7 +8,10 @@
     "stdio": "node --conditions=production dist/stdio.js",
     "stdio:dev": "tsx src/stdio.ts",
     "test": "vitest run",
-    "build": "rm -rf dist && tsc -p tsconfig.json",
+    "build:package": "mkdir -p .publish/contracts/agent-pay-registry/scripts && esbuild src/public-stdio.ts --bundle --platform=node --target=node22 --format=esm --outfile=.publish/main.js && cp ../../docs/agents/SKILL.md .publish/SKILL.md && cp ../../LICENSE .publish/LICENSE && cp ../../contracts/agent-pay-registry/scripts/record-decision-testnet.sh ../../contracts/agent-pay-registry/scripts/record-receipt-testnet.sh .publish/contracts/agent-pay-registry/scripts/ && chmod +x .publish/contracts/agent-pay-registry/scripts/*.sh",
+    "package:check": "npm run build:package && node --import tsx scripts/verify-package.ts",
+    "publish:npm": "npm run package:check && cd .publish && npm publish --access public",
+    "build": "rm -rf dist && tsc -p tsconfig.json && npm run build:package",
     "lint": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
@@ -21,6 +24,7 @@
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
+    "esbuild": "0.28.1",
     "supertest": "^7.1.4",
     "tsx": "^4.21.0",
     "typescript": "^5.8.3",

@@ -133,25 +133,26 @@ npm run smoke    # boot the report API and probe the live capability surface
 
 ## Agent integration
 
-Agents talk to AgentPay over MCP (stdio) or the hosted HTTP bridge. The one-call paid assessment uses the Casper Testnet key configured in the MCP process; the payment-audit API itself remains non-custodial. Add the MCP server to any MCP-capable client and give it a scoped AgentPay token:
+Agents talk to AgentPay over MCP (stdio) or the hosted HTTP bridge. Install is not required: any MCP client that can run `npx` can start the published adapter. Give it a scoped AgentPay token for payment checks and receipts:
 
 ```json
 {
   "mcpServers": {
     "agent-pay": {
-      "command": "pnpm",
-      "args": ["--filter", "@agent-pay/mcp-server", "stdio"],
+      "command": "npx",
+      "args": ["--yes", "@timidan/agentpay-mcp"],
       "env": {
-        "REPORT_API_URL": "https://agentpay.timidan.xyz/api",
-        "AGENT_PAY_API_URL": "https://agentpay.timidan.xyz/api",
-        "AGENT_PAY_RESOURCE_BASE_URL": "https://agentpay.timidan.xyz/api",
-        "AGENT_PAY_API_TOKEN": "<scoped-agent-token>",
-        "CASPER_SECRET_KEY_PATH": "/absolute/path/to/testnet_secret_key.pem"
+        "AGENT_PAY_API_TOKEN": "<scoped-agent-token>"
       }
     }
   }
 }
 ```
+
+The package defaults to `https://agentpay.timidan.xyz/api`. Public quotes,
+payment status, and proof verification work without a token. A one-call paid
+token or account assessment additionally needs a local Testnet buyer key and
+registry configuration; the key stays in the MCP process.
 
 Or call the hosted bridge directly at
 `POST https://agentpay.timidan.xyz/bridge/tools/<name>` with

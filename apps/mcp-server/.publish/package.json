@@ -1,0 +1,35 @@
+{
+  "name": "@timidan/agentpay-mcp",
+  "version": "0.1.0",
+  "description": "AgentPay MCP server for checking Casper x402 charges before signing and verifying what settled.",
+  "type": "module",
+  "bin": {
+    "agentpay-mcp": "main.js"
+  },
+  "files": [
+    "main.js",
+    "SKILL.md",
+    "LICENSE",
+    "contracts"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Timidan/agentpay-trust-pass.git",
+    "directory": "apps/mcp-server"
+  },
+  "homepage": "https://agentpay.timidan.xyz",
+  "keywords": [
+    "casper",
+    "x402",
+    "payments",
+    "agents",
+    "mcp"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}

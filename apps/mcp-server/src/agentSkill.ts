@@ -2,23 +2,18 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const SKILL_PATH = resolve(
-  dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "..",
-  "..",
-  "docs",
-  "agents",
-  "SKILL.md"
-);
+const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
+const SKILL_PATHS = [
+  resolve(MODULE_DIR, "SKILL.md"),
+  resolve(MODULE_DIR, "..", "..", "..", "docs", "agents", "SKILL.md")
+];
 
 export const AGENT_PAY_SKILL_URI = "skill://agentpay";
 
 export function agentPaySkillMarkdown(origin = agentPayPublicOrigin()) {
-  if (!existsSync(SKILL_PATH)) {
-    throw new Error(`AgentPay skill file not found at ${SKILL_PATH}`);
-  }
-  return readFileSync(SKILL_PATH, "utf8").replace(/\$AGENT_PAY_BASE_URL/g, origin);
+  const skillPath = SKILL_PATHS.find((candidate) => existsSync(candidate));
+  if (!skillPath) throw new Error("AgentPay skill file is missing");
+  return readFileSync(skillPath, "utf8").replace(/\$AGENT_PAY_BASE_URL/g, origin);
 }
 
 export function agentPayPublicOrigin() {
