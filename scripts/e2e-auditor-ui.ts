@@ -349,6 +349,8 @@ try {
   let settlementTransactionHash: string | null = null;
   let settlementVerdict: string | null = null;
   let receiptRecorded = false;
+  let receiptAnchored = false;
+  let receiptAnchorTransactionHash: string | null = null;
   if (authMode === "wallet" && finalVerdict === "pay") {
     const signing = page.getByRole("region", { name: "Signing handoff" });
     const paidResponsePromise = page.waitForResponse((response) =>
@@ -388,6 +390,15 @@ try {
       timeout: 60_000
     });
     receiptRecorded = true;
+    const casperRecord = page.locator(
+      'section[aria-label="Casper receipt record"][data-anchor="anchored"]'
+    );
+    await casperRecord.waitFor({ timeout: 180_000 });
+    const anchorHref = await casperRecord.getByRole("link", { name: "cspr.live (Testnet)" })
+      .getAttribute("href");
+    receiptAnchorTransactionHash = anchorHref?.match(/[0-9a-f]{64}/i)?.[0]?.toLowerCase() ?? null;
+    assert.ok(receiptAnchorTransactionHash, "Anchored receipt omitted its Casper transaction hash");
+    receiptAnchored = true;
   }
   assert.deepEqual(browserErrors, [], `Browser errors: ${browserErrors.join(" | ")}`);
 
@@ -415,6 +426,8 @@ try {
     settlementTransactionHash,
     settlementVerdict,
     receiptRecorded,
+    receiptAnchored,
+    receiptAnchorTransactionHash,
     viewport: mobile ? "mobile" : "desktop",
     horizontalOverflow,
     screenshot

@@ -53,6 +53,7 @@ export type ObservationResult = {
     observationHash: string;
   };
   receipt: PurchaseReceipt;
+  anchorState: PurchaseReceipt["anchor"];
 };
 
 export type PaymentReceiptRecord = {

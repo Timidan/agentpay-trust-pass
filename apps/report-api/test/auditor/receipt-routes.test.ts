@@ -36,6 +36,10 @@ describe("response observations and receipt routes", () => {
       settlement: { verdict: "match", transactionHash: TRANSACTION_HASH },
       anchor: { status: "off_chain_verified", transactionHash: null }
     });
+    expect(observed.body.anchorState).toEqual({
+      status: "off_chain_verified",
+      transactionHash: null
+    });
 
     const receiptId = observed.body.receipt.receiptId as string;
     const fetched = await request(context.app)
@@ -60,7 +64,8 @@ describe("response observations and receipt routes", () => {
     expect(replay.body).toEqual({
       created: false,
       observation: first.body.observation,
-      receipt: first.body.receipt
+      receipt: first.body.receipt,
+      anchorState: first.body.anchorState
     });
 
     const conflict = await request(context.app)

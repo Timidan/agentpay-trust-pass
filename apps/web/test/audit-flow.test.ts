@@ -353,7 +353,12 @@ describe("useAuditFlow honest states", () => {
         if (String(url).endsWith("/v1/probes")) return jsonResponse(probeResult);
         if (String(url).endsWith("/v1/checks")) return jsonResponse(reviewCheck("check-1"), 201);
         if (String(url).endsWith("/response-observations")) {
-          return jsonResponse({ created: true, observation: { checkId: "check-1", observationHash: "2".repeat(64) }, receipt: receiptBody }, 201);
+          return jsonResponse({
+            created: true,
+            observation: { checkId: "check-1", observationHash: "2".repeat(64) },
+            receipt: receiptBody,
+            anchorState: { status: "pending", transactionHash: null }
+          }, 201);
         }
         if (String(url).includes("/v1/receipts/")) {
           receiptReads += 1;

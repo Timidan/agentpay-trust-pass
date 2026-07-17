@@ -555,7 +555,7 @@ export function useAuditFlow(options: UseAuditFlowOptions = {}): AuditFlow {
         setObservation({ status: "success", data: result, error: null });
         // The receipt body is immutable; its anchor state is dynamic and polled
         // separately from the hash-bearing body.
-        startReceiptPolling({ receipt: result.receipt, anchorState: result.receipt.anchor });
+        startReceiptPolling({ receipt: result.receipt, anchorState: result.anchorState });
       } catch (cause) {
         setObservation({ status: "error", data: null, error: toApiError(cause) });
       }

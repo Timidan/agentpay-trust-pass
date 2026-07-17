@@ -383,6 +383,7 @@ if (args[0] === "get-state-root-hash") {
         .expect(201);
 
       const receiptId = observed.body.receipt.receiptId as string;
+      expect(observed.body.anchorState).toEqual({ status: "pending", transactionHash: null });
       expect(context.repository.getAnchorJob(`anchor-${receiptId}`)).toMatchObject({
         receiptId,
         status: "pending",

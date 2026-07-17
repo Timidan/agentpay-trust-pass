@@ -332,7 +332,10 @@ export function createAuditorRouter(dependencies: AuditorRouterDependencies): Ro
       requireCheckOwnership(principal, check.operatorPublicKey, check.agentTokenId);
       requireAgentScope(principal, "observations:write", "Agent token cannot record response observations");
       const result = service.recordResponseObservation(check.id, bodyRecord(request));
-      response.status(result.created ? 201 : 200).json(result);
+      response.status(result.created ? 201 : 200).json({
+        ...result,
+        anchorState: service.getReceiptAnchorState(result.receipt.receiptId)
+      });
     });
 
     router.get("/receipts/:id", (request, response) => {
