@@ -2,6 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it } from "vitest";
 import type {
   AuthorizationIntent,
@@ -76,7 +77,7 @@ describe("openSqliteRepository", () => {
     const receipt = makeReceipt(check, policy, providerDecision, settlement, observation);
     const anchorJob = makeAnchorJob(receipt.receiptId);
 
-    expect(first.schemaVersion()).toBe(5);
+    expect(first.schemaVersion()).toBe(6);
     expect(first.saveChallenge(challenge)).toBe(true);
     expect(first.saveSession(session)).toBe(true);
     expect(first.savePolicy(policy)).toBe(true);
@@ -91,7 +92,7 @@ describe("openSqliteRepository", () => {
     repositories.splice(repositories.indexOf(first), 1);
 
     const reopened = open(databasePath);
-    expect(reopened.schemaVersion()).toBe(5);
+    expect(reopened.schemaVersion()).toBe(6);
     expect(reopened.getChallenge(challenge.id)).toEqual(challenge);
     expect(reopened.findSessionByTokenHash(session.tokenHash)).toEqual(session);
     expect(reopened.getCurrentPolicy(OPERATOR)).toEqual(policy);
@@ -146,6 +147,17 @@ describe("openSqliteRepository", () => {
     expect(repository.savePolicy(policy)).toBe(false);
     expect(repository.latestPolicyRevision(OPERATOR)).toBe(1);
     expect(repository.savePolicy({ ...policy, policyId: "changed", policyHash: "9".repeat(64) })).toBe(false);
+    const revisedPolicy: OperatorPolicy = {
+      ...policy,
+      revision: 2,
+      issuedAt: LATER,
+      effectiveAt: LATER,
+      assetDailyCaps: { [ASSET]: "2000000" },
+      policyHash: "8".repeat(64)
+    };
+    expect(repository.savePolicy(revisedPolicy)).toBe(true);
+    expect(repository.latestPolicyRevision(OPERATOR)).toBe(2);
+    expect(repository.getCurrentPolicy(OPERATOR)).toEqual(revisedPolicy);
 
     expect(repository.saveProviderDecision(providerDecision)).toBe(true);
     expect(repository.saveProviderDecision(providerDecision)).toBe(false);
@@ -154,6 +166,53 @@ describe("openSqliteRepository", () => {
     expect(repository.saveCheck(check)).toBe(true);
     expect(repository.saveCheck(check)).toBe(false);
     expect(repository.saveCheck({ ...check, id: "different-id" })).toBe(false);
+  });
+
+  it("preserves a version 5 policy while enabling later revisions", async () => {
+    const databasePath = await temporaryDatabasePath();
+    const policy = makePolicy();
+    const legacy = new DatabaseSync(databasePath);
+    legacy.exec(`
+      CREATE TABLE schema_migrations (
+        version INTEGER PRIMARY KEY,
+        applied_at TEXT NOT NULL
+      ) STRICT;
+      INSERT INTO schema_migrations (version, applied_at) VALUES (5, '${NOW}');
+      CREATE TABLE policies (
+        policy_id TEXT PRIMARY KEY,
+        operator_key TEXT NOT NULL,
+        revision INTEGER NOT NULL,
+        policy_hash TEXT NOT NULL UNIQUE,
+        effective_at TEXT NOT NULL,
+        json TEXT NOT NULL,
+        UNIQUE(operator_key, revision)
+      ) STRICT;
+    `);
+    legacy.prepare(
+      `INSERT INTO policies
+        (policy_id, operator_key, revision, policy_hash, effective_at, json)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(
+      policy.policyId,
+      policy.operatorPublicKey,
+      policy.revision,
+      policy.policyHash,
+      policy.effectiveAt,
+      JSON.stringify(policy)
+    );
+    legacy.close();
+
+    const repository = open(databasePath);
+    expect(repository.schemaVersion()).toBe(6);
+    expect(repository.getCurrentPolicy(OPERATOR)).toEqual(policy);
+    expect(repository.savePolicy({
+      ...policy,
+      revision: 2,
+      issuedAt: LATER,
+      effectiveAt: LATER,
+      policyHash: "8".repeat(64)
+    })).toBe(true);
+    expect(repository.latestPolicyRevision(OPERATOR)).toBe(2);
   });
 
   it("reserves atomically, enforces the daily cap, and remains idempotent", async () => {

@@ -20,7 +20,7 @@ import type {
   StoredPaymentCheck
 } from "./repository.js";
 
-const CURRENT_SCHEMA_VERSION = 5;
+const CURRENT_SCHEMA_VERSION = 6;
 const DECIMAL_INTEGER = /^(0|[1-9][0-9]*)$/;
 const UTC_DAY = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
 
@@ -1230,12 +1230,32 @@ const MIGRATION_5 = `
     ON receipt_shares(receipt_id, expires_at);
 `;
 
+const MIGRATION_6 = `
+  ALTER TABLE policies RENAME TO policies_v5;
+  CREATE TABLE policies (
+    policy_id TEXT NOT NULL,
+    operator_key TEXT NOT NULL,
+    revision INTEGER NOT NULL,
+    policy_hash TEXT NOT NULL UNIQUE,
+    effective_at TEXT NOT NULL,
+    json TEXT NOT NULL,
+    PRIMARY KEY(policy_id, revision),
+    UNIQUE(operator_key, revision)
+  ) STRICT;
+  INSERT INTO policies
+    (policy_id, operator_key, revision, policy_hash, effective_at, json)
+  SELECT policy_id, operator_key, revision, policy_hash, effective_at, json
+  FROM policies_v5;
+  DROP TABLE policies_v5;
+`;
+
 const MIGRATIONS = [
   { version: 1, sql: MIGRATION_1 },
   { version: 2, sql: MIGRATION_2 },
   { version: 3, sql: MIGRATION_3 },
   { version: 4, sql: MIGRATION_4 },
-  { version: 5, sql: MIGRATION_5 }
+  { version: 5, sql: MIGRATION_5 },
+  { version: 6, sql: MIGRATION_6 }
 ] as const;
 
 function tokenFromRow(row: Row): AgentTokenRecord {

@@ -65,7 +65,7 @@ describe("signed operator routes", () => {
     });
   });
 
-  it("installs one exact signed policy revision and rejects its replay", async () => {
+  it("stores sequential signed policy revisions and rejects a replay", async () => {
     const context = createContext();
     const session = await createSession(context.app);
     const policy = policyRevision(1);
@@ -94,6 +94,29 @@ describe("signed operator routes", () => {
       .send({ challengeId: signed.challengeId, policy })
       .expect(409);
     expect(replay.body.code).toBe("policy_revision_conflict");
+
+    const revised = policyRevision(2);
+    revised.assetDailyCaps[ASSET] = "2000000";
+    revised.policyHash = operatorPolicyHash(revised);
+    const revisedSignature = await signArtifact(
+      context.app,
+      session.authorization,
+      policyAction(revised)
+    );
+    revised.signatureMessage = revisedSignature.message;
+    revised.signature = signMessage(revisedSignature.message);
+    await request(context.app)
+      .post("/v1/policies/revisions")
+      .set("Authorization", session.authorization)
+      .set("Origin", ORIGIN)
+      .send({ challengeId: revisedSignature.challengeId, policy: revised })
+      .expect(201);
+
+    const currentRevision = await request(context.app)
+      .get("/v1/policies/current")
+      .set("Authorization", session.authorization)
+      .expect(200);
+    expect(currentRevision.body.policy).toEqual(revised);
   });
 
   it("rejects revision skips and policy content altered after challenge signing", async () => {
@@ -357,7 +380,7 @@ async function issueAgentToken(
 
 function policyRevision(revision: number, operatorPublicKey = OPERATOR): OperatorPolicy {
   const policy: OperatorPolicy = {
-    policyId: `policy-${revision}`,
+    policyId: "policy-main",
     operatorPublicKey,
     revision,
     issuedAt: NOW,
