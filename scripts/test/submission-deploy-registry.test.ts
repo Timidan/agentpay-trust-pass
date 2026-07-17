@@ -249,21 +249,22 @@ async function createRegistryDeployFixture(): Promise<{
   await writeFile(envFile, "CSPR_CLOUD_ACCESS_TOKEN=configured\n");
   await writeFile(
     clientPath,
-    `#!/usr/bin/env node
-const args = process.argv.slice(2);
-if (args[0] === "account-address") {
-  console.log("account-hash-${"d".repeat(64)}");
-} else if (args[0] === "query-balance") {
-  console.log(JSON.stringify({ result: { balance: "155000000000" } }));
-} else if (args[0] === "get-account") {
-  console.log(JSON.stringify({ result: { account: { named_keys: [
-    { name: "agentpay_registry_v2_package", key: "hash-${PACKAGE_HASH}" },
-    { name: "agentpay_registry_v2", key: "hash-${CONTRACT_HASH}" }
-  ] } } }));
-} else {
-  console.error("unsupported casper-client command");
-  process.exit(2);
-}
+    `#!/usr/bin/env sh
+case "$1" in
+  account-address)
+    printf '%s' 'account-hash-${"d".repeat(64)}'
+    ;;
+  query-balance)
+    printf '%s' '{"result":{"balance":"155000000000"}}'
+    ;;
+  get-account)
+    printf '%s' '{"result":{"account":{"named_keys":[{"name":"agentpay_registry_v2_package","key":"hash-${PACKAGE_HASH}"},{"name":"agentpay_registry_v2","key":"hash-${CONTRACT_HASH}"}]}}}'
+    ;;
+  *)
+    printf '%s\n' 'unsupported casper-client command' >&2
+    exit 2
+    ;;
+esac
 `
   );
   await writeFile(

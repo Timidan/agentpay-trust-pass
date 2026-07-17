@@ -1,0 +1,13 @@
+{
+  "allowedNetworks": [
+    "casper:casper-test"
+  ],
+  "assetDailyCaps": {
+    "a7888ddfbc31455396f3c57583547962a28bcb3b20e60d6be2dea3a8f2991d4d": "1000000"
+  },
+  "maximumAuthorizationWindowSeconds": 300,
+  "maximumConcurrentReservations": 5,
+  "evidenceMaxAgeSeconds": 600,
+  "reviewOnInvestmentAdvisories": false,
+  "allowPinnedResourceSchemeMismatch": false
+}

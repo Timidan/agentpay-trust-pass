@@ -7,22 +7,37 @@ import {
   type SubjectRef
 } from "@agent-pay/core";
 import type { LiveEvidenceDataset } from "./liveEvidence.js";
+import { fetchBoundedJson } from "./httpJson.js";
+import {
+  defaultEvidenceNetwork,
+  evidenceRpcUrl,
+  type EvidenceNetwork
+} from "./evidenceNetwork.js";
 
 /**
- * Counterparty (account) evidence from the public Casper node. Confirmed live
- * (Casper 2.0 testnet): `state_get_entity` returns the account's associated
+ * Account evidence from a public Casper node. `state_get_entity` returns
+ * the account's associated
  * keys, action thresholds, named keys and main purse; `query_balance` returns
  * the purse balance. All named-param JSON-RPC. Best-effort: a lookup failure
  * degrades to `exists: null` (surfaced as "not checked"), never a false CLEAR.
  */
 
-const DEFAULT_CASPER_RPC_URL = "https://node.testnet.casper.network/rpc";
+const RPC_ATTEMPTS = 2;
+const RPC_RETRY_DELAY_MS = 150;
 
 type EntityIdentifier = { PublicKey: string } | { AccountHash: string };
 
-export async function buildAccountEvidence(subject: SubjectRef): Promise<LiveEvidenceDataset> {
-  const rpcUrl = process.env.CASPER_RPC_URL ?? DEFAULT_CASPER_RPC_URL;
-  const network = "casper-testnet";
+export type AccountEvidenceOptions = {
+  network?: EvidenceNetwork;
+  rpcUrl?: string;
+};
+
+export async function buildAccountEvidence(
+  subject: SubjectRef,
+  options: AccountEvidenceOptions = {}
+): Promise<LiveEvidenceDataset> {
+  const network = options.network ?? defaultEvidenceNetwork();
+  const rpcUrl = options.rpcUrl ?? evidenceRpcUrl(network);
   const observedAt = new Date().toISOString();
 
   const entityIdentifier: EntityIdentifier = subject.publicKey
@@ -80,7 +95,8 @@ export async function buildAccountEvidence(subject: SubjectRef): Promise<LiveEvi
   }
 
   const key = subject.packageHash.slice(0, 16);
-  const datasetId = `trust-account-${key}-${Date.now().toString(36)}`;
+  const datasetId =
+    `trust-account-${network}-${key}-${Date.now().toString(36)}`;
 
   const identityFacts: Record<string, EvidenceFactValue> = {};
   if (exists != null) identityFacts.exists = exists;
@@ -109,6 +125,7 @@ export async function buildAccountEvidence(subject: SubjectRef): Promise<LiveEvi
       network: report.record.network,
       subject: report.record.subject,
       observedAt: report.record.observedAt,
+      sourceUrl: report.record.sourceUrl,
       recordHash: report.reportHash,
       facts: report.record.facts
     }))
@@ -189,21 +206,35 @@ function evidenceRecord(input: {
 }
 
 async function rpc<T>(rpcUrl: string, method: string, params: unknown): Promise<T> {
-  const response = await fetch(rpcUrl, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", id: randomUUID(), method, params })
-  });
-  const body = (await response.json()) as { result?: T; error?: { code?: number; message?: string } };
-  if (body.error) {
-    const err = new Error(body.error.message ?? `Casper RPC ${method} failed`) as Error & { rpcCode?: number };
-    err.rpcCode = body.error.code;
-    throw err;
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= RPC_ATTEMPTS; attempt += 1) {
+    try {
+      const { response, body } = await fetchBoundedJson<{
+        result?: T;
+        error?: { code?: number; message?: string };
+      }>(rpcUrl, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: randomUUID(), method, params })
+      });
+      if (body.error) {
+        const error = new Error(body.error.message ?? `Casper RPC ${method} failed`) as Error & {
+          rpcCode?: number;
+        };
+        error.rpcCode = body.error.code;
+        throw error;
+      }
+      if (!response.ok || body.result == null) {
+        throw new Error(`Casper RPC ${method} failed with ${response.status}`);
+      }
+      return body.result;
+    } catch (error) {
+      if ((error as { rpcCode?: unknown } | null)?.rpcCode !== undefined) throw error;
+      lastError = error;
+      if (attempt < RPC_ATTEMPTS) await delay(RPC_RETRY_DELAY_MS);
+    }
   }
-  if (!response.ok || body.result == null) {
-    throw new Error(`Casper RPC ${method} failed with ${response.status}`);
-  }
-  return body.result;
+  throw lastError ?? new Error(`Casper RPC ${method} failed`);
 }
 
 function isNotFound(error: unknown): boolean {
@@ -223,4 +254,8 @@ function asString(value: unknown): string | null {
 }
 function asNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }

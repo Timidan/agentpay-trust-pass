@@ -36,7 +36,7 @@ const agentPayButtonVariants = cva(
         explorer:
           "explorer-link rounded-md bg-transparent px-0 text-primary shadow-none hover:text-primary/80 hover:underline",
         nav:
-          "hero-nav-link-control rounded-lg bg-card/85 text-card-foreground shadow-sm backdrop-blur-md hover:bg-card"
+          "hero-nav-link-control rounded-lg bg-card text-card-foreground shadow-sm hover:bg-secondary"
       },
       size: {
         default: "h-9 px-3.5 py-2",

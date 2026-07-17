@@ -7,7 +7,7 @@
 // only releases the paid report after the settlement transaction is confirmed executed on Casper.
 //
 // Usage:
-//   REPORT_API_URL=http://127.0.0.1:4021 \
+//   REPORT_API_URL=https://agentpay.timidan.xyz/api \
 //   AGENT_PAY_SUBJECT=hash-<64 hex package hash> \
 //   CASPER_SECRET_KEY_PATH=.agentpay-testnet-key/funded_secret_key.pem \
 //   tsx scripts/x402-buy.ts
@@ -40,7 +40,13 @@ type Quote = {
 };
 
 async function main(): Promise<void> {
-  const reportApiUrl = (process.env.REPORT_API_URL ?? "http://127.0.0.1:4021").replace(/\/+$/, "");
+  const configuredReportApiUrl = process.env.REPORT_API_URL?.trim();
+  if (!configuredReportApiUrl) {
+    throw new Error(
+      "REPORT_API_URL is required; use https://agentpay.timidan.xyz/api for the hosted service"
+    );
+  }
+  const reportApiUrl = configuredReportApiUrl.replace(/\/+$/, "");
   const secretKeyPath = process.env.CASPER_SECRET_KEY_PATH;
   if (!secretKeyPath) {
     throw new Error("CASPER_SECRET_KEY_PATH is required to sign the x402 payment authorization");

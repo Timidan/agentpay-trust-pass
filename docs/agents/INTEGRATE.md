@@ -1,8 +1,9 @@
 # Integrate your agent with AgentPay
 
-AgentPay is an x402-paid evidence desk and Trust Signal for Casper agents. Your
-agent asks AgentPay for evidence, pays with its own Casper wallet, verifies the
-Merkle proof, and records the resulting decision on Casper.
+AgentPay checks a Casper x402 charge before your agent signs it. It verifies the
+service, recipient, token, amount, authorization, and local spending policy,
+then returns `PAY`, `REVIEW`, or `BLOCK`. AgentPay also offers paid token and
+account checks backed by live Casper evidence and a verifiable receipt.
 
 This is the human orientation. The machine-readable skill is the source of
 truth for exact tool names, request bodies, response shapes, and security
@@ -16,20 +17,24 @@ The skill is also available to MCP clients as `skill://agentpay`.
 
 ## The integration in five moves
 
-Everything is agent -> AgentPay. The web UI is observe-only documentation and
-demo surface; it does not hold wallet keys and it does not approve actions for
-the agent.
+Everything is agent -> AgentPay. Private keys stay with the agent or local CLI.
+The web UI never asks a user to paste or upload one.
 
-1. Install the skill with `curl $AGENT_PAY_BASE_URL/skill.md`, or read the MCP
-   resource `skill://agentpay`.
-2. Connect to the AgentPay MCP server. MCP is the primary agent channel; the
-   HTTP bridge under `/tools/<name>` is secondary.
-3. Quote or assess a subject. Use `assess_subject` for the full local MCP rail,
-   or use `quote_report` plus your own signing/payment path.
-4. Pay the x402 requirement with your own Casper key. AgentPay never takes a
-   private key.
-5. Verify the report, then record `approved`, `needs_review`, or `rejected`.
+1. For local stdio MCP, create a scoped AgentPay API token. For the hosted HTTP
+   bridge, use the separate bridge bearer token supplied by the operator.
+2. Capture the service request and its real x402 `402 Payment Required`
+   response.
+3. Call `check_x402_payment`. Stop on `REVIEW` or `BLOCK`.
+4. On `PAY`, sign the approved authorization locally and retry the service.
+5. Call `verify_x402_settlement`, then keep the receipt returned by
+   `get_payment_receipt`.
 
-The verdict words are `CLEAR`, `CAUTION`, and `DANGER`. They come from a pure
-deterministic rule engine. Any LLM text is narration only and cannot override
-the rule result.
+The hosted API is `https://agentpay.timidan.xyz/api`; the hosted tool bridge is
+`https://agentpay.timidan.xyz/bridge`. Protected bridge calls require a bearer
+token. Do not use the scoped API token as the bridge token: they protect
+different boundaries.
+
+Token and account checks are a second surface built on the same paid evidence
+rail. Use `assess_subject` or `assess_account` when you want `CLEAR`, `CAUTION`,
+or `DANGER` for a Casper asset or counterparty. Those verdicts come from fixed
+rules. Narration can explain a result but cannot change it.

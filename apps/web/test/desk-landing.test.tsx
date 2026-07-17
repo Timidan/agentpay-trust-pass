@@ -28,13 +28,89 @@ afterEach(() => {
 });
 
 describe("Landing integration", () => {
-  it("renders the Desk landing by default and opens the console on Launch", () => {
+  it("renders the current landing by default and opens the console", () => {
     render(<App />);
-    // Desk-unique copy proves LandingDesk (not the old hero) is mounted.
-    expect(screen.getByText("One rail, four stops, always in order.")).toBeTruthy();
-    // Launch opens the console workspace.
+    expect(screen.getByText("From the charge to a receipt on Casper.")).toBeTruthy();
     fireEvent.click(screen.getAllByRole("button", { name: /open the console/i })[0]);
-    expect(screen.getByText("Evidence desk")).toBeTruthy();
+    expect(screen.getByText("Evidence console")).toBeTruthy();
+  });
+
+  it("explains the pre-payment checks without showing an invented service result", () => {
+    render(<App />);
+
+    expect(screen.getByText("What AgentPay checks")).toBeTruthy();
+    expect(document.body.textContent).not.toContain("service.example");
+    expect(document.body.textContent).not.toMatch(/\b(?:hash-)?[a-f0-9]{64}\b/i);
+  });
+
+  it("shows current bridge, payment, and registry status from the public APIs", async () => {
+    const registryPackageHash =
+      "hash-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith("/api/health")) {
+          return new Response(JSON.stringify({
+            ok: true,
+            service: "report-api",
+            checkedAt: "2026-07-17T08:00:00.000Z",
+            tokenEvidence: {
+              status: "complete",
+              source: "CSPR.live + Casper RPC",
+              available: ["supplyControl", "contractAge", "holderCount", "topHolderShare"],
+              unavailable: []
+            }
+          }), { status: 200, headers: { "content-type": "application/json" } });
+        }
+        if (url.endsWith("/health")) {
+          return new Response(JSON.stringify({ ok: true }), { status: 200 });
+        }
+        if (url.endsWith("/tools/payment_status")) {
+          return new Response(
+            JSON.stringify({
+              status: "ready",
+              reason: null,
+              checkedAt: "2026-07-17T08:00:00.000Z",
+              checks: [],
+              supportedKind: {
+                x402Version: 2,
+                scheme: "exact",
+                network: "casper:casper-test",
+              },
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        if (url.endsWith("/tools/registry_status")) {
+          return new Response(
+            JSON.stringify({
+              status: "ready",
+              reason: null,
+              checkedAt: "2026-07-17T08:00:00.000Z",
+              checks: [],
+              registryPackageHash,
+              recordScript: "scripts/record-decision.sh",
+              rpc: null,
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        return new Response(JSON.stringify({ entries: [] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }),
+    );
+
+    render(<App />);
+
+    expect(await screen.findByText("Agent bridge live")).toBeTruthy();
+    expect(screen.getByText("x402 payments ready")).toBeTruthy();
+    expect(screen.getByText("Registry ready")).toBeTruthy();
+    expect(screen.getByText("Full token data ready")).toBeTruthy();
+    expect(screen.getByText("hash-01234567…abcdef")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Copy current registry package hash" })).toBeTruthy();
   });
 });
 
@@ -54,66 +130,6 @@ describe("AgentPayIconAction", () => {
   });
 });
 
-import LandingDesk from "../src/landing/LandingDesk";
-import { AgentPayTooltipProvider as Provider } from "../src/components/AgentPayUi";
-
-describe("LandingDesk theme toggle", () => {
-  const noop = () => {};
-
-  it("shows the correct aria-label per theme and fires onToggleTheme", () => {
-    const onToggleTheme = vi.fn();
-    const { rerender } = render(
-      <Provider>
-        <LandingDesk
-          theme="light"
-          onToggleTheme={onToggleTheme}
-          onOpenApp={noop}
-          onOpenTrust={noop}
-          onOpenFeed={noop}
-          onOpenAgents={noop}
-        />
-      </Provider>
-    );
-    const toLight = screen.getByRole("button", { name: "Switch to dark mode" });
-    fireEvent.click(toLight);
-    expect(onToggleTheme).toHaveBeenCalledTimes(1);
-
-    rerender(
-      <Provider>
-        <LandingDesk
-          theme="dark"
-          onToggleTheme={onToggleTheme}
-          onOpenApp={noop}
-          onOpenTrust={noop}
-          onOpenFeed={noop}
-          onOpenAgents={noop}
-        />
-      </Provider>
-    );
-    expect(screen.getByRole("button", { name: "Switch to light mode" })).toBeTruthy();
-  });
-});
-
-describe("Illustrative data labeling", () => {
-  const noop = () => {};
-  it("shows a visible Example/Demo qualifier on the feed", () => {
-    render(
-      <Provider>
-        <LandingDesk
-          theme="light"
-          onToggleTheme={noop}
-          onOpenApp={noop}
-          onOpenTrust={noop}
-          onOpenFeed={noop}
-          onOpenAgents={noop}
-        />
-      </Provider>
-    );
-    // Visible (not sr-only) qualifier — asserts on the specific visible bar string.
-    expect(screen.getByText(/example · settlement desk/i)).toBeTruthy();
-  });
-});
-
 describe("Theme persistence", () => {
   it("initializes theme from localStorage", () => {
     window.localStorage.setItem("agentpay-theme", "dark");
@@ -125,42 +141,40 @@ describe("Theme persistence", () => {
 });
 
 describe("Ask/Feed entry points", () => {
-  it("exposes Ask + Feed links on the landing and opens the Ask page (and returns home)", () => {
-    render(<App />);
-    // Both entry points are present on the Desk landing (nav + footer both expose them).
-    expect(screen.getAllByRole("button", { name: "Check a token" }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("button", { name: "Recent checks" }).length).toBeGreaterThan(0);
-    // "Check a token" opens the Ask page (AskPage-unique copy).
-    fireEvent.click(screen.getAllByRole("button", { name: "Check a token" })[0]);
-    expect(screen.getByText(/buy a Trust Pass before you buy the token/i)).toBeTruthy();
-    // "Overview" returns to the landing.
-    fireEvent.click(screen.getByText("Overview"));
-    expect(screen.getByText("One rail, four stops, always in order.")).toBeTruthy();
-  });
-});
-
-describe("Trust Pass positioning", () => {
-  const noop = () => {};
-
-  it("frames AgentPay as a consumer Trust Pass with a receipt", () => {
-    render(
-      <Provider>
-        <LandingDesk
-          theme="light"
-          onToggleTheme={noop}
-          onOpenApp={noop}
-          onOpenTrust={noop}
-          onOpenFeed={noop}
-          onOpenAgents={noop}
-          onOpenCounterparty={noop}
-        />
-      </Provider>
+  it("labels the two checks and shared results honestly and opens each route", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ entries: [] }), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        })
+      )
     );
+    render(<App />);
 
-    expect(screen.getByRole("heading", { name: /a verdict people can carry/i })).toBeTruthy();
-    expect(screen.getByLabelText(/example AgentPay Trust Pass receipt/i)).toBeTruthy();
-    expect(screen.getByText("Before a swap")).toBeTruthy();
-    expect(screen.getByText("Before a deal")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Two paid checks, and the results people share." })).toBeTruthy();
+    expect(screen.getByText("CSPR.name")).toBeTruthy();
+    expect(screen.getByText("CSPR.trade")).toBeTruthy();
+    expect(screen.getByText("CSPR.live")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Wallet check" })).toBeTruthy();
+    expect(document.body.textContent).not.toContain("Counterparty check");
+    expect(screen.getAllByRole("button", { name: "Check a token" }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Check a wallet" })).toBeTruthy();
+    const sharedResultsButtons = screen.getAllByRole("button", { name: "See shared results" });
+    expect(sharedResultsButtons.length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Check a token" })[0]);
+    expect(screen.getByRole("heading", { name: "Check a token before you buy it." })).toBeTruthy();
+    fireEvent.click(screen.getByText("Overview"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Check a wallet" }));
+    expect(screen.getByRole("heading", { name: "Check a Casper account before you send funds." })).toBeTruthy();
+    fireEvent.click(screen.getByText("Overview"));
+
+    const currentSharedResultsButtons = screen.getAllByRole("button", { name: "See shared results" });
+    fireEvent.click(currentSharedResultsButtons[currentSharedResultsButtons.length - 1]);
+    expect(screen.getByRole("heading", { name: "Checks people chose to share" })).toBeTruthy();
   });
 });
 
@@ -171,7 +185,7 @@ describe("Agent integration entry point", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Agent docs" })[0]);
 
     expect(screen.getByRole("heading", { name: "How agents talk to AgentPay" })).toBeTruthy();
-    expect(screen.getByText("curl http://127.0.0.1:4021/skill.md")).toBeTruthy();
+    expect(screen.getByText("curl http://localhost:3000/api/skill.md")).toBeTruthy();
     expect(screen.getByText("skill://agentpay")).toBeTruthy();
   });
 

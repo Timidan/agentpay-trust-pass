@@ -1,0 +1,26 @@
+[Unit]
+Description=AgentPay report API
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=agentpay
+Group=agentpay
+WorkingDirectory=/opt/agentpay
+EnvironmentFile=/etc/agentpay.env
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node --conditions=production apps/report-api/dist/server.js
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=30
+KillSignal=SIGTERM
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/agentpay
+
+[Install]
+WantedBy=multi-user.target

@@ -67,8 +67,8 @@ describe("NodeRpcClient", () => {
       name: "Casper X402 Token",
       symbol: "X402",
       decimals: 9,
-      mintAuthorityOpen: null,
-      supplyMutable: null,
+      mintBurnEnabled: false,
+      publicMintEntrypoint: false,
       holderConcentrationPct: null,
       contractAgeBlocks: null,
       apiVersion: "2.0.0",
@@ -84,8 +84,47 @@ describe("NodeRpcClient", () => {
       { state_identifier: null, key: `hash-${CONTRACT_HASH}`, path: [] },
       { state_identifier: null, key: `uref-${"a".repeat(64)}-007`, path: [] },
       { state_identifier: null, key: `uref-${"b".repeat(64)}-007`, path: [] },
-      { state_identifier: null, key: `uref-${"c".repeat(64)}-007`, path: [] }
+      { state_identifier: null, key: `uref-${"c".repeat(64)}-007`, path: [] },
+      { state_identifier: null, key: `uref-${"e".repeat(64)}-007`, path: [] }
     ]);
+  });
+
+  it("reports an enabled CEP-18 mint and burn setting from Casper state", async () => {
+    const rpcUrl = await startRpcServer((request) => {
+      const reply = stateReply(request);
+      if ((request.params as { key?: unknown }).key === `uref-${"e".repeat(64)}-007`) {
+        return success(request, metadataResult("U8", 1));
+      }
+      return reply;
+    });
+    const client = new NodeRpcClient({ rpcUrl, now: () => new Date(OBSERVED_AT) });
+
+    await expect(client.loadPaymentAssetEvidence(assetInput())).resolves.toMatchObject({
+      mintBurnEnabled: true
+    });
+  });
+
+  it("records a public mint entry point when the CEP-18 setting is absent", async () => {
+    const rpcUrl = await startRpcServer((request) => {
+      const reply = stateReply(request);
+      if (isContractQuery(request)) {
+        const contract = getStoredVariant(reply, "Contract");
+        contract.named_keys = (contract.named_keys as Array<{ name: string }>).filter(
+          (key) => key.name !== "enable_mint_burn"
+        );
+        contract.entry_points = [authorizationEntryPoint(), { name: "mint", access: "Public" }];
+      }
+      return reply;
+    });
+    const client = new NodeRpcClient({ rpcUrl, now: () => new Date(OBSERVED_AT) });
+
+    const evidence = await client.loadPaymentAssetEvidence(assetInput());
+
+    expect(evidence).toMatchObject({
+      mintBurnEnabled: null,
+      publicMintEntrypoint: true
+    });
+    expect(evidence.missing).not.toContain("mintBurnEnabled");
   });
 
   it("selects the highest non-disabled package version", async () => {
@@ -95,6 +134,22 @@ describe("NodeRpcClient", () => {
     const evidence = await client.loadPaymentAssetEvidence(assetInput());
 
     expect(evidence.activeContractHash).toBe(CONTRACT_HASH);
+  });
+
+  it("supports tuple-form disabled package versions from Casper RPC", async () => {
+    const rpcUrl = await startRpcServer((request) => {
+      const reply = stateReply(request);
+      if ((request.params as { key?: unknown }).key === `hash-${PACKAGE_HASH}`) {
+        const pkg = getStoredVariant(reply, "ContractPackage");
+        pkg.disabled_versions = [[2, 3]];
+      }
+      return reply;
+    });
+    const client = new NodeRpcClient({ rpcUrl, now: () => new Date(OBSERVED_AT) });
+
+    await expect(client.loadPaymentAssetEvidence(assetInput())).resolves.toMatchObject({
+      activeContractHash: CONTRACT_HASH
+    });
   });
 
   it("rejects a similarly named entry point with a different argument type", async () => {
@@ -157,9 +212,38 @@ describe("NodeRpcClient", () => {
       name: null,
       symbol: null,
       decimals: null,
-      missing: ["activeContractHash", "authorizationEntrypoint", "decimals", "name", "package", "symbol"]
+      missing: [
+        "activeContractHash",
+        "authorizationEntrypoint",
+        "decimals",
+        "name",
+        "package",
+        "supplyControl",
+        "symbol"
+      ]
     });
     expect(evidence.sourceErrors[0]).toMatch(/package: Casper RPC query_global_state failed \(-32003\)/);
+  });
+
+  it("does not report a missing package when the package query times out", async () => {
+    const rpcUrl = await startRpcServer((request) => ({
+      delayMs: 100,
+      body: { jsonrpc: "2.0", id: request.id, result: packageResult() }
+    }));
+    const client = new NodeRpcClient({
+      rpcUrl,
+      timeoutMs: 20,
+      now: () => new Date(OBSERVED_AT)
+    });
+
+    const evidence = await client.loadPaymentAssetEvidence(assetInput());
+
+    expect(evidence.packageExists).toBeNull();
+    expect(evidence.authorizationEntrypoint).toBeNull();
+    expect(evidence.missing).toEqual(expect.arrayContaining(["package", "authorizationEntrypoint"]));
+    expect(evidence.sourceErrors[0]).toBe(
+      "package: Casper RPC query_global_state timed out after 20ms"
+    );
   });
 
   it("rejects JSON-RPC error envelopes and missing results", async () => {
@@ -268,6 +352,7 @@ function stateReply(request: RpcRequest): RpcReply {
   if (key === `uref-${"a".repeat(64)}-007`) return success(request, metadataResult("String", "Casper X402 Token"));
   if (key === `uref-${"b".repeat(64)}-007`) return success(request, metadataResult("String", "X402"));
   if (key === `uref-${"c".repeat(64)}-007`) return success(request, metadataResult("U8", 9));
+  if (key === `uref-${"e".repeat(64)}-007`) return success(request, metadataResult("U8", 0));
   return {
     body: {
       jsonrpc: "2.0",
@@ -326,7 +411,8 @@ function contractResult() {
       named_keys: [
         { name: "name", key: `uref-${"a".repeat(64)}-007` },
         { name: "symbol", key: `uref-${"b".repeat(64)}-007` },
-        { name: "decimals", key: `uref-${"c".repeat(64)}-007` }
+        { name: "decimals", key: `uref-${"c".repeat(64)}-007` },
+        { name: "enable_mint_burn", key: `uref-${"e".repeat(64)}-007` }
       ],
       entry_points: [authorizationEntryPoint()]
     }

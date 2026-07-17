@@ -17,6 +17,8 @@ export type AuditorRuntimeOptions = {
   databasePath: string;
   rpcUrl: string;
   publicOrigin: string;
+  sessionCookiePath?: string;
+  allowLoopbackProbeTargets?: boolean;
   now?: () => Date;
 };
 
@@ -38,6 +40,7 @@ export function createAuditorRuntime(options: AuditorRuntimeOptions): AuditorRun
     const auth = new AuditorAuth({
       repository,
       publicOrigin: normalizeOrigin(options.publicOrigin),
+      cookiePath: options.sessionCookiePath,
       now: options.now
     });
     const anchorPublisher = createReceiptAnchorPublisherFromEnv({
@@ -52,7 +55,12 @@ export function createAuditorRuntime(options: AuditorRuntimeOptions): AuditorRun
       anchorPublisher: anchorPublisher ?? undefined,
       now: options.now
     });
-    const probe = new X402Probe({ allowHttp: isLoopbackOrigin(auth.publicOrigin), now: options.now });
+    const allowLoopback = options.allowLoopbackProbeTargets ?? false;
+    const probe = new X402Probe({
+      allowHttp: allowLoopback,
+      allowLoopback,
+      now: options.now
+    });
     const router = createAuditorRouter({ repository, auth, service, probe });
     return {
       router,
@@ -78,15 +86,18 @@ export function auditorRuntimeOptionsFromEnv(
 ): AuditorRuntimeOptions {
   const port = validPort(env.REPORT_API_PORT ?? "4021");
   const host = env.REPORT_API_HOST?.trim() || "127.0.0.1";
+  const publicOrigin =
+    env.AGENTPAY_PUBLIC_ORIGIN?.trim() ||
+    env.REPORT_API_PUBLIC_URL?.trim() ||
+    `http://${host}:${port}`;
   return {
+    allowLoopbackProbeTargets: env.AGENTPAY_ALLOW_LOOPBACK_PROBES === "1",
     databasePath: env.AGENTPAY_DATABASE_PATH?.trim()
       ? resolve(REPO_ROOT, env.AGENTPAY_DATABASE_PATH.trim())
       : DEFAULT_DATABASE_PATH,
     rpcUrl: env.CASPER_RPC_URL?.trim() || DEFAULT_CASPER_RPC_URL,
-    publicOrigin:
-      env.AGENTPAY_PUBLIC_ORIGIN?.trim() ||
-      env.REPORT_API_PUBLIC_URL?.trim() ||
-      `http://${host}:${port}`
+    sessionCookiePath: env.AGENTPAY_SESSION_COOKIE_PATH?.trim() || "/v1",
+    publicOrigin
   };
 }
 
@@ -100,9 +111,4 @@ function validPort(value: string): number {
     throw new TypeError("REPORT_API_PORT must be an integer from 1 to 65535");
   }
   return port;
-}
-
-function isLoopbackOrigin(value: string): boolean {
-  const hostname = new URL(value).hostname;
-  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
 }

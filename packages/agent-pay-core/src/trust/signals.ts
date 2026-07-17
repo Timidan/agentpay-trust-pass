@@ -2,8 +2,10 @@ import type { EvidenceRecord } from "../types.js";
 
 export type Tri = boolean | null;
 export type SubjectSignals = {
-  mintAuthorityOpen: Tri;
-  supplyRenounced: Tri;
+  /** Value of the CEP-18 enable_mint_burn installation flag. */
+  mintBurnEnabled: Tri;
+  /** Whether the active contract exposes an entry point named `mint` with public access. */
+  publicMintEntrypoint: Tri;
   holderCount: number | null;
   topHolderPct: number | null;
   contractAgeBlocks: number | null;
@@ -12,7 +14,7 @@ export type SubjectSignals = {
 };
 
 const EMPTY: SubjectSignals = {
-  mintAuthorityOpen: null, supplyRenounced: null, holderCount: null,
+  mintBurnEnabled: null, publicMintEntrypoint: null, holderCount: null,
   topHolderPct: null, contractAgeBlocks: null, lpHolderCount: null, liquidityDepth: null,
 };
 
@@ -22,10 +24,14 @@ function num(v: unknown): number | null { return typeof v === "number" ? v : nul
 export function extractSignals(records: EvidenceRecord[]): SubjectSignals {
   const facts: Record<string, unknown> = {};
   for (const r of records) Object.assign(facts, r.facts);
+  return subjectSignalsFromFacts(facts);
+}
+
+export function subjectSignalsFromFacts(facts: Record<string, unknown>): SubjectSignals {
   return {
     ...EMPTY,
-    mintAuthorityOpen: bool(facts.mintAuthorityOpen),
-    supplyRenounced: bool(facts.supplyRenounced),
+    mintBurnEnabled: bool(facts.mintBurnEnabled),
+    publicMintEntrypoint: bool(facts.publicMintEntrypoint),
     holderCount: num(facts.holderCount),
     topHolderPct: num(facts.topHolderPct),
     contractAgeBlocks: num(facts.contractAgeBlocks),

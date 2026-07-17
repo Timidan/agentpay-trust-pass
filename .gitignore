@@ -15,3 +15,23 @@ target/
 # large local media kept out of the repo
 prototypes/
 videos/
+hackathon-skills-v1.0.tar.gz
+
+# CLI npm publish staging (main.js is copied in at publish time)
+apps/cli/.publish/main.js
+
+# local audit and planning notes
+/docs/backend-security-review-2026-07-17.md
+/docs/e2e-walkthrough-2026-07-17.md
+/docs/finals-upgrade-board.md
+/docs/ui/2026-07-16-aave-style-brief.md
+/docs/ui/2026-07-16-final-ui-plan.md
+
+# hackathon process docs (working notes, not product documentation)
+/docs/HACKATHON.md
+/docs/dorahacks-submission.md
+/docs/superpowers/
+/docs/handoffs/
+/docs/research/
+/.superpowers/
+/docs/security/

@@ -8,6 +8,7 @@ vi.mock("../src/api", async (importOriginal) => {
   return {
     ...actual,
     assessSubject: vi.fn(),
+    getReportHealth: vi.fn().mockResolvedValue(null),
     resolveToken: vi.fn()
   };
 });
@@ -17,7 +18,7 @@ const dangerVerdict: Verdict = {
   decision: "rejected",
   flags: [
     {
-      code: "mint_authority_open",
+      code: "cep18_mint_burn_enabled",
       severity: "danger",
       message: "Mint authority is not renounced, so supply is unlimited"
     }
@@ -31,11 +32,21 @@ const dangerVerdict: Verdict = {
     packageHash: "a".repeat(64),
     raw: "b".repeat(64)
   },
+  evidenceNetwork: "casper-testnet",
+  payment: {
+    amount: "10000",
+    amountDisplay: "0.00001",
+    asset: "9".repeat(64),
+    assetSymbol: "X402",
+    assetDecimals: 9,
+    network: "casper:casper-test"
+  },
   paymentReceiptHash: "c".repeat(64),
   settlementTxHash: "d".repeat(64),
   decisionTxHash: "e".repeat(64),
   datasetRoot: "f".repeat(64),
   policyHash: "0".repeat(64),
+  settlementExplorerUrl: `https://testnet.cspr.live/transaction/${"d".repeat(64)}`,
   explorerUrl: `https://testnet.cspr.live/transaction/${"d".repeat(64)}`
 };
 
@@ -43,6 +54,14 @@ describe("Trust ASK page", () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+  });
+
+  it("explains the hosted token check in plain language", () => {
+    render(<AskPage />);
+
+    expect(screen.getByText(/checks live Casper data, covers a small Testnet service fee/i)).toBeTruthy();
+    expect(document.body.textContent).not.toContain("paid rail");
+    expect(document.body.textContent).not.toContain("Merkle");
   });
 
   it("shows DANGER verdict, flag message, explorer link, and honest footer", async () => {
@@ -62,10 +81,11 @@ describe("Trust ASK page", () => {
     });
 
     expect(screen.getByText("Mint authority is not renounced, so supply is unlimited")).toBeTruthy();
-    expect(screen.getByRole("link", { name: /proven on casper/i }).getAttribute("href")).toBe(
+    expect(screen.getByText(/Unavailable facts are never treated as passes\./)).toBeTruthy();
+    expect(screen.getByRole("link", { name: /receipt on casper/i }).getAttribute("href")).toBe(
       dangerVerdict.explorerUrl
     );
-    expect(screen.getByText("automated evidence flags, not financial advice")).toBeTruthy();
+    expect(screen.getByText("Based on automated checks of Casper data. This is not financial advice.")).toBeTruthy();
   });
 
   it("does not call assessSubject when input is empty", async () => {
@@ -77,6 +97,56 @@ describe("Trust ASK page", () => {
     fireEvent.click(askButton);
 
     expect(vi.mocked(assessSubject)).not.toHaveBeenCalled();
+  });
+
+  it("does not expose server configuration names in a consumer error", async () => {
+    const { assessSubject } = await import("../src/api");
+    vi.mocked(assessSubject).mockRejectedValueOnce(
+      new Error("CASPER_SECRET_KEY_PATH is required for assess_subject")
+    );
+
+    render(<AskPage />);
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "b".repeat(64) } });
+    fireEvent.click(screen.getByRole("button", { name: /check this token/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/isn't set up to run live checks/i)).toBeTruthy();
+    });
+    expect(document.body.textContent).not.toContain("CASPER_SECRET_KEY_PATH");
+  });
+
+  it("warns before a paid check when holder and age data are not connected", async () => {
+    const { getReportHealth } = await import("../src/api");
+    vi.mocked(getReportHealth).mockResolvedValueOnce({
+      ok: true,
+      service: "report-api",
+      checkedAt: "2026-07-17T12:00:00.000Z",
+      tokenEvidence: {
+        status: "limited",
+        source: "Casper RPC",
+        available: ["supplyControl"],
+        unavailable: ["contractAge", "holderCount", "topHolderShare"]
+      }
+    });
+
+    render(<AskPage />);
+
+    expect(await screen.findByText(/Current coverage is limited/)).toBeTruthy();
+    expect(screen.getByText(/contract age and holder data are not connected yet/)).toBeTruthy();
+  });
+
+  it("checks a pasted package hash on the network the user selected", async () => {
+    const { assessSubject } = await import("../src/api");
+    vi.mocked(assessSubject).mockResolvedValueOnce(dangerVerdict);
+
+    render(<AskPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Testnet" }));
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "b".repeat(64) } });
+    fireEvent.click(screen.getByRole("button", { name: /check this token/i }));
+
+    await waitFor(() => expect(screen.getByText("DANGER")).toBeTruthy());
+    expect(vi.mocked(assessSubject)).toHaveBeenCalledWith("b".repeat(64), "casper-testnet");
   });
 
   it("resolves a symbol through cspr.trade before assessing", async () => {
@@ -91,14 +161,19 @@ describe("Trust ASK page", () => {
 
     render(<AskPage />);
 
+    fireEvent.click(screen.getByRole("button", { name: "Testnet" }));
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "wcspr" } });
+    expect(screen.getByRole("button", { name: "Testnet" }).hasAttribute("disabled")).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: /check this token/i }));
 
     await waitFor(() => {
       expect(screen.getByText("DANGER")).toBeTruthy();
     });
     expect(vi.mocked(resolveToken)).toHaveBeenCalledWith("wcspr");
-    expect(vi.mocked(assessSubject)).toHaveBeenCalledWith(`hash-${"8".repeat(64)}`);
+    expect(vi.mocked(assessSubject)).toHaveBeenCalledWith(
+      `hash-${"8".repeat(64)}`,
+      "casper-mainnet"
+    );
     // The resolved identity is shown with the verdict.
     expect(screen.getByText(/WCSPR · Wrapped CSPR/)).toBeTruthy();
   });

@@ -53,9 +53,12 @@ describe("checkedX402Call", () => {
           headers: { "payment-required": Buffer.from(JSON.stringify(PAYMENT_REQUIRED)).toString("base64") }
         });
       }
-      return new Response(JSON.stringify({ payment: { transactionHash: TRANSACTION_HASH }, answer: "done" }), {
+      return new Response(JSON.stringify({ answer: "done" }), {
         status: 200,
-        headers: { "content-type": "application/json" }
+        headers: {
+          "content-type": "application/json",
+          "payment-response": Buffer.from(JSON.stringify({ success: true, transaction: TRANSACTION_HASH })).toString("base64")
+        }
       });
     });
 
@@ -82,7 +85,7 @@ describe("checkedX402Call", () => {
     expect(JSON.stringify(api.check.mock.calls)).not.toContain("privateKeyMaterial");
     expect(api.observe).toHaveBeenCalledWith("check-1", expect.objectContaining({
       status: 200,
-      bodyHash: createHash("sha256").update(JSON.stringify({ payment: { transactionHash: TRANSACTION_HASH }, answer: "done" })).digest("hex")
+      bodyHash: createHash("sha256").update(JSON.stringify({ answer: "done" })).digest("hex")
     }));
   });
 

@@ -1,0 +1,780 @@
+/* ------------------------------------------------------------------ *
+ *  AgentPay payment-check workflow. Everything is scoped under         *
+ *  .av-modern so nothing leaks into sibling views.                     *
+ *                                                                     *
+ *  Semantic reserve: green = PAY / match / anchored, amber = REVIEW /  *
+ *  pending, red = BLOCK / mismatch / failed / error. Lavender is the   *
+ *  brand accent and NEVER encodes a verdict — it marks the active step *
+ *  and primary actions only. State is carried by a word + a coloured   *
+ *  edge / tag, never by colour alone. No status dots anywhere.         *
+ * ------------------------------------------------------------------ */
+
+.av-modern {
+  /* One shared easing for every transition and settle in this variant. */
+  --av-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+
+  --av-field-1: #f2f2f5;
+  --av-field-2: #f7f7f9;
+  --av-field-3: #fbfbfc;
+  --av-glow: transparent;
+
+  --av-card: #ffffff;
+  --av-card-2: #f6f4fd; /* framed-table / nested surfaces */
+  --av-border: rgba(39, 34, 40, 0.09);
+  --av-border-2: rgba(39, 34, 40, 0.14);
+  --av-shadow: 0 1px 2px rgba(39, 34, 40, 0.04), 0 10px 30px -18px rgba(39, 34, 40, 0.28);
+  --av-shadow-lift: 0 2px 4px rgba(39, 34, 40, 0.05), 0 22px 48px -22px rgba(93, 78, 219, 0.4);
+
+  --av-ink: #221d28;
+  --av-ink-2: #5c5566;
+  --av-ink-3: #8a8398;
+
+  /* Lavender brand accent — navigation + primary, never a verdict. */
+  --av-accent: #8578ff; /* display accent word, active edges */
+  --av-accent-text: #6a5ce0; /* small accent text (AA on white) */
+  --av-accent-fill: #6c5ce7; /* primary button fill */
+  --av-accent-fill-ink: #ffffff;
+  --av-accent-soft: rgba(133, 120, 255, 0.12);
+  --av-accent-soft-2: rgba(133, 120, 255, 0.22);
+  --av-focus: #6a5ce0;
+
+  /* Reserved verdict colours — AA on the field/card in this theme. */
+  --av-pay: #16824c;
+  --av-review: #a76a00;
+  --av-block: #c22a20;
+  --av-neutral: #6e6879;
+
+  --av-radius: 8px;
+  --av-radius-s: 6px;
+  --av-radius-pill: 8px;
+
+  --av-serif: "Charter", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --av-mono: "Spline Sans Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --av-sans: "Archivo", "Helvetica Neue", "Segoe UI", system-ui, -apple-system, sans-serif;
+
+  position: relative;
+  isolation: isolate;
+  min-height: 100dvh;
+  color: var(--av-ink);
+  background: var(--av-field-3);
+  font-family: var(--av-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Dark theme keeps the same neutral hierarchy. */
+.av-modern[data-theme="dark"] {
+  --av-field-1: #17171a;
+  --av-field-2: #121215;
+  --av-field-3: #0e0e10;
+  --av-glow: transparent;
+
+  --av-card: #19191d;
+  --av-card-2: #222227;
+  --av-border: rgba(255, 255, 255, 0.11);
+  --av-border-2: rgba(255, 255, 255, 0.18);
+  --av-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 18px 40px -24px rgba(0, 0, 0, 0.7);
+  --av-shadow-lift: 0 2px 6px rgba(0, 0, 0, 0.45), 0 26px 60px -26px rgba(133, 120, 255, 0.42);
+
+  --av-ink: #ece8f4;
+  --av-ink-2: #a79fb8;
+  --av-ink-3: #7e7690;
+
+  --av-accent: #aba0ff;
+  --av-accent-text: #b9aeff;
+  --av-accent-fill: #8578ff;
+  --av-accent-fill-ink: #17111f;
+  --av-accent-soft: rgba(165, 150, 255, 0.16);
+  --av-accent-soft-2: rgba(165, 150, 255, 0.28);
+  --av-focus: #aba0ff;
+
+  --av-pay: #45d488;
+  --av-review: #f5b54b;
+  --av-block: #f7737f;
+  --av-neutral: #9990a6;
+}
+
+/* ---- Page field ---------------------------------------------------- */
+
+.av-modern .av-field {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--av-field-3);
+}
+
+/* ---- Shell + centred column ---------------------------------------- */
+
+.av-modern .av-shell {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  /* wide enough for two card columns; the page grows sideways, not down */
+  max-width: 68rem;
+  margin: 0 auto;
+  padding: clamp(1rem, 3vw, 2rem) clamp(0.85rem, 4vw, 1.75rem) 3.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.9rem, 2vw, 1.3rem);
+}
+
+/* ---- Hero strip ---------------------------------------------------- */
+
+.av-modern .av-hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem 2rem;
+  padding-bottom: clamp(0.5rem, 1.6vw, 1rem);
+}
+
+.av-modern .av-hero-lead {
+  min-width: 0;
+}
+
+.av-modern .av-hero-kicker {
+  margin: 0 0 0.5rem;
+  font-family: var(--av-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--av-accent-text);
+}
+
+.av-modern .av-hero-title {
+  margin: 0;
+  font-size: clamp(1.9rem, 5vw, 2.8rem);
+  font-weight: 500;
+  line-height: 0.98;
+  letter-spacing: 0;
+  color: var(--av-ink);
+}
+
+.av-modern .av-serif {
+  font-family: var(--av-serif);
+  font-style: italic;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--av-accent);
+}
+
+.av-modern .av-hero-tagline {
+  flex: 1 1 16rem;
+  max-width: 22rem;
+  margin: 0;
+  font-size: clamp(0.95rem, 1.4vw, 1.1rem);
+  line-height: 1.5;
+  color: var(--av-ink-2);
+  text-align: right;
+}
+
+@media (max-width: 640px) {
+  .av-modern .av-hero-tagline {
+    text-align: left;
+    max-width: none;
+  }
+}
+
+/* ---- Slim progress rail -------------------------------------------- */
+
+/* Segmented progress track: flush segments fill as steps complete; the
+   readout names only the active step. Tones are the reserved verdict colors;
+   lavender marks progress and is never a verdict. */
+.av-modern .av-track {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.av-modern .av-track-bar {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  height: 5px;
+}
+.av-modern .av-seg {
+  position: relative;
+  border-radius: 999px;
+  background: var(--av-border-2);
+  transition: background 0.4s ease;
+}
+.av-modern .av-seg[data-state="done"] { background: var(--av-accent); }
+.av-modern .av-seg[data-state="active"] {
+  background: color-mix(in srgb, var(--av-accent) 45%, var(--av-border-2));
+}
+.av-modern .av-seg[data-tone="pay"][data-state="done"] { background: var(--av-pay); }
+.av-modern .av-seg[data-tone="review"] { background: var(--av-review); }
+.av-modern .av-seg[data-tone="block"], .av-modern .av-seg[data-state="error"] { background: var(--av-block); }
+
+.av-modern .av-track-read {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  font-size: 0.84rem;
+}
+.av-modern .av-track-active {
+  font-weight: 600;
+  color: var(--av-ink);
+}
+.av-modern .av-track-active[data-tone="pay"] { color: var(--av-pay); }
+.av-modern .av-track-active[data-tone="review"] { color: var(--av-review); }
+.av-modern .av-track-active[data-tone="block"] { color: var(--av-block); }
+.av-modern .av-track-count {
+  font-family: var(--av-mono);
+  font-size: 0.72rem;
+  color: var(--av-muted);
+}
+.av-modern .av-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---- THE DECISION hero --------------------------------------------- */
+
+.av-modern .av-decision {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: clamp(1.4rem, 3.4vw, 2.4rem);
+  border: 1px solid var(--av-border);
+  border-radius: var(--av-radius);
+  background: var(--av-card);
+  box-shadow: var(--av-shadow);
+  transition: box-shadow 500ms var(--av-ease), border-color 500ms var(--av-ease);
+}
+
+/* Elevates once the check resolves. */
+.av-modern .av-decision[data-tone]:not([data-tone="awaiting"]) {
+  box-shadow: var(--av-shadow-lift);
+  border-color: var(--av-border-2);
+}
+
+.av-modern .av-decision-kicker {
+  margin: 0;
+  font-family: var(--av-mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--av-ink-3);
+}
+
+.av-modern .av-decision-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 1.1rem;
+}
+
+.av-modern .av-decision-word {
+  font-size: clamp(2.6rem, 11vw, 5rem);
+  font-weight: 600;
+  line-height: 0.92;
+  letter-spacing: 0;
+  color: var(--av-neutral); /* AWAITING is honestly neutral. */
+}
+
+.av-modern .av-decision-word[data-decision="pay"] {
+  color: var(--av-pay);
+}
+.av-modern .av-decision-word[data-decision="review"] {
+  color: var(--av-review);
+}
+.av-modern .av-decision-word[data-decision="block"] {
+  color: var(--av-block);
+}
+
+.av-modern .av-decision-qualifier {
+  margin: 0;
+  max-width: 58ch;
+  font-family: var(--av-sans);
+  font-style: normal;
+  font-size: clamp(1rem, 1.8vw, 1.15rem);
+  line-height: 1.45;
+  color: var(--av-ink-2);
+}
+
+/* ---- The workflow column ------------------------------------------- */
+
+.av-modern .av-column {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: clamp(0.9rem, 2vw, 1.25rem);
+  align-items: start;
+}
+@media (min-width: 980px) {
+  .av-modern .av-column {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* one honest line replaces the auth card once a token is loaded */
+.av-modern .av-token-strip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--av-muted);
+}
+.av-modern .av-token-clear {
+  appearance: none;
+  border: 1px solid var(--av-border-2);
+  background: transparent;
+  color: inherit;
+  font: 500 0.78rem var(--av-sans, inherit);
+  padding: 4px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.av-modern .av-step {
+  min-width: 0;
+}
+
+/* Each step card. */
+.av-modern .av-step > .audit-section {
+  padding: clamp(1.15rem, 2.6vw, 1.6rem);
+  border: 1px solid var(--av-border);
+  border-radius: var(--av-radius);
+  background: var(--av-card);
+  box-shadow: var(--av-shadow);
+  gap: 0.85rem;
+  transition: box-shadow 300ms var(--av-ease), border-color 300ms var(--av-ease),
+    transform 300ms var(--av-ease);
+}
+
+.av-modern .av-step > .audit-section:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--av-shadow-lift);
+}
+
+/* Active step: a full lavender border tint, not a side stripe. */
+.av-modern .av-step[data-active="true"] > .audit-section {
+  border-color: color-mix(in srgb, var(--av-accent) 55%, var(--av-border-2));
+  box-shadow: var(--av-shadow-lift);
+}
+
+/* Nested sections (the receipt anchor block, the response form) flatten. */
+.av-modern .audit-section .audit-section,
+.av-modern form.audit-section {
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--av-border);
+  border-radius: var(--av-radius-s);
+  background: var(--av-card-2);
+  box-shadow: none;
+}
+.av-modern .av-step > .audit-section:hover .audit-section {
+  transform: none;
+}
+
+/* ---- Section heads ------------------------------------------------- */
+
+.av-modern .audit-section-head {
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 0.75rem;
+}
+
+.av-modern .audit-section-head h2,
+.av-modern .audit-section-head h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--av-ink);
+}
+
+.av-modern .audit-section-head h3 {
+  font-size: 0.95rem;
+}
+
+/* ---- Status tags: word + reserved edge/colour ---------------------- */
+
+.av-modern .audit-tag {
+  font-family: var(--av-mono);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  padding: 0.24rem 0.6rem;
+  border: 1px solid var(--av-border-2);
+  border-radius: var(--av-radius-pill);
+  color: var(--av-ink-2);
+  background: var(--av-card-2);
+}
+
+.av-modern .audit-tag[data-decision="pay"],
+.av-modern .audit-tag[data-verdict="match"],
+.av-modern .audit-tag[data-anchor="anchored"],
+.av-modern .audit-tag[data-state="success"] {
+  color: var(--av-pay);
+  border-color: color-mix(in srgb, var(--av-pay) 42%, transparent);
+  background: color-mix(in srgb, var(--av-pay) 10%, transparent);
+}
+.av-modern .audit-tag[data-decision="review"],
+.av-modern .audit-tag[data-verdict="pending"],
+.av-modern .audit-tag[data-anchor="pending"],
+.av-modern .audit-tag[data-state="review"],
+.av-modern .audit-tag[data-state="running"],
+.av-modern .audit-tag[data-poll="polling"] {
+  color: var(--av-review);
+  border-color: color-mix(in srgb, var(--av-review) 42%, transparent);
+  background: color-mix(in srgb, var(--av-review) 10%, transparent);
+}
+.av-modern .audit-tag[data-decision="block"],
+.av-modern .audit-tag[data-verdict="mismatch"],
+.av-modern .audit-tag[data-anchor="failed"],
+.av-modern .audit-tag[data-state="error"],
+.av-modern .audit-tag[data-poll="error"] {
+  color: var(--av-block);
+  border-color: color-mix(in srgb, var(--av-block) 42%, transparent);
+  background: color-mix(in srgb, var(--av-block) 10%, transparent);
+}
+.av-modern .audit-tag[data-verdict="unverifiable"],
+.av-modern .audit-tag[data-anchor="off_chain_verified"] {
+  color: var(--av-neutral);
+  border-color: var(--av-border-2);
+}
+
+/* ---- Framed data tables (terms / settlement / receipt) ------------- */
+
+.av-modern .audit-section > .audit-field-grid,
+.av-modern form.audit-section > .audit-field-grid {
+  padding: 0.3rem 0.9rem;
+  border: 1px solid var(--av-border);
+  border-radius: var(--av-radius-s);
+  background: var(--av-card-2);
+  column-gap: 1rem;
+}
+
+.av-modern .audit-section > .audit-field-grid > dt,
+.av-modern .audit-section > .audit-field-grid > dd,
+.av-modern form.audit-section > .audit-field-grid > dt,
+.av-modern form.audit-section > .audit-field-grid > dd {
+  padding: 0.45rem 0;
+  border-top: 1px solid var(--av-border);
+}
+
+.av-modern .audit-section > .audit-field-grid > dt:first-of-type,
+.av-modern .audit-section > .audit-field-grid > dd:first-of-type,
+.av-modern form.audit-section > .audit-field-grid > dt:first-of-type,
+.av-modern form.audit-section > .audit-field-grid > dd:first-of-type {
+  border-top: 0;
+}
+
+.av-modern .audit-field-grid dt {
+  font-family: var(--av-mono);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--av-ink-3);
+  opacity: 1;
+}
+
+.av-modern .audit-mono,
+.av-modern .audit-hash,
+.av-modern code {
+  font-family: var(--av-mono);
+  font-size: 0.8rem;
+  color: var(--av-ink);
+}
+
+.av-modern .audit-field-grid dd,
+.av-modern .audit-field-grid dd .audit-mono {
+  font-size: 0.82rem;
+  color: var(--av-ink);
+}
+
+/* Inline verdict values keep their reserved colour. */
+.av-modern [data-decision="pay"],
+.av-modern dd[data-verdict="match"] {
+  color: var(--av-pay);
+}
+.av-modern [data-decision="review"],
+.av-modern dd[data-verdict="pending"] {
+  color: var(--av-review);
+}
+.av-modern [data-decision="block"],
+.av-modern dd[data-verdict="mismatch"] {
+  color: var(--av-block);
+}
+.av-modern dd[data-verdict="unverifiable"] {
+  color: var(--av-neutral);
+}
+
+/* ---- Explorer links: tinted lavender pills ------------------------- */
+
+.av-modern .audit-field-grid a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-family: var(--av-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  padding: 0.22rem 0.6rem;
+  border: 1px solid transparent;
+  border-radius: var(--av-radius-pill);
+  color: var(--av-accent-text);
+  background: var(--av-accent-soft);
+  transition: background 200ms var(--av-ease);
+}
+.av-modern .audit-field-grid a:hover {
+  background: var(--av-accent-soft-2);
+}
+
+/* ---- Notes + honest empty states ----------------------------------- */
+
+.av-modern .audit-note {
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--av-ink-2);
+  opacity: 1;
+}
+
+.av-modern .audit-note[data-state="error"] {
+  color: var(--av-block);
+}
+.av-modern .audit-note[data-state="not_checked"] {
+  color: var(--av-ink-3);
+}
+.av-modern .audit-note[data-state="success"] {
+  color: var(--av-pay);
+}
+
+.av-modern .audit-control-label {
+  color: var(--av-ink);
+}
+
+.av-modern .av-footnote {
+  margin: 0.5rem 0 0;
+  text-align: center;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--av-ink-3);
+}
+
+.av-modern .audit-disclosure {
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--av-border);
+}
+
+.av-modern .audit-disclosure[open] > summary {
+  margin-bottom: 0.75rem;
+}
+
+.av-modern .audit-disclosure > .audit-reasons {
+  margin-top: 0.75rem;
+}
+
+/* ---- Reasons ------------------------------------------------------- */
+
+.av-modern .audit-reason {
+  gap: 0.25rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--av-border);
+  border-radius: var(--av-radius-s);
+  background: var(--av-card-2);
+  font-size: 0.85rem;
+}
+
+.av-modern .audit-reason strong {
+  color: var(--av-ink);
+  font-weight: 600;
+}
+
+.av-modern .audit-reason .audit-mono {
+  font-size: 0.7rem;
+  color: var(--av-ink-2);
+}
+
+.av-modern .audit-reason[data-result="block"] {
+  border-color: color-mix(in srgb, var(--av-block) 42%, var(--av-border));
+}
+.av-modern .audit-reason[data-result="review"] {
+  border-color: color-mix(in srgb, var(--av-review) 42%, var(--av-border));
+}
+.av-modern .audit-reason[data-result="advisory"] {
+  border-color: var(--av-border);
+}
+.av-modern .audit-reason[data-state="error"],
+.av-modern .audit-reason[role="alert"] {
+  border-left-color: var(--av-block);
+}
+.av-modern .audit-reason[data-kind="pin"] {
+  border-left-color: var(--av-pay);
+}
+.av-modern .audit-reason[data-kind="deny"] {
+  border-left-color: var(--av-block);
+}
+
+/* The API error field grid stays plain (no frame) inside the reason. */
+.av-modern .audit-reason .audit-field-grid {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+/* ---- Buttons: pill-shaped -----------------------------------------  */
+/* Primary = form submit (filled lavender). Secondary = type=button      */
+/* (10%-tinted lavender). Neutral surfaces, red only for genuine failure. */
+
+.av-modern .audit-button {
+  font-family: var(--av-sans);
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  padding: 0.55rem 1.15rem;
+  border: 1px solid transparent;
+  border-radius: var(--av-radius-pill);
+  color: var(--av-accent-text);
+  background: var(--av-accent-soft);
+  transition: background 200ms var(--av-ease), color 200ms var(--av-ease),
+    border-color 200ms var(--av-ease), transform 120ms var(--av-ease);
+}
+
+.av-modern .audit-button:hover:not(:disabled) {
+  background: var(--av-accent-soft-2);
+}
+.av-modern .audit-button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.av-modern .audit-button[type="submit"] {
+  color: var(--av-accent-fill-ink);
+  background: var(--av-accent-fill);
+}
+.av-modern .audit-button[data-action="primary"] {
+  color: var(--av-accent-fill-ink);
+  background: var(--av-accent-fill);
+}
+.av-modern .audit-button[data-action="danger"] {
+  color: var(--av-block);
+  border-color: color-mix(in srgb, var(--av-block) 40%, transparent);
+  background: color-mix(in srgb, var(--av-block) 9%, transparent);
+}
+.av-modern .audit-button[type="submit"]:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--av-accent-fill) 88%, #000);
+}
+
+.av-modern .audit-button:disabled {
+  opacity: 0.45;
+}
+
+/* ---- Inputs -------------------------------------------------------- */
+
+.av-modern .audit-input,
+.av-modern .audit-textarea,
+.av-modern select.audit-input {
+  border: 1px solid var(--av-border-2);
+  border-radius: var(--av-radius-s);
+  background: var(--av-card);
+  color: var(--av-ink);
+  font-size: 0.88rem;
+  padding: 0.55rem 0.7rem;
+  transition: border-color 180ms var(--av-ease), box-shadow 180ms var(--av-ease);
+}
+
+.av-modern .audit-input:hover,
+.av-modern .audit-textarea:hover {
+  border-color: var(--av-accent);
+}
+.av-modern .audit-input:focus,
+.av-modern .audit-textarea:focus {
+  outline: none;
+  border-color: var(--av-accent);
+  box-shadow: 0 0 0 3px var(--av-accent-soft);
+}
+
+.av-modern .audit-input::placeholder,
+.av-modern .audit-textarea::placeholder {
+  color: var(--av-ink-3);
+}
+
+.av-modern .audit-textarea {
+  font-family: var(--av-mono);
+}
+
+/* ---- Copy buttons -------------------------------------------------- */
+
+.av-modern .audit-copy-button {
+  font-family: var(--av-mono);
+  font-size: 0.66rem;
+  padding: 0.22rem 0.5rem;
+  border: 1px solid var(--av-border-2);
+  border-radius: var(--av-radius-pill);
+  color: var(--av-ink-2);
+  background: var(--av-card);
+  opacity: 1;
+}
+.av-modern .audit-copy-button:hover {
+  color: var(--av-accent-text);
+  border-color: var(--av-accent);
+}
+
+/* ---- Code blocks (CLI hand-offs) ----------------------------------- */
+
+.av-modern .audit-code-block {
+  border: 1px solid var(--av-border);
+  border-radius: var(--av-radius-s);
+  background: var(--av-card-2);
+  color: var(--av-ink);
+  font-family: var(--av-mono);
+  font-size: 0.74rem;
+  padding: 0.85rem 0.95rem;
+}
+
+/* ---- Links + focus ------------------------------------------------- */
+
+.av-modern a {
+  color: var(--av-accent-text);
+  text-underline-offset: 2px;
+}
+
+.av-modern details summary {
+  cursor: pointer;
+  color: var(--av-ink-2);
+}
+
+.av-modern :focus-visible {
+  outline: 2px solid var(--av-focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Long hashes hold at 320px. */
+.av-modern .audit-hash--truncate {
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------ *
+ *  Reduced motion: framer entrances are already disabled in JS via    *
+ *  useReducedMotion; here we drop every hover/transition lift so the   *
+ *  settled frame is fully static.                                      *
+ * ------------------------------------------------------------------ */
+@media (prefers-reduced-motion: reduce) {
+  .av-modern .av-step > .audit-section,
+  .av-modern .av-decision,
+  .av-modern .audit-button,
+  .av-modern .audit-input,
+  .av-modern .audit-textarea,
+  .av-modern .av-rail-step,
+  .av-modern .audit-field-grid a {
+    transition: none;
+  }
+  .av-modern .av-step > .audit-section:hover {
+    transform: none;
+  }
+}

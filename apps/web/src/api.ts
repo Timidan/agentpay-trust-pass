@@ -1,3 +1,5 @@
+import { bridgeApiBase, publicEndpoint, reportApiBase } from "./runtime-origins";
+
 export type EvidenceFactValue = string | number | boolean | null;
 
 export type EvidenceRecord = {
@@ -29,8 +31,12 @@ export type Quote = {
   reportHash: string;
   datasetId: string;
   datasetRoot: string;
+  evidenceNetwork: EvidenceNetwork;
   amount: string;
+  amountDisplay?: string;
   asset: string;
+  assetPackageHash?: string | null;
+  assetDecimals?: number | null;
   network: string;
   expiresAt: string;
   expiresInSeconds: number;
@@ -47,6 +53,7 @@ export type SourceSummary = {
   network: string;
   subject: string;
   observedAt: string;
+  sourceUrl: string;
   recordHash: string;
   facts: Record<string, EvidenceFactValue>;
 };
@@ -82,19 +89,18 @@ export type PaymentReadiness = {
   status: "ready" | "configuration_required" | "facilitator_unavailable" | "facilitator_unsupported";
   reason: string | null;
   checkedAt: string;
-  facilitatorUrl: string;
   checks: PaymentReadinessCheck[];
   supportedKind: {
     x402Version: number;
     scheme: string;
     network: string;
-    feePayer: string | null;
   } | null;
 };
 
 export type PaidReport = {
   datasetId: string;
   datasetRoot: string;
+  evidenceNetwork: EvidenceNetwork;
   reportId: string;
   report: EvidenceRecord;
   reportHash: string;
@@ -105,6 +111,12 @@ export type PaidReport = {
     scheme: "x402";
     status: "settled";
     transactionHash: string;
+    amount: string;
+    amountDisplay?: string;
+    asset: string;
+    assetSymbol: string;
+    assetDecimals?: number | null;
+    network: string;
     confirmation: {
       rpcUrl: string;
       method: "info_get_transaction";
@@ -156,26 +168,42 @@ export type RegistryStatus = {
   checkedAt: string;
   checks: RegistryStatusCheck[];
   registryPackageHash: string | null;
-  recordScript: string;
   rpc: {
-    url: string;
     apiVersion: string | null;
     chainspecName: string | null;
     latestBlockHeight: number | null;
     latestBlockHash: string | null;
   } | null;
+  receiptAnchors?: {
+    status: "ready" | "configuration_required";
+    reason: string | null;
+    contractHash: string | null;
+  };
 };
 
-const MCP_URL = import.meta.env.VITE_MCP_SERVER_URL ?? "http://127.0.0.1:3001";
-const reportApiBase = import.meta.env.VITE_REPORT_API_URL ?? "http://127.0.0.1:4021";
-export const voteUrl = import.meta.env.VITE_CSPR_FANS_VOTE_URL ?? "https://cspr.fans";
-export const bridgeUrl = MCP_URL;
+const MCP_URL = bridgeApiBase;
+export const bridgeUrl = publicEndpoint(MCP_URL);
+export const reportApiOrigin = publicEndpoint(reportApiBase);
 
 export type BridgeActivityEntry = {
   tool: string;
   status: number;
   ms: number;
   at: string;
+};
+
+export type TokenEvidenceStatus = {
+  status: "complete" | "limited";
+  source: "CSPR.live + Casper RPC" | "CSPR.cloud" | "Casper RPC";
+  available: string[];
+  unavailable: string[];
+};
+
+export type ReportHealth = {
+  ok: boolean;
+  service: "report-api";
+  checkedAt: string;
+  tokenEvidence: TokenEvidenceStatus;
 };
 
 /** Real agent traffic seen by the MCP HTTP bridge, newest first. */
@@ -196,6 +224,23 @@ export async function getBridgeHealth(): Promise<boolean> {
   }
 }
 
+export async function getReportHealth(): Promise<ReportHealth | null> {
+  try {
+    const response = await fetch(`${reportApiBase}/health`);
+    if (!response.ok) return null;
+    const body = await response.json() as Partial<ReportHealth>;
+    if (
+      body.service !== "report-api" ||
+      (body.tokenEvidence?.status !== "complete" && body.tokenEvidence?.status !== "limited")
+    ) {
+      return null;
+    }
+    return body as ReportHealth;
+  } catch {
+    return null;
+  }
+}
+
 export type FeedEntry = {
   id: string;
   aspect: string;
@@ -203,13 +248,27 @@ export type FeedEntry = {
   cardImageUrl: string;
 };
 
-export async function storeVerdictCard(data: {
+export type VerdictPublicationProof = {
+  hashKind: "transaction" | "deploy";
+  datasetId: string;
+  datasetRoot: string;
+  reportHash: string;
+  paymentReceiptHash: string;
+  verdictReport: Record<string, unknown>;
+};
+
+export type VerdictCardData = {
   aspect: string;
   subjectShortHash: string;
   flags: { code: string; message: string }[];
   notChecked: string[];
   decisionTxHash: string;
   policyHash: string;
+};
+
+export async function storeVerdictCard(data: {
+  card: VerdictCardData;
+  proof: VerdictPublicationProof;
 }): Promise<{ id: string }> {
   const response = await fetch(`${reportApiBase}/card`, {
     method: "POST",
@@ -217,7 +276,7 @@ export async function storeVerdictCard(data: {
     body: JSON.stringify(data)
   });
   if (!response.ok) {
-    throw new Error(`Failed to store card: ${response.status}`);
+    await throwReportApiError(response, "AgentPay could not create the share card.");
   }
   return response.json() as Promise<{ id: string }>;
 }
@@ -229,25 +288,52 @@ export async function shareVerdict(cardId: string, optIn: boolean): Promise<{ ok
     body: JSON.stringify({ cardId, optIn })
   });
   if (!response.ok) {
-    throw new Error(`Failed to share verdict: ${response.status}`);
+    await throwReportApiError(response, "AgentPay could not publish this check.");
   }
   return response.json() as Promise<{ ok: boolean }>;
+}
+
+/** Resolve server-relative card paths against the public report API. */
+export function absoluteCardImageUrl(cardImageUrl: string): string {
+  if (/^https?:\/\//i.test(cardImageUrl)) {
+    return cardImageUrl;
+  }
+  return `${reportApiOrigin}${cardImageUrl.startsWith("/") ? "" : "/"}${cardImageUrl}`;
 }
 
 export async function getFeed(): Promise<{ entries: FeedEntry[] }> {
   const response = await fetch(`${reportApiBase}/feed`);
   if (!response.ok) {
-    throw new Error(`Failed to fetch feed: ${response.status}`);
+    await throwReportApiError(response, "AgentPay could not load shared checks.");
   }
-  return response.json() as Promise<{ entries: FeedEntry[] }>;
+  const body = (await response.json()) as { entries: FeedEntry[] };
+  return {
+    entries: (body?.entries ?? []).map((entry) => ({
+      ...entry,
+      cardImageUrl: absoluteCardImageUrl(entry.cardImageUrl)
+    }))
+  };
 }
 
 export type ResolvedToken = {
   symbol: string;
   packageHash: string;
   name: string | null;
-  network: string;
+  network: "casper-mainnet";
 };
+
+export type ResolvedCsprName = {
+  name: string;
+  accountHash: string;
+  publicKey: string | null;
+  expiresAt: string;
+  isPrimary: boolean;
+  network: "casper-mainnet";
+  source: "CSPR.name";
+  sourceUrl: string;
+};
+
+export type EvidenceNetwork = "casper-mainnet" | "casper-testnet";
 
 /** Resolves a token symbol to its package hash within cspr.trade's pair set. */
 export async function resolveToken(symbol: string): Promise<ResolvedToken | null> {
@@ -256,23 +342,31 @@ export async function resolveToken(symbol: string): Promise<ResolvedToken | null
     return null;
   }
   if (!response.ok) {
-    throw new Error(`Symbol lookup failed: ${response.status}`);
+    await throwReportApiError(response, "AgentPay could not look up that token symbol.");
   }
   return response.json() as Promise<ResolvedToken>;
 }
 
 export function buildShareLink(cardId: string): string {
-  return `${voteUrl}?card=${encodeURIComponent(`${reportApiBase}/card/${cardId}.png`)}`;
+  return `${reportApiOrigin}/card/${encodeURIComponent(cardId)}.png`;
 }
 
-// The full rail (quote → x402 → verify → record) legitimately takes ~10-20s,
-// so the ceiling is generous — but bounded, so a hung backend surfaces a real
-// error instead of an infinite spinner.
-const TOOL_TIMEOUT_MS = 45_000;
+const DEFAULT_TOOL_TIMEOUT_MS = 45_000;
+const CHAIN_TOOL_TIMEOUT_MS = 180_000;
+const CHAIN_TOOLS = new Set([
+  "assess_account",
+  "assess_subject",
+  "buy_report",
+  "record_decision"
+]);
+
+export function toolTimeoutMs(tool: string): number {
+  return CHAIN_TOOLS.has(tool) ? CHAIN_TOOL_TIMEOUT_MS : DEFAULT_TOOL_TIMEOUT_MS;
+}
 
 export async function callTool<T>(tool: string, payload: unknown): Promise<T> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TOOL_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), toolTimeoutMs(tool));
   try {
     // The timeout must cover the body read too: a server can send headers then
     // stall the JSON stream, so clearing the timer before .json() would hang.
@@ -290,7 +384,7 @@ export async function callTool<T>(tool: string, payload: unknown): Promise<T> {
       body = raw ? JSON.parse(raw) : null;
     } catch {
       throw new ToolCallError(
-        "The trust desk returned an unexpected response. Check that the AgentPay services are running, then try again.",
+        "AgentPay returned an unexpected response. Check that its services are running, then try again.",
         response.status,
         null
       );
@@ -320,6 +414,16 @@ export class ToolCallError extends Error {
   }
 }
 
+async function throwReportApiError(response: Response, fallback: string): Promise<never> {
+  let body: { code?: string; error?: string; message?: string } | null = null;
+  try {
+    body = await response.json() as { code?: string; error?: string; message?: string };
+  } catch {
+    // The fallback remains safe when a proxy returns HTML or an empty body.
+  }
+  throw new ToolCallError(body?.message ?? fallback, response.status, body);
+}
+
 export type Verdict = {
   aspect: "CLEAR" | "CAUTION" | "DANGER";
   decision: "approved" | "needs_review" | "rejected";
@@ -329,19 +433,38 @@ export type Verdict = {
   rationale: string;
   notCheckedNote: string;
   subject: { kind: string; packageHash: string; raw: string };
+  evidenceNetwork: EvidenceNetwork;
+  resolvedToken?: ResolvedToken & { source: "CSPR.trade" };
+  resolvedAccount?: ResolvedCsprName;
+  payment: {
+    amount: string;
+    amountDisplay: string;
+    asset: string;
+    assetSymbol: string;
+    assetDecimals: number | null;
+    network: string;
+  };
   paymentReceiptHash: string;
   settlementTxHash: string;
   decisionTxHash: string;
   datasetRoot: string;
   policyHash: string;
+  publicationProof: VerdictPublicationProof;
+  settlementExplorerUrl: string;
   explorerUrl: string;
 };
 
-export async function assessSubject(subject: string): Promise<Verdict> {
-  return callTool<Verdict>("assess_subject", { subject });
+export async function assessSubject(
+  subject: string,
+  evidenceNetwork: EvidenceNetwork
+): Promise<Verdict> {
+  return callTool<Verdict>("assess_subject", { subject, evidenceNetwork });
 }
 
-/** Counterparty check — the rail scoped to a Casper account (hash or public key). */
-export async function assessAccount(account: string): Promise<Verdict> {
-  return callTool<Verdict>("assess_account", { account });
+/** Paid check scoped to a Casper account hash or public key. */
+export async function assessAccount(
+  account: string,
+  evidenceNetwork: EvidenceNetwork
+): Promise<Verdict> {
+  return callTool<Verdict>("assess_account", { account, evidenceNetwork });
 }

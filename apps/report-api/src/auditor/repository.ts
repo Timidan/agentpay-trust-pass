@@ -204,6 +204,7 @@ export interface AuditorRepository {
 
   saveAgentToken(token: AgentTokenRecord): boolean;
   getAgentToken(id: string): AgentTokenRecord | null;
+  listAgentTokens(operatorPublicKey: string): AgentTokenRecord[];
   findAgentTokenByHash(tokenHash: string): AgentTokenRecord | null;
   latestAgentTokenRevision(operatorPublicKey: string): number;
   revokeAgentToken(revocation: AgentTokenRevocation): boolean;

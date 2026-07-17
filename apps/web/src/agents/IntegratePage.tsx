@@ -1,13 +1,13 @@
-import { ArrowLeft } from "@phosphor-icons/react";
-import { AgentPayLogo } from "../components/AgentPayLogo";
+import { bridgeUrl, reportApiOrigin } from "../api";
+import { SiteFooter, SiteNav } from "../components/SiteChrome";
 import "./integrate-page.css";
 
 const PRIMARY_TOOLS = [
-  { name: "quote_report", body: "Returns price, expiry, dataset root, payment resource, and x402 requirements for a subject (token package hash or Casper account)." },
-  { name: "assess_subject", body: "Runs the full rail in one call: quote, sign/pay, verify, score, narrate, record. Accepts a token package hash or a Casper account and routes to the matching policy." },
-  { name: "buy_report", body: "Replays the quote with a signed PAYMENT-SIGNATURE payload and unlocks the report." },
-  { name: "verify_report", body: "Checks the released report + Merkle proof against the quoted dataset root." },
-  { name: "record_decision", body: "Writes approved / needs_review / rejected to the Casper registry." }
+  { name: "check_x402_payment", body: "Checks a captured Casper x402 charge and payment details the wallet has not signed yet. Returns PAY, REVIEW, or BLOCK before a key signs anything." },
+  { name: "verify_x402_settlement", body: "Compares the executed Casper transaction with the exact charge AgentPay approved." },
+  { name: "get_payment_receipt", body: "Returns the signed policy, approval, settlement proof, service response, and Casper anchor state." },
+  { name: "assess_subject", body: "Runs a paid token or account check using live Casper evidence and records the result on Testnet." },
+  { name: "payment_status", body: "Shows whether the hosted Casper x402 payment path is ready before an agent starts a purchase." }
 ] as const;
 
 const MCP_CONFIG = `{
@@ -16,48 +16,44 @@ const MCP_CONFIG = `{
       "command": "pnpm",
       "args": ["--filter", "@agent-pay/mcp-server", "stdio"],
       "env": {
-        "REPORT_API_URL": "http://127.0.0.1:4021",
-        "AGENT_PAY_PUBLIC_ORIGIN": "http://127.0.0.1:4021"
+        "REPORT_API_URL": "${reportApiOrigin}",
+        "AGENT_PAY_API_URL": "${reportApiOrigin}",
+        "AGENT_PAY_API_TOKEN": "<scoped-agent-token>",
+        "AGENT_PAY_RESOURCE_BASE_URL": "${reportApiOrigin}",
+        "CASPER_SECRET_KEY_PATH": "/absolute/path/to/testnet_secret_key.pem"
       }
     }
   }
 }`;
 
-const MCP_TOOL_CALL = `{ "name": "quote_report", "arguments": { "subject": "hash-<64 hex package hash>" } }`;
+const MCP_TOOL_CALL = `{ "name": "assess_subject", "arguments": { "subject": "WCSPR", "evidenceNetwork": "casper-mainnet" } }`;
 
-const HTTP_CALL = `export AGENT_PAY_BASE_URL=http://127.0.0.1:4021
-curl -X POST "$AGENT_PAY_BASE_URL/tools/quote_report" \\
+const HTTP_CALL = `export AGENT_PAY_MCP_URL=${bridgeUrl}
+export AGENT_PAY_MCP_TOKEN="replace-with-bridge-token"
+curl -X POST "$AGENT_PAY_MCP_URL/tools/payment_status" \\
+  -H "Authorization: Bearer $AGENT_PAY_MCP_TOKEN" \\
   -H "Content-Type: application/json" \\
-  -d '{ "subject": "hash-<64 hex package hash>" }'`;
+  -d '{}'`;
 
 type IntegratePageProps = {
   onBack: () => void;
   onOpenAsk: () => void;
+  navigate?: (path: string) => void;
 };
 
-export default function IntegratePage({ onBack, onOpenAsk }: IntegratePageProps) {
+export default function IntegratePage({ onBack, onOpenAsk, navigate }: IntegratePageProps) {
+  const nav = navigate ?? ((path: string) => (path === "/check" ? onOpenAsk() : onBack()));
   return (
     <main className="ag">
-      <nav className="ag-nav" aria-label="Agent integration">
-        <button className="ag-brand" type="button" onClick={onBack}>
-          <AgentPayLogo className="ag-brand-logo" decorative />
-          <span>AgentPay</span>
-        </button>
-        <div className="ag-navlinks">
-          <button type="button" onClick={onBack}>
-            <ArrowLeft size={14} weight="bold" aria-hidden="true" /> Overview
-          </button>
-          <button type="button" onClick={onOpenAsk}>Check a token</button>
-        </div>
-      </nav>
+      <SiteNav current="agents" sub="Agent integration" navigate={nav} />
 
       <div className="ag-doc">
         <header className="ag-head">
           <p className="ag-kicker">MCP server</p>
           <h1>How agents talk to AgentPay</h1>
           <p className="ag-lede">
-            AgentPay publishes a self-describing skill and the same evidence rail over MCP tools
-            (with an HTTP bridge). Agents act with their own Casper keys, and the web UI only observes.
+            AgentPay publishes an integration guide and exposes the same payment checks through MCP
+            tools and an authenticated HTTP bridge. Agents keep their own Casper keys.
           </p>
         </header>
 
@@ -70,11 +66,11 @@ export default function IntegratePage({ onBack, onOpenAsk }: IntegratePageProps)
             <code>{MCP_CONFIG}</code>
           </pre>
           <p className="ag-note">
-            These env values are literal strings, not shell variables. Use{" "}
-            <code>http://127.0.0.1:4021</code> locally, or your deployed report-API origin.
+            The scoped token authorizes payment checks. The Testnet key is used only when this local
+            MCP process buys a token or account report. This deployment uses <code>{reportApiOrigin}</code>.
           </p>
           <p className="ag-note">
-            Or fetch the skill directly: <code>curl http://127.0.0.1:4021/skill.md</code>
+            Or fetch the skill directly: <code>curl {reportApiOrigin}/skill.md</code>
           </p>
         </section>
 
@@ -89,7 +85,7 @@ export default function IntegratePage({ onBack, onOpenAsk }: IntegratePageProps)
             ))}
           </dl>
           <p className="ag-note">
-            HTTP bridge: <code>POST http://127.0.0.1:4021/tools/&lt;name&gt;</code>
+            HTTP bridge: <code>POST {bridgeUrl}/tools/&lt;name&gt;</code>
             <span className="ag-sep">·</span> support: <code>payment_status</code>, <code>registry_status</code>
           </p>
         </section>
@@ -97,11 +93,11 @@ export default function IntegratePage({ onBack, onOpenAsk }: IntegratePageProps)
         <section className="ag-section">
           <h2>The flow</h2>
           <p className="ag-flow">
-            <b>Connect → Quote → Pay → Verify → Record.</b> The buyer signs x402 with its own Casper
-            key; AgentPay never holds one. A deterministic rule engine owns the verdict:{" "}
-            <span className="ag-chip ag-chip--clear">CLEAR</span>
-            <span className="ag-chip ag-chip--caution">CAUTION</span>
-            <span className="ag-chip ag-chip--danger">DANGER</span>. Narration can explain it but never override it.
+            <b>Capture → Check → Sign → Verify → Receipt.</b> AgentPay returns{" "}
+            <span className="ag-chip ag-chip--clear">PAY</span>
+            <span className="ag-chip ag-chip--caution">REVIEW</span>
+            <span className="ag-chip ag-chip--danger">BLOCK</span> before signing. The buyer signs
+            locally only after PAY; AgentPay then verifies the exact Casper settlement.
           </p>
         </section>
 
@@ -114,13 +110,18 @@ export default function IntegratePage({ onBack, onOpenAsk }: IntegratePageProps)
           <pre className="ag-code">
             <code>{HTTP_CALL}</code>
           </pre>
+          <p className="ag-note">
+            The hosted bridge token is separate from a scoped AgentPay API token.
+          </p>
         </section>
 
         <div className="ag-cta">
           <button type="button" className="ag-btn" onClick={onOpenAsk}>Check a token</button>
-          <span className="ag-cta-note">Use the skill as the contract. Keep the wallet with the agent.</span>
+          <span className="ag-cta-note">Use the published skill as the integration guide. The agent keeps its wallet.</span>
         </div>
       </div>
+
+      <SiteFooter current="agents" navigate={nav} />
     </main>
   );
 }

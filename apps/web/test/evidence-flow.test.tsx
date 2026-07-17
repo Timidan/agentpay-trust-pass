@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "../src/App";
@@ -10,13 +10,17 @@ const quote: Quote = {
   reportHash: "b".repeat(64),
   datasetId: "agent-pay-live-1000-aaaaaaaaaaaaaaaa",
   datasetRoot: "a".repeat(64),
+  evidenceNetwork: "casper-mainnet",
   amount: "10000",
+  amountDisplay: "0.00001",
   asset: "CSPR",
+  assetPackageHash: "9".repeat(64),
+  assetDecimals: 9,
   network: "casper:casper-test",
   expiresAt: new Date(Date.now() + 300_000).toISOString(),
   expiresInSeconds: 300,
   paymentResource: {
-    url: "http://127.0.0.1:4021/reports/buy/agent-pay-live-1000-aaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb",
+    url: "https://agentpay.timidan.xyz/api/reports/buy/agent-pay-live-1000-aaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb",
     description: "AgentPay live evidence report cspr-trade-pairs-1111111111111111",
     mimeType: "application/json"
   },
@@ -41,7 +45,6 @@ const quote: Quote = {
     status: "ready",
     reason: null,
     checkedAt: new Date(0).toISOString(),
-    facilitatorUrl: "http://127.0.0.1:4021",
     checks: [
       {
         name: "payment_requirement",
@@ -57,8 +60,7 @@ const quote: Quote = {
     supportedKind: {
       x402Version: 2,
       scheme: "exact",
-      network: "casper:casper-test",
-      feePayer: "7".repeat(64)
+      network: "casper:casper-test"
     }
   },
   sourceSummary: [
@@ -90,6 +92,7 @@ const quote: Quote = {
 const paid: PaidReport = {
   datasetId: quote.datasetId,
   datasetRoot: quote.datasetRoot,
+  evidenceNetwork: quote.evidenceNetwork,
   reportId: quote.reportId,
   report: {
     id: quote.reportId,
@@ -166,8 +169,8 @@ describe("AgentPay console", () => {
 
     render(<App />);
 
-    expect(screen.queryByRole("button", { name: /run it live/i })).toBeNull();
-    expect(screen.getByText("One rail, four stops, always in order.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /run live check/i })).toBeNull();
+    expect(screen.getByText("From the charge to a receipt on Casper.")).toBeTruthy();
 
     await launchAgentPay();
 
@@ -175,9 +178,9 @@ describe("AgentPay console", () => {
     // the console observes that real traffic.
     expect(screen.queryByRole("heading", { name: "Connect agent" })).toBeNull();
     expect(screen.queryByText(/local session only/i)).toBeNull();
-    expect(screen.getByRole("heading", { name: /agents connect over mcp or http/i })).toBeTruthy();
+    expect(screen.getByText("Agent bridge")).toBeTruthy();
     // The run button is gated: disabled until a subject is entered, then enabled.
-    const runButton = screen.getByRole("button", { name: /run it live/i });
+    const runButton = screen.getByRole("button", { name: /run live check/i });
     expect(runButton.hasAttribute("disabled")).toBe(true);
     await userEvent.type(screen.getByLabelText(/token package hash or casper account/i), "a".repeat(64));
     expect(runButton.hasAttribute("disabled")).toBe(false);
@@ -211,18 +214,29 @@ describe("AgentPay console", () => {
     vi.stubGlobal("fetch", fetchSpy);
 
     render(<App />);
-    // Hero manifesto: the three verdict words are the headline.
-    expect(screen.getByText("CLEAR")).toBeTruthy();
-    expect(screen.getByText("DANGER")).toBeTruthy();
+    // New landing: the product story reads plainly, and the console stays reachable.
+    expect(screen.getByText(/answers PAY, REVIEW, or BLOCK/i)).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: /open the payment checker/i }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("button", { name: /open the console/i }).length).toBeGreaterThan(0);
     expect(screen.queryByLabelText("AgentPay settlement animation")).toBeNull();
 
+    await waitFor(() => {
+      expect(fetchSpy.mock.calls.filter(([url]) => isLandingStatusCall(url))).toHaveLength(2);
+    });
+    const consoleCallStart = fetchSpy.mock.calls.length;
     await launchAgentPay();
     await runLive();
 
     await waitFor(() => {
-      expect(screen.getByText(/paused at the x402 wall/i)).toBeTruthy();
+      expect(screen.getByText(/signed payment needed/i)).toBeTruthy();
     });
+
+    const paymentTerms = within(screen.getByLabelText("x402 payment terms"));
+    expect(paymentTerms.getByText("0.00001 CSPR")).toBeTruthy();
+    expect(paymentTerms.getByText("10000 base units")).toBeTruthy();
+    expect(paymentTerms.getByText("9".repeat(64))).toBeTruthy();
+    expect(paymentTerms.getByText(`00${"8".repeat(64)}`)).toBeTruthy();
+    expect(paymentTerms.getByText("casper:casper-test")).toBeTruthy();
 
     expect(screen.getByText("Casper Node RPC")).toBeTruthy();
     expect(screen.getByText("CSPR.trade MCP")).toBeTruthy();
@@ -230,7 +244,76 @@ describe("AgentPay console", () => {
     // Raw config codes map to consumer copy via friendly-errors.
     expect(screen.getByText(/registry contract isn't configured/)).toBeTruthy();
     // Count only the console's tool calls; the shell also polls /feed + bridge endpoints.
-    expect(fetchSpy.mock.calls.filter(([u]) => isConsoleToolCall(u)).length).toBe(3);
+    expect(fetchSpy.mock.calls.slice(consoleCallStart).filter(([u]) => isConsoleToolCall(u))).toHaveLength(3);
+  });
+
+  it("keeps the Mainnet network returned by CSPR.trade when quoting a symbol", async () => {
+    let quoteInput: Record<string, unknown> | null = null;
+    const fetchSpy = vi.fn(async (url: string, init?: RequestInit) => {
+      if (String(url).includes("/resolve?symbol=WCSPR")) {
+        return jsonResponse({
+          symbol: "WCSPR",
+          packageHash: `hash-${"8".repeat(64)}`,
+          name: "Wrapped CSPR",
+          network: "casper-mainnet"
+        });
+      }
+      if (url.endsWith("/quote_report")) {
+        quoteInput = JSON.parse(String(init?.body));
+        return jsonResponse(quote);
+      }
+      if (url.endsWith("/registry_status")) return jsonResponse(registryStatus);
+      if (url.endsWith("/buy_report")) {
+        return jsonResponse({ error: "payment_required", reason: "PAYMENT-SIGNATURE header is required" }, 402);
+      }
+      if (isBridgePanelUrl(url)) return bridgePanelResponse(url);
+      if (String(url).endsWith("/feed")) return jsonResponse({ entries: [] });
+      throw new Error(`Unexpected URL ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    render(<App />);
+    await launchAgentPay();
+    await runLive("WCSPR");
+
+    await waitFor(() => expect(screen.getByText(/signed payment needed/i)).toBeTruthy());
+    expect(quoteInput).toEqual({
+      subject: `hash-${"8".repeat(64)}`,
+      evidenceNetwork: "casper-mainnet"
+    });
+  });
+
+  it("quotes a pasted hash on the evidence network selected in the console", async () => {
+    let quoteInput: Record<string, unknown> | null = null;
+    const fetchSpy = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.endsWith("/quote_report")) {
+        quoteInput = JSON.parse(String(init?.body));
+        return jsonResponse({ ...quote, evidenceNetwork: "casper-testnet" });
+      }
+      if (url.endsWith("/registry_status")) return jsonResponse(registryStatus);
+      if (url.endsWith("/buy_report")) {
+        return jsonResponse({ error: "payment_required", reason: "PAYMENT-SIGNATURE header is required" }, 402);
+      }
+      if (isBridgePanelUrl(url)) return bridgePanelResponse(url);
+      if (String(url).endsWith("/feed")) return jsonResponse({ entries: [] });
+      throw new Error(`Unexpected URL ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    render(<App />);
+    await launchAgentPay();
+    fireEvent.click(
+      within(screen.getByRole("group", { name: "Evidence network" })).getByRole("button", {
+        name: "Testnet"
+      })
+    );
+    await runLive();
+
+    await waitFor(() => expect(screen.getByText(/signed payment needed/i)).toBeTruthy());
+    expect(quoteInput).toEqual({
+      subject: "a".repeat(64),
+      evidenceNetwork: "casper-testnet"
+    });
   });
 
   it("continues a gated quote with a runtime x402 payment payload", async () => {
@@ -315,16 +398,20 @@ describe("AgentPay console", () => {
 
     render(<App />);
 
+    await waitFor(() => {
+      expect(fetchSpy.mock.calls.filter(([url]) => isLandingStatusCall(url))).toHaveLength(2);
+    });
+    const consoleCallStart = fetchSpy.mock.calls.length;
     await launchAgentPay();
     await runLive();
     await waitFor(() => {
-      expect(screen.getByText(/paused at the x402 wall/i)).toBeTruthy();
+      expect(screen.getByText(/signed payment needed/i)).toBeTruthy();
     });
 
     fireEvent.change(screen.getByLabelText(/x402 payment payload/i), {
       target: { value: JSON.stringify({ scheme: "x402", proof: "runtime-payload" }) }
     });
-    await userEvent.click(screen.getByRole("button", { name: /continue settlement/i }));
+    await userEvent.click(screen.getByRole("button", { name: /continue with signed payment/i }));
 
     await waitFor(() => {
       // The registry receipt shows the tx hash middle-truncated beside a copy control.
@@ -333,7 +420,7 @@ describe("AgentPay console", () => {
     expect(screen.getByText("2".repeat(64))).toBeTruthy();
     expect(screen.getByText("info get transaction")).toBeTruthy();
     // Count only the console's tool calls; the shell also polls /feed + bridge endpoints.
-    expect(fetchSpy.mock.calls.filter(([u]) => isConsoleToolCall(u)).length).toBe(6);
+    expect(fetchSpy.mock.calls.slice(consoleCallStart).filter(([u]) => isConsoleToolCall(u))).toHaveLength(6);
   });
 
   it("follows one theme across landing and console, with toggles in both", async () => {
@@ -357,11 +444,11 @@ async function launchAgentPay() {
   await userEvent.click(screen.getAllByRole("button", { name: /open the console/i })[0]);
 }
 
-// The console's "Run it live" button is gated on a non-empty subject. Type a
+// The console's "Run live check" button is gated on a non-empty subject. Type a
 // well-formed package hash (skips symbol resolution) before running the rail.
 async function runLive(subject = "a".repeat(64)) {
   await userEvent.type(screen.getByLabelText(/token package hash or casper account/i), subject);
-  await userEvent.click(screen.getByRole("button", { name: /run it live/i }));
+  await userEvent.click(screen.getByRole("button", { name: /run live check/i }));
 }
 
 function isBridgePanelUrl(url: string) {
@@ -376,6 +463,10 @@ function bridgePanelResponse(url: string) {
 
 function isConsoleToolCall(url: unknown) {
   return !/\/(feed|health|activity)$/.test(String(url));
+}
+
+function isLandingStatusCall(url: unknown) {
+  return /\/tools\/(payment_status|registry_status)$/.test(String(url));
 }
 
 function jsonResponse(body: unknown, status = 200) {

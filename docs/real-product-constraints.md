@@ -1,6 +1,6 @@
 # AgentPay Real Product Constraints
 
-Date: 2026-07-16
+Date: 2026-07-17
 
 ## Product Rule
 
@@ -9,7 +9,7 @@ AgentPay must show evidence produced by runtime interaction with Casper ecosyste
 Current runtime source set:
 
 - Casper Node RPC: network status and latest finalized block from `CASPER_RPC_URL`.
-- Token-subject evidence: package-hash validation plus live latest-block context from `CASPER_RPC_URL`; mint authority, supply renouncement, holder distribution, LP holders, and liquidity depth remain not checked until a real token-state source is wired in.
+- Token-subject evidence: Casper RPC supplies latest height, CEP-18 supply controls, and total supply. Public CSPR.live APIs supply package metadata, version/install height, and FT ownership. CSPR.trade supplies Mainnet pair and priced-liquidity observations. Every source is independently nullable; custom authority models and LP-holder concentration remain not checked.
 - CSPR.trade MCP: DEX pair surface from `CSPR_TRADE_MCP_URL`.
 - x402 facilitator: payment verification and settlement through `X402_FACILITATOR_URL`, using `PAYMENT-REQUIRED`, `PAYMENT-SIGNATURE`, and `PAYMENT-RESPONSE` headers. The proven Testnet run used the self-hosted open-source `casper-x402` facilitator at `http://127.0.0.1:4022`; the hosted CSPR.cloud facilitator remains an optional drop-in path that has not been exercised end-to-end in this repo.
 - Payment auditor: authenticated `/v1/checks` evaluates normalized x402 terms before signing; the API stores no buyer key and cannot submit a buyer payment.
@@ -75,7 +75,7 @@ MVP must include:
 
 - Quote built from live Casper product interactions.
 - UI source summary showing Casper RPC and CSPR.trade observations.
-- Token-subject verdicts must show unavailable mandatory risk signals as not checked until a real token-state source supplies them.
+- Token-subject verdicts must show any unavailable CSPR.cloud/RPC signal as not checked and must never infer missing evidence as clean.
 - x402 payment requirement returned as HTTP 402 plus `PAYMENT-REQUIRED`.
 - Agent-visible `payment_status` that proves the configured Casper x402 path is ready, or returns the exact missing configuration/facilitator support reason.
 - Runtime x402 payment payload continuation for the existing quote through `PAYMENT-SIGNATURE`.
@@ -115,4 +115,4 @@ Deferred:
 - Wallet UX for creating payment payloads.
 - Autonomous trading execution.
 - Persistent quote storage.
-- Production deployment and monitoring.
+- Public deployment and production monitoring; systemd/nginx templates are prepared under `deploy/agentpay` but are not themselves proof of a live deployment.

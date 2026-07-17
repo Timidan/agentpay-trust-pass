@@ -91,7 +91,6 @@ export function createAuditorRouter(dependencies: AuditorRouterDependencies): Ro
   router.get("/policies/current", (request, response) => {
     const session = requireOperator(request, auth);
     const policy = repository.getCurrentPolicy(session.operatorPublicKey);
-    if (!policy) throw new AuthError("policy_not_found", "No signed operator policy is installed", 404);
     response.json({ policy });
   });
 
@@ -170,6 +169,17 @@ export function createAuditorRouter(dependencies: AuditorRouterDependencies): Ro
       );
     }
     response.status(201).json({ decision });
+  });
+
+  router.get("/agent-tokens", (request, response) => {
+    const session = requireOperator(request, auth);
+    const records = repository
+      .listAgentTokens(session.operatorPublicKey)
+      .map(({ tokenHash: _tokenHash, ...record }) => record);
+    response.json({
+      records,
+      nextRevision: repository.latestAgentTokenRevision(session.operatorPublicKey) + 1
+    });
   });
 
   router.post("/agent-tokens", (request, response) => {

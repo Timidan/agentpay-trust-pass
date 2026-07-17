@@ -1,11 +1,12 @@
-import { createHash } from "node:crypto";
+import { sha256 } from "@noble/hashes/sha256";
+import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils";
 
 export function canonicalJson(value: unknown): string {
   return serializeCanonical(value, new Set<object>());
 }
 
 export function artifactHash(value: unknown): string {
-  return createHash("sha256").update(canonicalJson(value), "utf8").digest("hex");
+  return bytesToHex(sha256(utf8ToBytes(canonicalJson(value))));
 }
 
 function serializeCanonical(value: unknown, ancestors: Set<object>): string {

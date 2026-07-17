@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  accountSignalsFromFacts,
   extractAccountSignals,
   parseSubject,
   scoreAccount,
@@ -80,6 +81,40 @@ describe("scoreAccount", () => {
     expect(r.notChecked).toContain("balanceMotes");
   });
 
+  it("does not clear an account when its action thresholds were not read", () => {
+    const r = scoreAccount(signals({
+      deploymentThreshold: null,
+      keyManagementThreshold: null
+    }));
+
+    expect(r.aspect).toBe("CAUTION");
+    expect(r.notChecked).toEqual(expect.arrayContaining([
+      "deploymentThreshold",
+      "keyManagementThreshold"
+    ]));
+  });
+
+  it("treats a malformed balance as not checked instead of zero CSPR", () => {
+    const extracted = extractAccountSignals([
+      { id: "a", product: "p", network: "n", subject: "account_identity", observedAt: "t", sourceUrl: "u", facts: { exists: true, associatedKeyCount: 1 }, rawHash: "h" },
+      { id: "b", product: "p", network: "n", subject: "account_balance", observedAt: "t", sourceUrl: "u", facts: { balanceMotes: "not-a-number" }, rawHash: "h" }
+    ]);
+
+    expect(extracted.balanceMotes).toBeNull();
+    const result = scoreAccount(extracted);
+    expect(result.aspect).toBe("CAUTION");
+    expect(result.notChecked).toContain("balanceMotes");
+    expect(result.flags.map((flag) => flag.code)).not.toContain("dust_balance");
+  });
+
+  it("uses exact, factual pass labels", () => {
+    expect(scoreAccount(signals({})).passed).toEqual([
+      "Account exists on-chain.",
+      "CSPR balance is at least 1 CSPR.",
+      "Account has one associated key."
+    ]);
+  });
+
   it("extractAccountSignals reads facts off evidence records", () => {
     const s = extractAccountSignals([
       { id: "a", product: "p", network: "n", subject: "account_identity", observedAt: "t", sourceUrl: "u", facts: { exists: true, namedKeyCount: 2 }, rawHash: "h" },
@@ -88,5 +123,18 @@ describe("scoreAccount", () => {
     expect(s.exists).toBe(true);
     expect(s.namedKeyCount).toBe(2);
     expect(s.balanceMotes).toBe("9");
+  });
+
+  it("normalizes submitted account facts without creating an evidence record", () => {
+    expect(accountSignalsFromFacts({
+      exists: true,
+      balanceMotes: "5000000000",
+      associatedKeyCount: "one"
+    })).toMatchObject({
+      exists: true,
+      balanceMotes: "5000000000",
+      associatedKeyCount: null,
+      deploymentThreshold: null
+    });
   });
 });

@@ -8,27 +8,51 @@ export type Flag = { code: string; severity: "danger" | "caution"; message: stri
 // real green rows next to the flags.
 export type RuleResult = { aspect: Aspect; decision: WireDecision; flags: Flag[]; notChecked: string[]; passed: string[] };
 
-const MANDATORY: (keyof SubjectSignals)[] = ["mintAuthorityOpen", "supplyRenounced", "contractAgeBlocks", "holderCount"];
+const MANDATORY: (keyof SubjectSignals)[] = [
+  "contractAgeBlocks",
+  "holderCount",
+  "topHolderPct"
+];
 const YOUNG_BLOCKS = 1000;
 
 export function scoreSubject(s: SubjectSignals): RuleResult {
   const flags: Flag[] = [];
-  if (s.mintAuthorityOpen === true) flags.push({ code: "mint_authority_open", severity: "danger", message: "Mint authority is open, so supply can be inflated." });
-  if (s.supplyRenounced === false) flags.push({ code: "supply_not_renounced", severity: "danger", message: "Token supply control has not been renounced." });
+  if (s.mintBurnEnabled === true) flags.push({
+    code: "cep18_mint_burn_enabled",
+    severity: "danger",
+    message: "The CEP-18 mint and burn functions are enabled, so authorized roles can change token supply."
+  });
+  if (s.mintBurnEnabled === null && s.publicMintEntrypoint === true) flags.push({
+    code: "public_mint_entrypoint",
+    severity: "caution",
+    message: "The active contract exposes a public mint entry point. Its internal access rules were not checked."
+  });
   if (s.lpHolderCount === 1) flags.push({ code: "single_lp_holder", severity: "danger", message: "Liquidity is held by a single account." });
   if (s.holderCount === 1 || (s.topHolderPct !== null && s.topHolderPct >= 95)) flags.push({ code: "holder_concentration", severity: "danger", message: "Token holdings are extremely concentrated." });
-  if (s.contractAgeBlocks !== null && s.contractAgeBlocks < YOUNG_BLOCKS) flags.push({ code: "very_new_contract", severity: "caution", message: "Contract is very new." });
+  if (s.contractAgeBlocks !== null && s.contractAgeBlocks < YOUNG_BLOCKS) flags.push({
+    code: "very_new_contract",
+    severity: "caution",
+    message: "The contract has existed for fewer than 1,000 blocks."
+  });
 
   const notChecked = MANDATORY.filter((k) => s[k] == null).map(String);
+  if (s.mintBurnEnabled === null && s.publicMintEntrypoint === null) {
+    notChecked.unshift("supplyControl");
+  }
 
   // Mandatory checks that ran and came back clean, as readable labels.
   const passed: string[] = [];
-  if (s.mintAuthorityOpen === false) passed.push("Mint authority is locked.");
-  if (s.supplyRenounced === true) passed.push("Supply control is renounced.");
-  if (s.contractAgeBlocks !== null && s.contractAgeBlocks >= YOUNG_BLOCKS) passed.push("Contract is established.");
+  if (s.mintBurnEnabled === false) {
+    passed.push("The standard CEP-18 mint and burn setting is disabled.");
+  } else if (s.publicMintEntrypoint === false) {
+    passed.push("No public mint entry point was found in the active contract.");
+  }
+  if (s.contractAgeBlocks !== null && s.contractAgeBlocks >= YOUNG_BLOCKS) {
+    passed.push("Contract has existed for at least 1,000 blocks.");
+  }
   // Only a real pass when concentration was actually measured and is not high.
   if (s.holderCount !== null && s.holderCount > 1 && s.topHolderPct !== null && s.topHolderPct < 95) {
-    passed.push("Holdings are distributed.");
+    passed.push("Top-holder concentration is below 95%.");
   }
 
   const aspect: Aspect = flags.some((f) => f.severity === "danger")

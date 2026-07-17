@@ -178,7 +178,11 @@ describe("AgentPay registry recorder", () => {
         id: requestBody.id,
         result: {
           api_version: "2.0.0",
-          transaction: { hash: { Version1: transactionHash } },
+          transaction: version1DecisionTransaction({
+            transactionHash,
+            packageHash: "d".repeat(64),
+            decision: "approved"
+          }),
           execution_info: {
             block_hash: blockHash,
             block_height: 8135708,
@@ -232,9 +236,9 @@ describe("AgentPay registry recorder", () => {
     const submitter = await createSubmitter(`DEPLOY_HASH=${deployHash}`);
     const secretKeyPath = await createSecretKeyFile();
     const rpc = await withRpcServer(async (requestBody) => {
-      expect(requestBody.method).toBe("info_get_deploy");
+      expect(requestBody.method).toBe("info_get_transaction");
       expect(requestBody.params).toMatchObject({
-        deploy_hash: deployHash
+        transaction_hash: { Deploy: deployHash }
       });
 
       return {
@@ -242,7 +246,13 @@ describe("AgentPay registry recorder", () => {
         id: requestBody.id,
         result: {
           api_version: "2.0.0",
-          deploy: { hash: deployHash },
+          transaction: {
+            Deploy: decisionDeploy({
+              deployHash,
+              packageHash: "e".repeat(64),
+              decision: "needs_review"
+            })
+          },
           execution_info: {
             block_hash: blockHash,
             block_height: 8135708,
@@ -272,12 +282,57 @@ describe("AgentPay registry recorder", () => {
         txHash: deployHash,
         hashKind: "deploy",
         confirmation: {
-          method: "info_get_deploy",
+          method: "info_get_transaction",
           executionState: "executed",
           blockHash,
           attempts: 1
         }
       });
+    } finally {
+      await rpc.close();
+      await submitter.close();
+      await rm(secretKeyPath, { force: true });
+    }
+  });
+
+  it("rejects an executed hash whose registry arguments do not match the decision", async () => {
+    const deployHash = "4".repeat(64);
+    const submitter = await createSubmitter(`DEPLOY_HASH=${deployHash}`);
+    const secretKeyPath = await createSecretKeyFile();
+    const rpc = await withRpcServer(async (requestBody) => ({
+      jsonrpc: "2.0",
+      id: requestBody.id,
+      result: {
+        api_version: "2.0.0",
+        deploy: decisionDeploy({
+          deployHash,
+          packageHash: "d".repeat(64),
+          decision: "approved",
+          reportHash: "f".repeat(64)
+        }),
+        execution_info: {
+          block_hash: "8".repeat(64),
+          block_height: 8135708,
+          execution_result: { Version2: { error_message: null } }
+        }
+      }
+    }));
+
+    process.env.AGENT_PAY_REGISTRY_PACKAGE_HASH = `hash-${"d".repeat(64)}`;
+    process.env.AGENT_PAY_RECORD_SCRIPT = submitter.path;
+    process.env.CASPER_RPC_URL = rpc.url;
+    process.env.CASPER_SECRET_KEY_PATH = secretKeyPath;
+    process.env.CASPER_CONFIRMATION_ATTEMPTS = "1";
+    process.env.CASPER_CONFIRMATION_DELAY_MS = "0";
+
+    try {
+      await expect(recordAgentPayDecision({
+        datasetId: "agent-pay-live-runtime",
+        datasetRoot: "a".repeat(64),
+        reportHash: "b".repeat(64),
+        paymentReceiptHash: "c".repeat(64),
+        decision: "approved"
+      })).rejects.toThrow(/arguments do not match/i);
     } finally {
       await rpc.close();
       await submitter.close();
@@ -339,6 +394,63 @@ describe("AgentPay registry recorder", () => {
     }
   });
 });
+
+function version1DecisionTransaction(input: {
+  transactionHash: string;
+  packageHash: string;
+  decision: "approved" | "needs_review" | "rejected";
+}) {
+  return {
+    Version1: {
+      hash: input.transactionHash,
+      payload: {
+        chain_name: "casper-test",
+        fields: {
+          args: { Named: decisionArguments(input.decision) },
+          entry_point: { Custom: "record_decision_with_root" },
+          target: {
+            Stored: {
+              id: { ByPackageHash: { addr: input.packageHash, version: null } },
+              runtime: "VmCasperV1"
+            }
+          }
+        }
+      }
+    }
+  };
+}
+
+function decisionDeploy(input: {
+  deployHash: string;
+  packageHash: string;
+  decision: "approved" | "needs_review" | "rejected";
+  reportHash?: string;
+}) {
+  return {
+    hash: input.deployHash,
+    header: { chain_name: "casper-test" },
+    session: {
+      StoredVersionedContractByHash: {
+        hash: input.packageHash,
+        entry_point: "record_decision_with_root",
+        args: decisionArguments(input.decision, input.reportHash)
+      }
+    }
+  };
+}
+
+function decisionArguments(
+  decision: "approved" | "needs_review" | "rejected",
+  reportHash = "b".repeat(64)
+) {
+  return [
+    ["dataset_id", { cl_type: "String", parsed: "agent-pay-live-runtime" }],
+    ["dataset_root", { cl_type: "String", parsed: "a".repeat(64) }],
+    ["report_hash", { cl_type: "String", parsed: reportHash }],
+    ["payment_receipt_hash", { cl_type: "String", parsed: "c".repeat(64) }],
+    ["decision", { cl_type: "String", parsed: decision }]
+  ];
+}
 
 async function createSubmitter(output: string): Promise<{
   path: string;

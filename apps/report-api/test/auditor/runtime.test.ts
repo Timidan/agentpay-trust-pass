@@ -31,12 +31,38 @@ describe("auditor runtime", () => {
     });
 
     expect(options).toEqual({
+      allowLoopbackProbeTargets: false,
       databasePath: "/tmp/agentpay-test.sqlite",
       publicOrigin: "https://agentpay.example",
-      rpcUrl: "https://node.testnet.casper.network/rpc"
+      rpcUrl: "https://node.testnet.casper.network/rpc",
+      sessionCookiePath: "/v1"
     });
     expect(JSON.stringify(options)).not.toContain("CASPER_SECRET_KEY_PATH");
     expect(JSON.stringify(options)).not.toContain("must/not/be/read");
+  });
+
+  it("forbids loopback probes when the deployment environment is unconfigured", () => {
+    expect(auditorRuntimeOptionsFromEnv({})).toMatchObject({
+      allowLoopbackProbeTargets: false
+    });
+  });
+
+  it("forbids loopback probes for a production public origin", () => {
+    expect(auditorRuntimeOptionsFromEnv({
+      AGENTPAY_PUBLIC_ORIGIN: "https://agentpay.example"
+    })).toMatchObject({ allowLoopbackProbeTargets: false });
+  });
+
+  it("allows loopback probes only through the explicit opt-in", () => {
+    expect(auditorRuntimeOptionsFromEnv({
+      AGENTPAY_ALLOW_LOOPBACK_PROBES: "1"
+    })).toMatchObject({ allowLoopbackProbeTargets: true });
+  });
+
+  it("maps an API-prefix cookie path for reverse-proxy deployments", () => {
+    expect(auditorRuntimeOptionsFromEnv({
+      AGENTPAY_SESSION_COOKIE_PATH: "/api/v1"
+    })).toMatchObject({ sessionCookiePath: "/api/v1" });
   });
 
   it("opens the durable runtime at the current schema and closes idempotently", async () => {

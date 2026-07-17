@@ -98,6 +98,8 @@ describe("MCP stdio server", () => {
             "buy_report",
             "verify_report",
             "record_decision",
+            "assess_subject",
+            "assess_account",
             "check_x402_payment",
             "verify_x402_settlement",
             "get_payment_receipt"
@@ -110,7 +112,10 @@ describe("MCP stdio server", () => {
         });
 
         expect(JSON.parse(quote.content[0].type === "text" ? quote.content[0].text : "{}")).toMatchObject({
-          asset: "CSPR"
+          amount: "",
+          asset: "",
+          paymentConfigurationRequired: true,
+          paymentConfigurationReason: "x402_asset_package_hash_required"
         });
         expect(JSON.parse(quote.content[0].type === "text" ? quote.content[0].text : "{}").quoteId).toMatch(
           /^trust-/

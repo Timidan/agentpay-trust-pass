@@ -1,0 +1,25 @@
+[Unit]
+Description=AgentPay MCP HTTP bridge
+Wants=network-online.target
+After=network-online.target agentpay-report-api.service
+
+[Service]
+Type=simple
+User=agentpay
+Group=agentpay
+WorkingDirectory=/opt/agentpay
+EnvironmentFile=/etc/agentpay.env
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node --conditions=production apps/mcp-server/dist/server.js
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=30
+KillSignal=SIGTERM
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+
+[Install]
+WantedBy=multi-user.target

@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { ArrowSquareOut, MagnifyingGlass } from "@phosphor-icons/react";
 import type { FeedEntry } from "../api";
-import { getFeed, voteUrl } from "../api";
+import { getFeed } from "../api";
 import { friendlyError } from "../lib/friendly-errors";
+import { SiteFooter, SiteNav } from "../components/SiteChrome";
 import "./ask-page.css";
 
 type FeedState =
@@ -15,7 +16,7 @@ function toSentenceCase(str: string): string {
   return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
 }
 
-export default function FeedPage({ onBack, onOpenAsk }: { onBack?: () => void; onOpenAsk?: () => void }) {
+export default function FeedPage({ navigate }: { navigate?: (path: string) => void }) {
   const [state, setState] = useState<FeedState>({ status: "loading" });
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -40,26 +41,21 @@ export default function FeedPage({ onBack, onOpenAsk }: { onBack?: () => void; o
 
   return (
     <div className="ask2">
-      <nav className="ask2-nav" aria-label="AgentPay Trust Signal">
-        <div className="ask2-brand">
-          <span className="ask2-brand-name">AgentPay</span>
-          <span className="ask2-brand-sub">Trust Signal</span>
-        </div>
-        <div className="ask2-navlinks">
-          <a href="/" onClick={navClick(onBack)}>Overview</a>
-          <a href="/check" onClick={navClick(onOpenAsk)}>Check a token</a>
-        </div>
-      </nav>
+      <SiteNav current="feed" sub="Shared results" navigate={navigate} />
 
       {/* div, not <main>: App already wraps this page in a <main> landmark. */}
       <div className="ask2-main">
         <div className="ask2-feed">
-          <p className="ask2-kicker">Community feed</p>
-          <h1 className="ask2-title">Recent checks</h1>
+          <p className="ask2-kicker">Shared results</p>
+          <h1 className="ask2-title">Checks people chose to share</h1>
+          <p className="ask2-feed-note">
+            Only results their owners opted to publish appear here — this is not a full history of
+            AgentPay decisions.
+          </p>
 
           {state.status === "loading" ? (
             <div className="ask2-card ask2-feed-card" aria-live="polite" aria-busy="true">
-              <p className="ask2-feed-note">Loading recent checks…</p>
+              <p className="ask2-feed-note">Loading shared results…</p>
             </div>
           ) : state.status === "error" ? (
             <div className="ask2-card ask2-feed-card ask2-feed-empty" role="alert">
@@ -70,19 +66,19 @@ export default function FeedPage({ onBack, onOpenAsk }: { onBack?: () => void; o
             </div>
           ) : state.entries.length === 0 ? (
             <div className="ask2-card ask2-feed-card ask2-feed-empty">
-              <p className="ask2-feed-note">No checks yet. Be the first.</p>
-              <button type="button" className="ask2-submit ask2-feed-cta" onClick={onOpenAsk}>
+              <p className="ask2-feed-note">Nothing shared yet. Run a check and choose to share it.</p>
+              <button type="button" className="ask2-submit ask2-feed-cta" onClick={() => navigate?.("/check")}>
                 <MagnifyingGlass size={16} weight="bold" aria-hidden="true" />
                 Check a token
               </button>
             </div>
           ) : (
             <div className="ask2-card ask2-feed-card">
-              <ul className="ask2-feed-list" aria-label="Recent token checks">
+              <ul className="ask2-feed-list" aria-label="Shared check results">
                 {state.entries.map((entry) => (
                   <li key={entry.id} className={`ask2-feed-row ask2-feed-row--${entry.aspect.toLowerCase()}`}>
                     <a
-                      href={`${voteUrl}?card=${encodeURIComponent(entry.cardImageUrl)}`}
+                      href={entry.cardImageUrl}
                       target="_blank"
                       rel="noreferrer"
                       className="ask2-feed-link"
@@ -99,16 +95,8 @@ export default function FeedPage({ onBack, onOpenAsk }: { onBack?: () => void; o
           )}
         </div>
       </div>
+
+      <SiteFooter current="feed" navigate={navigate} />
     </div>
   );
-}
-
-function navClick(handler?: () => void) {
-  return (event: React.MouseEvent<HTMLAnchorElement>) => {
-    if (!handler || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
-      return;
-    }
-    event.preventDefault();
-    handler();
-  };
 }

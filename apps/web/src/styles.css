@@ -21,27 +21,27 @@
 /* ------------------------------------------------------------------ */
 
 :root {
-  --background: hsl(208 30% 95.5%);
-  --foreground: hsl(213 36% 13%);
-  --card: hsl(206 36% 99%);
-  --card-foreground: hsl(213 36% 13%);
-  --popover: hsl(206 36% 99%);
-  --popover-foreground: hsl(213 36% 13%);
-  --primary: hsl(33 95% 51%);
-  --primary-foreground: hsl(28 42% 11%);
-  --secondary: hsl(208 24% 90%);
-  --secondary-foreground: hsl(213 30% 20%);
-  --muted: hsl(208 22% 90%);
-  --muted-foreground: hsl(211 15% 39%);
-  --accent: hsl(208 28% 87%);
-  --accent-foreground: hsl(213 36% 13%);
+  --background: hsl(276 40% 98.5%);
+  --foreground: hsl(280 14% 14%);
+  --card: hsl(276 40% 99.5%);
+  --card-foreground: hsl(280 14% 14%);
+  --popover: hsl(276 40% 99.5%);
+  --popover-foreground: hsl(280 14% 14%);
+  --primary: hsl(250 78% 62%);
+  --primary-foreground: hsl(250 100% 98%);
+  --secondary: hsl(273 24% 91%);
+  --secondary-foreground: hsl(280 16% 20%);
+  --muted: hsl(273 22% 91%);
+  --muted-foreground: hsl(276 8% 40%);
+  --accent: hsl(273 28% 88%);
+  --accent-foreground: hsl(280 14% 14%);
   --destructive: hsl(353 74% 44%);
-  --border: hsl(210 20% 84%);
-  --input: hsl(210 20% 84%);
-  --ring: hsl(33 95% 51%);
-  --chart-1: hsl(33 95% 51%);
-  --chart-2: hsl(38 44% 44%);
-  --chart-3: hsl(213 40% 26%);
+  --border: hsl(274 16% 85%);
+  --input: hsl(274 16% 85%);
+  --ring: hsl(250 78% 62%);
+  --chart-1: hsl(250 78% 62%);
+  --chart-2: hsl(272 30% 48%);
+  --chart-3: hsl(280 30% 26%);
   --chart-4: hsl(156 60% 32%);
   --chart-5: hsl(353 70% 50%);
   --radius: 0.5rem;
@@ -51,19 +51,19 @@
   --surface-2: var(--secondary);
   --ink: var(--foreground);
   --ink-2: var(--muted-foreground);
-  --ink-3: hsl(211 13% 48%);
+  --ink-3: hsl(276 7% 48%);
   --line: var(--border);
-  --line-strong: hsl(210 18% 76%);
+  --line-strong: hsl(274 14% 77%);
 
-  /* The brand carry colour is the caution aspect (amber). */
-  --brand: hsl(33 95% 51%);
-  --brand-hot: hsl(30 96% 47%);
-  --brand-ink: hsl(28 86% 38%);
-  --brand-soft: hsl(36 86% 92%);
+  /* The brand carry colour is lavender (aave-style direction). Amber is now
+     purely the CAUTION aspect and never brand chrome. */
+  --brand: hsl(250 78% 62%);
+  --brand-hot: hsl(250 84% 57%);
+  --brand-ink: hsl(250 72% 52%);
+  --brand-soft: hsl(250 100% 96%);
   --brand-glow: transparent;
-  --on-brand: hsl(28 42% 11%);
-  /* Focus ring: brand amber is ~2:1 on the light page (fails WCAG 1.4.11),
-     so light mode uses the darker brand-ink (~4.25:1). Dark mode passes. */
+  --on-brand: hsl(250 100% 98%);
+  /* Focus ring: the darker brand-ink clears WCAG 1.4.11 on the light page. */
   --focus-ring: var(--brand-ink);
 
   /* Signal aspects — one meaning each. */
@@ -74,18 +74,19 @@
   --clear: hsl(156 70% 28%);
   --clear-soft: hsl(154 44% 91%);
 
-  /* Brass — structural chrome only (rules, lever caps, finials). */
-  --brass: hsl(38 46% 42%);
-  --brass-soft: hsl(40 50% 88%);
+  /* Structural chrome only (rules, lever caps, finials) — violet-grey now
+     so no amber remains outside the CAUTION aspect. */
+  --brass: hsl(272 12% 46%);
+  --brass-soft: hsl(272 22% 90%);
 
-  /* The signal-box interior — a permanently dark dusk stage, used by
-     the hero scene regardless of page theme. */
-  --box: hsl(213 38% 11%);
-  --box-2: hsl(213 32% 15%);
-  --box-line: hsla(210, 40%, 92%, 0.13);
-  --box-ink: hsl(206 34% 92%);
-  --box-ink-2: hsla(208, 36%, 90%, 0.6);
-  --box-brass: hsl(40 56% 60%);
+  /* The dark stage used by hero scenes regardless of page theme — deep plum
+     to match the modern bands. */
+  --box: hsl(278 30% 10%);
+  --box-2: hsl(278 26% 14%);
+  --box-line: hsla(276, 40%, 92%, 0.13);
+  --box-ink: hsl(276 34% 93%);
+  --box-ink-2: hsla(276, 36%, 90%, 0.6);
+  --box-brass: hsl(250 96% 78%);
   --aspect-danger: hsl(353 86% 60%);
   --aspect-caution: hsl(36 96% 57%);
   --aspect-clear: hsl(150 70% 52%);
@@ -106,22 +107,22 @@
   --radius-s: 4px;
   --radius-m: 6px;
   --radius-l: 8px;
-  --radius-xl: 10px;
+  --radius-xl: 8px;
   --radius-pill: 8px;
 
-  --shadow-s: 0 1px 2px hsla(213, 40%, 14%, 0.06);
-  --shadow-m: 0 1px 2px hsla(213, 40%, 14%, 0.07), 0 4px 12px -6px hsla(213, 40%, 14%, 0.14);
-  --shadow-l: 0 1px 3px hsla(213, 40%, 14%, 0.08), 0 10px 28px -14px hsla(213, 40%, 14%, 0.28);
+  --shadow-s: 0 1px 2px hsla(275, 40%, 14%, 0.06);
+  --shadow-m: 0 1px 2px hsla(275, 40%, 14%, 0.07), 0 4px 12px -6px hsla(275, 40%, 14%, 0.14);
+  --shadow-l: 0 1px 3px hsla(275, 40%, 14%, 0.08), 0 10px 28px -14px hsla(275, 40%, 14%, 0.28);
 
   /* Glass system — frosted surfaces that refract the living-metal field behind
      them. Light theme: bright frost with a hairline highlight. Kept opaque
      enough (>=0.7) that text over it stays WCAG AA. */
-  --glass-bg: hsla(210, 40%, 99%, 0.72);
-  --glass-bg-strong: hsla(210, 40%, 99%, 0.86);
-  --glass-border: hsla(213, 30%, 40%, 0.18);
+  --glass-bg: hsla(276, 40%, 99%, 0.72);
+  --glass-bg-strong: hsla(276, 40%, 99%, 0.86);
+  --glass-border: hsla(275, 24%, 40%, 0.18);
   --glass-hi: hsla(0, 0%, 100%, 0.55);
   --glass-blur: 18px;
-  --glass-shadow: 0 1px 3px hsla(213, 40%, 14%, 0.08), 0 16px 40px -20px hsla(213, 40%, 14%, 0.35);
+  --glass-shadow: 0 1px 3px hsla(275, 40%, 14%, 0.08), 0 16px 40px -20px hsla(275, 40%, 14%, 0.35);
 
   /* One easing for the whole machine — a sprung lever that settles. */
   --ease: cubic-bezier(0.2, 0.85, 0.2, 1);
@@ -197,7 +198,7 @@ html {
 body {
   margin: 0;
   min-width: 320px;
-  min-height: 100vh;
+  min-height: 100dvh;
   overflow-x: hidden;
   background: var(--bg);
 }
@@ -302,27 +303,27 @@ code {
 
 .dark,
 .agent-pay-app[data-theme="dark"] {
-  --background: hsl(213 36% 8.5%);
-  --foreground: hsl(206 32% 92%);
-  --card: hsl(213 30% 12%);
-  --card-foreground: hsl(206 32% 92%);
-  --popover: hsl(213 30% 12%);
-  --popover-foreground: hsl(206 32% 92%);
-  --primary: hsl(36 96% 56%);
-  --primary-foreground: hsl(28 42% 10%);
-  --secondary: hsl(213 24% 17%);
-  --secondary-foreground: hsl(206 28% 88%);
-  --muted: hsl(213 24% 17%);
-  --muted-foreground: hsl(208 17% 64%);
-  --accent: hsl(213 26% 22%);
-  --accent-foreground: hsl(206 32% 92%);
+  --background: hsl(278 34% 7.5%);
+  --foreground: hsl(276 34% 93%);
+  --card: hsl(278 28% 11%);
+  --card-foreground: hsl(276 34% 93%);
+  --popover: hsl(278 28% 11%);
+  --popover-foreground: hsl(276 34% 93%);
+  --primary: hsl(250 100% 79%);
+  --primary-foreground: hsl(258 32% 12%);
+  --secondary: hsl(277 22% 17%);
+  --secondary-foreground: hsl(276 28% 89%);
+  --muted: hsl(277 22% 17%);
+  --muted-foreground: hsl(274 13% 66%);
+  --accent: hsl(277 24% 22%);
+  --accent-foreground: hsl(276 34% 93%);
   --destructive: hsl(353 84% 61%);
-  --border: hsl(213 20% 24%);
-  --input: hsl(213 20% 24%);
-  --ring: hsl(36 96% 56%);
-  --chart-1: hsl(36 96% 56%);
-  --chart-2: hsl(40 50% 60%);
-  --chart-3: hsl(206 38% 70%);
+  --border: hsl(276 17% 24%);
+  --input: hsl(276 17% 24%);
+  --ring: hsl(250 100% 79%);
+  --chart-1: hsl(250 100% 79%);
+  --chart-2: hsl(266 60% 72%);
+  --chart-3: hsl(276 30% 72%);
   --chart-4: hsl(150 56% 54%);
   --chart-5: hsl(353 80% 64%);
 
@@ -331,17 +332,17 @@ code {
   --surface-2: var(--secondary);
   --ink: var(--foreground);
   --ink-2: var(--muted-foreground);
-  --ink-3: hsl(208 15% 56%);
+  --ink-3: hsl(274 11% 58%);
   --line: var(--border);
-  --line-strong: hsl(213 18% 34%);
+  --line-strong: hsl(276 15% 34%);
 
-  --brand: hsl(36 96% 56%);
-  --brand-hot: hsl(38 96% 60%);
-  --brand-ink: hsl(36 92% 64%);
-  --brand-soft: hsl(33 40% 18%);
+  --brand: hsl(250 100% 79%);
+  --brand-hot: hsl(250 100% 83%);
+  --brand-ink: hsl(250 100% 82%);
+  --brand-soft: hsl(252 38% 21%);
   --brand-glow: transparent;
-  --on-brand: hsl(28 42% 10%);
-  /* On the dark page the bright brand amber already clears 3:1. */
+  --on-brand: hsl(258 32% 12%);
+  /* On the dark page the bright brand lavender already clears 3:1. */
   --focus-ring: var(--brand);
 
   --danger: hsl(353 84% 61%);
@@ -355,8 +356,8 @@ code {
   --aspect-caution-ink: var(--aspect-caution);
   --aspect-danger-ink: var(--aspect-danger);
 
-  --brass: hsl(40 50% 58%);
-  --brass-soft: hsl(38 30% 20%);
+  --brass: hsl(272 16% 62%);
+  --brass-soft: hsl(274 22% 21%);
 
   --success-bg: hsl(154 36% 15%);
   --success-fg: hsl(150 56% 70%);
@@ -369,13 +370,13 @@ code {
   --shadow-m: 0 1px 2px hsla(0, 0%, 0%, 0.45), 0 4px 12px -6px hsla(0, 0%, 0%, 0.5);
   --shadow-l: 0 1px 3px hsla(0, 0%, 0%, 0.45), 0 10px 28px -14px hsla(0, 0%, 0%, 0.6);
 
-  /* Dark glass: deep navy frost over the molten field, with a faint top highlight. */
-  --glass-bg: hsla(213, 44%, 10%, 0.62);
-  --glass-bg-strong: hsla(213, 46%, 9%, 0.82);
-  --glass-border: hsla(210, 40%, 92%, 0.12);
-  --glass-hi: hsla(210, 40%, 92%, 0.08);
+  /* Dark glass: deep plum frost over the field, with a faint top highlight. */
+  --glass-bg: hsla(278, 40%, 10%, 0.62);
+  --glass-bg-strong: hsla(278, 42%, 9%, 0.82);
+  --glass-border: hsla(276, 40%, 92%, 0.12);
+  --glass-hi: hsla(276, 40%, 92%, 0.08);
   --glass-blur: 22px;
-  --glass-shadow: inset 0 1px 0 hsla(210, 40%, 92%, 0.07), 0 24px 60px -24px hsla(213, 60%, 3%, 0.7);
+  --glass-shadow: inset 0 1px 0 hsla(276, 40%, 92%, 0.07), 0 24px 60px -24px hsla(278, 60%, 3%, 0.7);
 }
 
 .agent-pay-app[data-theme="dark"].agent-pay-landing {
@@ -384,7 +385,7 @@ code {
       180deg,
       color-mix(in oklch, var(--surface) 60%, var(--bg)) 0%,
       var(--bg) 50%,
-      hsl(213 40% 6%) 100%
+      hsl(278 40% 6%) 100%
     );
 }
 
@@ -418,7 +419,7 @@ code {
   display: block;
   padding: 0;
   min-height: 100dvh;
-  background: hsl(213 40% 5%);
+  background: hsl(278 40% 5%);
   overflow: hidden;
 }
 
@@ -433,10 +434,10 @@ code {
      lifts the backdrop behind the swap scene so the card glass reads.
      A second gradient at far right adds depth behind the swap card. */
   background:
-    radial-gradient(ellipse 44% 66% at 78% 50%, hsl(194 40% 17%) 0%, hsl(202 36% 10%) 52%, hsl(210 40% 5%) 78%),
-    radial-gradient(ellipse 32% 48% at 92% 50%, hsl(194 36% 14%) 0%, transparent 70%),
-    radial-gradient(ellipse 65% 50% at 14% 20%, hsl(196 34% 13%) 0%, transparent 60%),
-    hsl(213 44% 4%);
+    radial-gradient(ellipse 44% 66% at 78% 50%, hsl(259 40% 17%) 0%, hsl(267 36% 10%) 52%, hsl(275 40% 5%) 78%),
+    radial-gradient(ellipse 32% 48% at 92% 50%, hsl(259 36% 14%) 0%, transparent 70%),
+    radial-gradient(ellipse 65% 50% at 14% 20%, hsl(261 34% 13%) 0%, transparent 60%),
+    hsl(278 44% 4%);
 }
 
 /* Fog layer A -- slow drift right.
@@ -447,7 +448,7 @@ code {
   z-index: 1;
   background:
     radial-gradient(ellipse 52% 40% at 18% 28%, hsla(192, 52%, 34%, 0.48) 0%, transparent 65%),
-    radial-gradient(ellipse 42% 32% at 68% 58%, hsla(196, 44%, 26%, 0.32) 0%, transparent 60%);
+    radial-gradient(ellipse 42% 32% at 68% 58%, hsla(261, 44%, 26%, 0.32) 0%, transparent 60%);
   pointer-events: none;
 }
 
@@ -457,7 +458,7 @@ code {
   inset: -10% -20%;
   z-index: 1;
   background:
-    radial-gradient(ellipse 46% 36% at 58% 18%, hsla(194, 48%, 30%, 0.36) 0%, transparent 60%),
+    radial-gradient(ellipse 46% 36% at 58% 18%, hsla(259, 48%, 30%, 0.36) 0%, transparent 60%),
     radial-gradient(ellipse 36% 44% at 8% 68%, hsla(192, 46%, 24%, 0.28) 0%, transparent 65%);
   pointer-events: none;
 }
@@ -485,9 +486,9 @@ code {
   border-radius: 50%;
   background:
     radial-gradient(ellipse 30% 30% at 50% 50%,
-      hsla(194, 84%, 70%, 0.24) 0%,
-      hsla(194, 70%, 54%, 0.14) 34%,
-      hsla(194, 52%, 42%, 0.07) 58%,
+      hsla(259, 84%, 70%, 0.24) 0%,
+      hsla(259, 70%, 54%, 0.14) 34%,
+      hsla(259, 52%, 42%, 0.07) 58%,
       transparent 80%);
   pointer-events: none;
 }
@@ -525,13 +526,13 @@ code {
    The arm-plate is toned to a muted warm-red so it doesn't clash with the
    amber lamp glow. Track and post strokes are lifted to visible teal-brass. */
 .hero-cin-scene-wrap .sig-track {
-  stroke: hsla(196, 40%, 62%, 0.28);
+  stroke: hsla(261, 40%, 62%, 0.28);
 }
 .hero-cin-scene-wrap .sig-sleeper {
-  stroke: hsla(196, 40%, 58%, 0.22);
+  stroke: hsla(261, 40%, 58%, 0.22);
 }
 .hero-cin-scene-wrap .sig-route-base {
-  stroke: hsla(210, 40%, 70%, 0.22);
+  stroke: hsla(275, 40%, 70%, 0.22);
 }
 .hero-cin-scene-wrap .sig-post {
   stroke: hsla(40, 56%, 72%, 0.65);
@@ -543,11 +544,11 @@ code {
   stroke: hsla(40, 50%, 68%, 0.40);
 }
 .hero-cin-scene-wrap .sig-train-body {
-  fill: hsl(196 32% 18%);
+  fill: hsl(261 32% 18%);
   stroke: hsla(40, 56%, 68%, 0.50);
 }
 .hero-cin-scene-wrap .sig-label {
-  fill: hsla(206, 34%, 80%, 0.38);
+  fill: hsla(271, 34%, 80%, 0.38);
 }
 .hero-cin-scene-wrap .sig-node {
   stroke: hsla(40, 56%, 68%, 0.65);
@@ -556,10 +557,10 @@ code {
    it shows in the interactive scene. Keep it recognizable as a semaphore arm
    but don't let it fight the warm lamp glow. */
 .hero-cin-scene-wrap .sig-arm-plate {
-  fill: hsla(196, 26%, 22%, 0.70);
+  fill: hsla(261, 26%, 22%, 0.70);
 }
 .hero-cin-scene-wrap .sig-arm-stripe {
-  fill: hsla(210, 30%, 55%, 0.35);
+  fill: hsla(275, 30%, 55%, 0.35);
 }
 /* Mute the lamp halo ring so it blends into the CSS lamp-glow */
 .hero-cin-scene-wrap .sig-lamp-halo {
@@ -607,14 +608,14 @@ code {
   flex-direction: column;
   gap: 0;
   padding: 20px 22px 18px;
-  border: 1px solid hsla(210, 60%, 78%, 0.36);
+  border: 1px solid hsla(275, 60%, 78%, 0.36);
   border-radius: 18px;
-  background: hsl(213 36% 28% / 0.96);
+  background: hsl(278 36% 28% / 0.96);
   box-shadow:
-    inset 0 1px 0 hsla(210, 60%, 90%, 0.24),
-    0 0 0 1px hsla(210, 40%, 92%, 0.10),
-    0 0 60px -8px hsla(194, 60%, 40%, 0.24),
-    0 40px 80px -20px hsl(213 60% 4% / 0.85);
+    inset 0 1px 0 hsla(275, 60%, 90%, 0.24),
+    0 0 0 1px hsla(275, 40%, 92%, 0.10),
+    0 0 60px -8px hsla(259, 60%, 40%, 0.24),
+    0 40px 80px -20px hsl(278 60% 4% / 0.85);
 }
 
 .hero-swap-header {
@@ -640,9 +641,9 @@ code {
   letter-spacing: 0.1em;
   color: var(--box-ink-2);
   padding: 3px 8px;
-  border: 1px solid hsla(210, 40%, 92%, 0.12);
+  border: 1px solid hsla(275, 40%, 92%, 0.12);
   border-radius: var(--radius-pill);
-  background: hsla(213, 44%, 12%, 0.6);
+  background: hsla(278, 44%, 12%, 0.6);
 }
 
 /* Each swap row (pay / receive) */
@@ -651,17 +652,17 @@ code {
   flex-direction: column;
   gap: 6px;
   padding: 12px 14px;
-  border: 1px solid hsla(210, 50%, 80%, 0.22);
+  border: 1px solid hsla(275, 50%, 80%, 0.22);
   border-radius: 12px;
-  background: hsl(213 38% 20% / 0.95);
+  background: hsl(278 38% 20% / 0.95);
   margin-bottom: 3px;
 }
 
 .hero-swap-row--receive {
-  border-color: hsla(194, 70%, 55%, 0.36);
-  background: hsl(194 40% 20% / 0.95);
+  border-color: hsla(259, 70%, 55%, 0.36);
+  background: hsl(259 40% 20% / 0.95);
   /* Teal tint on the receive row -- the focal moment */
-  box-shadow: inset 0 0 0 1px hsla(194, 60%, 50%, 0.18);
+  box-shadow: inset 0 0 0 1px hsla(259, 60%, 50%, 0.18);
 }
 
 .hero-swap-row-label {
@@ -684,13 +685,13 @@ code {
   font-family: var(--font-body);
   font-size: 1.4rem;
   font-weight: 800;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   color: var(--box-ink);
   line-height: 1;
 }
 
 .hero-swap-row--receive .hero-swap-amount {
-  color: hsl(194 72% 80%);
+  color: hsl(259 72% 80%);
 }
 
 /* Token chip */
@@ -699,16 +700,16 @@ code {
   align-items: center;
   gap: 6px;
   padding: 5px 10px 5px 6px;
-  border: 1px solid hsla(210, 40%, 92%, 0.18);
+  border: 1px solid hsla(275, 40%, 92%, 0.18);
   border-radius: var(--radius-pill);
-  background: hsla(213, 44%, 20%, 0.85);
+  background: hsla(278, 44%, 20%, 0.85);
   flex-shrink: 0;
   position: relative;
 }
 
 .hero-swap-token--new {
-  border-color: hsla(194, 60%, 50%, 0.36);
-  background: hsla(194, 44%, 18%, 0.80);
+  border-color: hsla(259, 60%, 50%, 0.36);
+  background: hsla(259, 44%, 18%, 0.80);
 }
 
 /* Token mark -- a small colored circle representing the token icon */
@@ -725,11 +726,11 @@ code {
 }
 
 .hero-swap-token-mark--new {
-  background: hsl(194 60% 38%);
+  background: hsl(259 60% 38%);
   font-family: var(--font-mono);
   font-size: 0.6rem;
   font-weight: 800;
-  color: hsl(194 72% 90%);
+  color: hsl(259 72% 90%);
 }
 
 /* Warm focal glow behind the $TOKEN chip -- the warm light in the fog */
@@ -738,7 +739,7 @@ code {
   inset: -20px -24px;
   border-radius: 50%;
   background: radial-gradient(ellipse 60% 60% at 50% 50%,
-    hsla(194, 72%, 52%, 0.22) 0%,
+    hsla(259, 72%, 52%, 0.22) 0%,
     hsla(40, 80%, 55%, 0.10) 45%,
     transparent 75%);
   pointer-events: none;
@@ -754,7 +755,7 @@ code {
 }
 
 .hero-swap-token--new .hero-swap-token-name {
-  color: hsl(194 72% 82%);
+  color: hsl(259 72% 82%);
 }
 
 .hero-swap-row-sub {
@@ -788,10 +789,10 @@ code {
   justify-content: center;
   width: 28px;
   height: 28px;
-  border: 1px solid hsla(210, 40%, 92%, 0.20);
+  border: 1px solid hsla(275, 40%, 92%, 0.20);
   border-radius: 50%;
-  background: hsla(213, 44%, 22%, 0.90);
-  color: hsl(206 34% 76%);
+  background: hsla(278, 44%, 22%, 0.90);
+  color: hsl(271 34% 76%);
   cursor: default;
   pointer-events: none;
 }
@@ -822,12 +823,12 @@ code {
   padding: 11px 16px;
   border: none;
   border-radius: var(--radius-pill);
-  background: hsl(194 60% 38%);
-  color: hsl(194 72% 96%);
+  background: hsl(259 60% 38%);
+  color: hsl(259 72% 96%);
   font-family: var(--font-body);
   font-size: 0.82rem;
   font-weight: 700;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   cursor: default;
   pointer-events: none;
   box-shadow: none;
@@ -843,15 +844,15 @@ code {
   margin: clamp(12px, 2vw, 24px);
   height: calc(100dvh - clamp(24px, 4vw, 48px));
   min-height: 640px;
-  border: 1px solid hsla(210, 40%, 92%, 0.1);
+  border: 1px solid hsla(275, 40%, 92%, 0.1);
   border-radius: clamp(16px, 2.5vw, 28px);
-  background: hsla(213, 44%, 8%, 0.55);
+  background: hsla(278, 44%, 8%, 0.55);
   backdrop-filter: blur(20px) saturate(1.15);
   -webkit-backdrop-filter: blur(20px) saturate(1.15);
   box-shadow:
-    inset 0 1px 0 hsla(210, 40%, 92%, 0.08),
-    0 0 0 1px hsla(210, 40%, 92%, 0.04),
-    0 48px 100px -32px hsla(213, 60%, 4%, 0.7);
+    inset 0 1px 0 hsla(275, 40%, 92%, 0.08),
+    0 0 0 1px hsla(275, 40%, 92%, 0.04),
+    0 48px 100px -32px hsla(278, 60%, 4%, 0.7);
   overflow: hidden;
 }
 
@@ -862,36 +863,36 @@ code {
   max-width: none;
   margin: 0;
   padding: clamp(14px, 2vh, 22px) clamp(20px, 3vw, 40px);
-  border-bottom: 1px solid hsla(210, 40%, 92%, 0.07);
+  border-bottom: 1px solid hsla(275, 40%, 92%, 0.07);
   animation: none;
 }
 
 /* Inside the dark frame, override nav pill background to be darker glass */
 .hero-cin-frame .hero-nav-links {
-  border-color: hsla(210, 40%, 92%, 0.12);
-  background: hsla(213, 44%, 10%, 0.6);
+  border-color: hsla(275, 40%, 92%, 0.12);
+  background: hsla(278, 44%, 10%, 0.6);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
 
 .hero-cin-frame .hero-nav-links a,
 .hero-cin-frame .hero-nav-links button {
-  color: hsla(206, 34%, 92%, 0.7);
+  color: hsla(271, 34%, 92%, 0.7);
 }
 
 .hero-cin-frame .hero-nav-links a:hover,
 .hero-cin-frame .hero-nav-links button:hover {
-  color: hsl(206, 34%, 96%);
-  background: hsla(210, 40%, 92%, 0.08);
+  color: hsl(271, 34%, 96%);
+  background: hsla(275, 40%, 92%, 0.08);
 }
 
 .hero-cin-frame .brand-name,
 .hero-cin-frame .brand-sub {
-  color: hsl(206 34% 90%);
+  color: hsl(271 34% 90%);
 }
 
 .hero-cin-frame .brand-sub {
-  color: hsla(206, 34%, 80%, 0.6);
+  color: hsla(271, 34%, 80%, 0.6);
 }
 
 /* ---- Bottom body: headline left + card right ---------------------- */
@@ -940,15 +941,15 @@ code {
   font-size: clamp(3rem, 6.5vw, 5.6rem);
   font-weight: 900;
   line-height: 0.94;
-  letter-spacing: -0.03em;
-  color: hsl(206, 34%, 96%);
+  letter-spacing: 0;
+  color: hsl(271, 34%, 96%);
 }
 
 /* "this token" -- intentionally lighter than the full headline but still legible.
    At 0.62 on the very dark backdrop (~4-5% L) the computed contrast is ~3:1 for
    large heading text, which meets WCAG AA for large text (>=18pt bold). */
 .hero-em {
-  color: hsla(206, 34%, 92%, 0.62);
+  color: hsla(271, 34%, 92%, 0.62);
   font-style: normal;
 }
 
@@ -959,7 +960,7 @@ code {
   font-size: clamp(1rem, 1.7vw, 1.22rem);
   font-weight: 550;
   line-height: 1.4;
-  color: hsl(206, 30%, 88%);
+  color: hsl(271, 30%, 88%);
   max-width: 46ch;
 }
 
@@ -988,15 +989,15 @@ code {
   flex-direction: column;
   gap: 12px;
   padding: clamp(18px, 2.5vw, 28px);
-  border: 1px solid hsla(210, 40%, 92%, 0.12);
+  border: 1px solid hsla(275, 40%, 92%, 0.12);
   border-radius: clamp(12px, 1.6vw, 20px);
-  background: hsla(213, 46%, 7%, 0.82);
+  background: hsla(278, 46%, 7%, 0.82);
   backdrop-filter: blur(24px) saturate(1.1);
   -webkit-backdrop-filter: blur(24px) saturate(1.1);
   box-shadow:
-    inset 0 1px 0 hsla(210, 40%, 92%, 0.07),
-    0 24px 64px -16px hsla(213, 60%, 4%, 0.65),
-    0 4px 16px -4px hsla(213, 60%, 4%, 0.45);
+    inset 0 1px 0 hsla(275, 40%, 92%, 0.07),
+    0 24px 64px -16px hsla(278, 60%, 4%, 0.65),
+    0 4px 16px -4px hsla(278, 60%, 4%, 0.45);
   /* Align to bottom of the body grid row */
   align-self: flex-end;
   /* Sit in front of the absolute swap wrap (z-index 0) */
@@ -1021,10 +1022,10 @@ code {
 .hero-cin-card-input {
   width: 100%;
   padding: 11px 14px;
-  border: 1px solid hsla(210, 40%, 92%, 0.14);
+  border: 1px solid hsla(275, 40%, 92%, 0.14);
   border-radius: var(--radius-m);
-  background: hsla(213, 44%, 11%, 0.7);
-  color: hsl(206, 34%, 92%);
+  background: hsla(278, 44%, 11%, 0.7);
+  color: hsl(271, 34%, 92%);
   font-family: var(--font-mono);
   font-size: 0.74rem;
   line-height: 1.4;
@@ -1033,11 +1034,11 @@ code {
 }
 
 .hero-cin-card-input::placeholder {
-  color: hsla(208, 36%, 70%, 0.4);
+  color: hsla(273, 36%, 70%, 0.4);
 }
 
 .hero-cin-card-input:focus {
-  border-color: hsla(210, 40%, 92%, 0.3);
+  border-color: hsla(275, 40%, 92%, 0.3);
 }
 
 /* White pill button -- the "Reserve" analog */
@@ -1046,12 +1047,12 @@ code {
   padding: 13px 20px;
   border: none;
   border-radius: var(--radius-pill);
-  background: hsl(206, 30%, 96%);
-  color: hsl(213, 44%, 10%);
+  background: hsl(271, 30%, 96%);
+  color: hsl(278, 44%, 10%);
   font-family: var(--font-body);
   font-size: 0.92rem;
   font-weight: 700;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   cursor: pointer;
   transition:
     background 160ms var(--ease),
@@ -1059,7 +1060,7 @@ code {
 }
 
 .hero-cin-card-btn:hover {
-  background: hsl(206, 24%, 100%);
+  background: hsl(271, 24%, 100%);
   transform: translateY(-1px);
 }
 
@@ -1073,7 +1074,7 @@ code {
   align-items: center;
   gap: 14px;
   padding-top: 4px;
-  border-top: 1px solid hsla(210, 40%, 92%, 0.08);
+  border-top: 1px solid hsla(275, 40%, 92%, 0.08);
 }
 
 .hero-cin-legend-item {
@@ -1085,7 +1086,7 @@ code {
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: hsla(206, 34%, 88%, 0.55);
+  color: hsla(271, 34%, 88%, 0.55);
 }
 
 .hero-cin-dot {
@@ -1167,7 +1168,7 @@ code {
   color: var(--ink);
   font-weight: 800;
   font-size: 1.02rem;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 
 .brand-copy {
@@ -1178,7 +1179,7 @@ code {
 .brand-name {
   font-size: 1.04rem;
   font-weight: 800;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 
 .brand-sub {
@@ -1273,14 +1274,14 @@ code {
   font-size: clamp(3.4rem, 7.4vw, 6rem);
   font-weight: 900;
   line-height: 0.92;
-  letter-spacing: -0.03em;
+  letter-spacing: 0;
 }
 
 .hero-tagline {
   margin-top: 14px;
   font-size: clamp(1.3rem, 2.3vw, 1.7rem);
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   line-height: 1.2;
   color: var(--ink);
 }
@@ -1288,7 +1289,7 @@ code {
 /* Inside the cinematic hero the base .hero-tagline ink override must be
    reversed — the backdrop is always dark regardless of page theme. */
 .hero-cin-copy .hero-tagline {
-  color: hsl(206, 30%, 88%);
+  color: hsl(271, 30%, 88%);
   font-size: clamp(1rem, 1.7vw, 1.22rem);
   font-weight: 550;
 }
@@ -1420,8 +1421,8 @@ code {
   background:
     linear-gradient(160deg, var(--box-2), var(--box) 60%);
   box-shadow:
-    0 40px 90px -54px hsla(213, 60%, 4%, 0.8),
-    inset 0 1px 0 hsla(210, 40%, 92%, 0.1);
+    0 40px 90px -54px hsla(278, 60%, 4%, 0.8),
+    inset 0 1px 0 hsla(275, 40%, 92%, 0.1);
 }
 
 /* Brass frame rivets + a faint inspection grid inside the box. */
@@ -1497,7 +1498,7 @@ code {
 /* Route to the root (the merkle proof locking up) */
 .sig-route-base {
   fill: none;
-  stroke: hsla(210, 40%, 92%, 0.18);
+  stroke: hsla(275, 40%, 92%, 0.18);
   stroke-width: 1.4;
   stroke-dasharray: 1 5;
   stroke-linecap: round;
@@ -1564,7 +1565,7 @@ code {
 }
 
 .sig-arm-stripe {
-  fill: hsl(206 34% 96%);
+  fill: hsl(271 34% 96%);
 }
 
 .sig-arm-pivot {
@@ -1598,7 +1599,7 @@ code {
 }
 
 .sig-train-glass {
-  fill: hsla(210, 40%, 92%, 0.16);
+  fill: hsla(275, 40%, 92%, 0.16);
 }
 
 .sig-train-label {
@@ -1618,7 +1619,7 @@ code {
 }
 
 .sig-reg-line {
-  stroke: hsla(210, 40%, 92%, 0.2);
+  stroke: hsla(275, 40%, 92%, 0.2);
   stroke-width: 2.4;
   stroke-linecap: round;
 }
@@ -1631,7 +1632,7 @@ code {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   border-top: 1px solid var(--box-line);
-  background: hsla(213, 50%, 6%, 0.6);
+  background: hsla(278, 50%, 6%, 0.6);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
 }
@@ -1900,7 +1901,7 @@ code {
 .console-heading h2 {
   font-size: 1.42rem;
   font-weight: 800;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 .console-heading .muted {
@@ -2004,7 +2005,7 @@ code {
 .connection-copy h2 {
   font-size: 1.06rem;
   font-weight: 700;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 
 .connection-copy .muted {
@@ -2176,6 +2177,50 @@ code {
   gap: 16px;
 }
 
+.payment-sheet-terms {
+  margin: 0;
+}
+
+.payment-sheet-terms > div {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.payment-sheet-terms > div:first-child {
+  padding-top: 0;
+}
+
+.payment-sheet-terms dt {
+  color: var(--ink-3);
+  font-size: 0.78rem;
+}
+
+.payment-sheet-terms dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.82rem;
+}
+
+.payment-sheet-terms dd strong,
+.payment-sheet-terms dd small {
+  display: block;
+}
+
+.payment-sheet-terms dd small {
+  margin-top: 3px;
+  color: var(--ink-3);
+}
+
+.payment-sheet-terms code {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  overflow-wrap: anywhere;
+}
+
 .console-subject-input {
   width: min(240px, 30vw);
   padding: 8px 11px;
@@ -2314,8 +2359,7 @@ code {
   display: block;
   margin-bottom: 16px;
   padding: clamp(20px, 3vw, 30px);
-  border: 1px solid var(--border);
-  border-left: 4px solid var(--v, var(--border));
+  border: 1px solid color-mix(in oklab, var(--v, var(--border)) 45%, var(--border));
   border-radius: var(--radius-xl);
   background: color-mix(in oklab, var(--v, transparent) 7%, var(--card));
   box-shadow: var(--shadow-s);
@@ -2350,7 +2394,7 @@ code {
   color: var(--v, var(--foreground));
   font-size: clamp(2.2rem, 6vw, 3.4rem);
   font-weight: 800;
-  letter-spacing: -0.03em;
+  letter-spacing: 0;
   line-height: 0.95;
 }
 .verdict-detail {
@@ -2377,36 +2421,8 @@ code {
   color: var(--aspect-caution-ink);
   font-size: clamp(1.4rem, 3vw, 1.9rem);
   font-weight: 800;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
-
-/* Three-row aspect legend so every outcome reads as a normal result */
-.aspect-legend {
-  margin: 16px 0 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.aspect-legend li {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border-left: 3px solid var(--border);
-  border-radius: 6px;
-  background: color-mix(in oklab, var(--foreground) 3%, transparent);
-  font-size: 0.82rem;
-  color: var(--muted-foreground);
-}
-.aspect-legend li b { margin-right: 2px; color: var(--foreground); font-weight: 700; letter-spacing: 0.03em; }
-.aspect-legend .is-clear { border-left-color: var(--aspect-clear-ink); }
-.aspect-legend .is-clear svg { color: var(--aspect-clear-ink); }
-.aspect-legend .is-caution { border-left-color: var(--aspect-caution-ink); }
-.aspect-legend .is-caution svg { color: var(--aspect-caution-ink); }
-.aspect-legend .is-danger { border-left-color: var(--aspect-danger-ink); }
-.aspect-legend .is-danger svg { color: var(--aspect-danger-ink); }
 
 .identity-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 16px; }
 .identity-subject { font-family: var(--font-data); font-size: 0.86rem; color: var(--foreground); }
@@ -2442,6 +2458,32 @@ code {
   padding-top: 16px;
   border-top: 1px solid var(--border);
 }
+.hero-run-network {
+  display: grid;
+  flex: 0 0 176px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-height: 40px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.hero-run-network button {
+  min-width: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  font: 650 0.76rem/1 var(--font-body);
+}
+.hero-run-network button.is-active {
+  background: var(--card);
+  color: var(--foreground);
+  box-shadow: 0 1px 3px color-mix(in oklab, var(--foreground) 12%, transparent);
+}
+.hero-run-network button:disabled { cursor: wait; opacity: 0.55; }
+.hero-run-network button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
 .hero-run-input {
   flex: 1 1 220px;
   min-width: 0;
@@ -2472,7 +2514,6 @@ code {
   gap: 10px;
   padding: 12px 14px;
   border: 1px solid var(--border);
-  border-left: 3px solid var(--border);
   border-radius: var(--radius-l);
   background: var(--card);
 }
@@ -2502,11 +2543,11 @@ code {
   white-space: nowrap;
 }
 .rail-caption { margin: 4px 0 0; font-size: 0.72rem; line-height: 1.4; color: var(--muted-foreground); }
-.rail-stop.is-done { border-left-color: var(--aspect-clear-ink); }
+.rail-stop.is-done { border-color: color-mix(in oklab, var(--aspect-clear-ink) 55%, var(--border)); }
 .rail-stop.is-done .rail-num { color: var(--aspect-clear-ink); border-color: var(--aspect-clear-ink); }
-.rail-stop.is-blocked { border-left-color: var(--aspect-caution-ink); }
+.rail-stop.is-blocked { border-color: color-mix(in oklab, var(--aspect-caution-ink) 55%, var(--border)); }
 .rail-stop.is-blocked .rail-num { color: var(--aspect-caution-ink); border-color: var(--aspect-caution-ink); }
-.rail-stop.is-active { border-left-color: var(--con-brass); }
+.rail-stop.is-active { border-color: color-mix(in oklab, var(--con-brass) 55%, var(--border)); }
 .rail-stop.is-active .rail-num { color: var(--con-brass); border-color: var(--con-brass); }
 .rail-stop.is-active {
   background-image: linear-gradient(90deg, transparent, color-mix(in oklab, var(--con-brass) 16%, transparent), transparent);
@@ -2530,22 +2571,28 @@ code {
   align-items: center;
   gap: 9px;
   padding: 8px 12px;
-  border-left: 3px solid var(--border);
+  border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--card);
   font-size: 0.86rem;
   color: var(--foreground);
 }
 .check-row svg { flex: none; }
-.check-row.is-danger { border-left-color: var(--aspect-danger-ink); }
+.check-row.is-danger { border-color: color-mix(in oklab, var(--aspect-danger-ink) 55%, var(--border)); }
 .check-row.is-danger svg { color: var(--aspect-danger-ink); }
-.check-row.is-caution { border-left-color: var(--aspect-caution-ink); }
+.check-row.is-caution { border-color: color-mix(in oklab, var(--aspect-caution-ink) 55%, var(--border)); }
 .check-row.is-caution svg { color: var(--aspect-caution-ink); }
-.check-row.is-pass { border-left-color: var(--aspect-clear-ink); }
+.check-row.is-pass { border-color: color-mix(in oklab, var(--aspect-clear-ink) 55%, var(--border)); }
 .check-row.is-pass svg { color: var(--aspect-clear-ink); }
 .check-row.is-unchecked { color: var(--muted-foreground); }
 .check-row.is-unchecked svg { color: var(--muted-foreground); }
 .check-tag { margin-left: auto; font-family: var(--font-data); font-size: 0.62rem; color: var(--muted-foreground); }
+.check-missing-note {
+  margin: 2px 0 0;
+  color: var(--muted-foreground);
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
 
 /* Registry receipt: copyable key/value definition list */
 .decision-receipt { display: flex; flex-direction: column; gap: 12px; }
@@ -2600,11 +2647,11 @@ code {
 [data-theme="dark"] .console-glass-frame .rail-stop,
 [data-theme="dark"] .console-glass-frame .check-row,
 [data-theme="dark"] .console-glass-frame .aspect-legend li {
-  background: hsla(213 46% 7% / 0.55);
+  background: hsla(278 46% 7% / 0.55);
   border-color: var(--box-line);
 }
 [data-theme="dark"] .console-glass-frame .agent-pay-verdict-hero {
-  background: color-mix(in oklab, var(--v, transparent) 13%, hsla(213 46% 7% / 0.85));
+  background: color-mix(in oklab, var(--v, transparent) 13%, hsla(278 46% 7% / 0.85));
   border-color: var(--box-line);
   border-left-color: var(--v, var(--box-line));
 }
@@ -2626,7 +2673,7 @@ code {
 [data-theme="dark"] .console-glass-frame .identity-tag { color: var(--box-ink-2); }
 [data-theme="dark"] .console-glass-frame .rail-num { border-color: var(--box-line); color: var(--box-ink-2); }
 [data-theme="dark"] .console-glass-frame .hero-run-input {
-  background: hsla(213 46% 7% / 0.6);
+  background: hsla(278 46% 7% / 0.6);
   border-color: var(--box-line);
   color: var(--box-ink);
 }
@@ -2757,7 +2804,7 @@ code {
   color: var(--ink);
   font-size: 1rem;
   font-weight: 700;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 
 .panel-header {
@@ -2782,7 +2829,7 @@ code {
 .panel-header h2 {
   font-size: 1.02rem;
   font-weight: 750;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 
 .panel-header p {
@@ -3352,7 +3399,7 @@ code {
 .footer-name {
   font-weight: 800;
   font-size: 0.98rem;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 
 .agent-pay-footer p {
@@ -3403,9 +3450,9 @@ code {
 .agent-pay-button-primary-white:disabled { opacity: .6; cursor: default; transform: none; }
 
 [data-theme="dark"] .console-glass-frame .agent-pay-button-primary-white {
-  color: hsl(213 36% 12%); background: hsl(206 30% 96%);
+  color: hsl(278 36% 12%); background: hsl(271 30% 96%);
 }
-[data-theme="dark"] .console-glass-frame .agent-pay-button-primary-white:hover { transform: translateY(-1px); background: hsl(206 24% 100%); }
+[data-theme="dark"] .console-glass-frame .agent-pay-button-primary-white:hover { transform: translateY(-1px); background: hsl(271 24% 100%); }
 [data-theme="dark"] .console-glass-frame .agent-pay-button-primary-white:active { transform: translateY(0); }
 [data-theme="dark"] .console-glass-frame .agent-pay-button-primary-white:disabled { opacity: .6; cursor: default; transform: none; }
 
@@ -3420,7 +3467,7 @@ code {
 [data-theme="dark"] .console-glass-frame .decision-receipt,
 [data-theme="dark"] .console-glass-frame .evidence-record,
 [data-theme="dark"] .console-glass-frame .proof-row {
-  background: hsla(213 46% 7% / .82);
+  background: hsla(278 46% 7% / .82);
   border-color: var(--box-line);
   color: var(--box-ink);
 }
@@ -3431,7 +3478,7 @@ code {
 }
 
 [data-theme="dark"] .console-glass-frame .panel {
-  background: hsla(213 46% 7% / .82);
+  background: hsla(278 46% 7% / .82);
   border-color: var(--box-line);
   color: var(--box-ink);
 }
@@ -3459,7 +3506,7 @@ code {
 
 /* Panel header icon */
 [data-theme="dark"] .console-glass-frame .panel-icon {
-  background: hsla(213 38% 16% / .9);
+  background: hsla(278 38% 16% / .9);
   border-color: var(--box-line);
   color: var(--box-brass);
 }
@@ -3474,14 +3521,14 @@ code {
 
 /* Tabs */
 [data-theme="dark"] .console-glass-frame .agent-pay-tabs-list {
-  background: hsla(213 38% 11% / .8);
+  background: hsla(278 38% 11% / .8);
   border-color: var(--box-line);
 }
 [data-theme="dark"] .console-glass-frame .agent-pay-tabs-trigger { color: var(--box-ink-2); }
 [data-theme="dark"] .console-glass-frame .agent-pay-tabs-trigger[data-state="active"] {
-  background: hsla(213 38% 16% / .9);
+  background: hsla(278 38% 16% / .9);
   color: var(--box-ink);
-  box-shadow: inset 0 1px 0 hsla(210 40% 92% / .08);
+  box-shadow: inset 0 1px 0 hsla(275 40% 92% / .08);
 }
 
 /* Separator */
@@ -3490,7 +3537,7 @@ code {
 /* Code blocks */
 [data-theme="dark"] .console-glass-frame .agent-pay-code-block,
 [data-theme="dark"] .console-glass-frame .tx-hash {
-  background: hsla(213 38% 11% / .7);
+  background: hsla(278 38% 11% / .7);
   border-color: var(--box-line);
   color: var(--box-ink-2);
 }
@@ -3499,41 +3546,41 @@ code {
 /* Input and textarea */
 [data-theme="dark"] .console-glass-frame .agent-pay-input,
 [data-theme="dark"] .console-glass-frame .agent-identifier-field input {
-  background: hsla(213 44% 11% / .7);
-  border-color: hsla(210 40% 92% / .14);
+  background: hsla(278 44% 11% / .7);
+  border-color: hsla(275 40% 92% / .14);
   color: var(--box-ink);
   font-family: var(--font-mono);
 }
-[data-theme="dark"] .console-glass-frame .agent-pay-input::placeholder { color: hsla(208 36% 70% / .4); }
-[data-theme="dark"] .console-glass-frame .agent-pay-input:focus { border-color: hsla(210 40% 92% / .3); box-shadow: none; }
+[data-theme="dark"] .console-glass-frame .agent-pay-input::placeholder { color: hsla(273 36% 70% / .4); }
+[data-theme="dark"] .console-glass-frame .agent-pay-input:focus { border-color: hsla(275 40% 92% / .3); box-shadow: none; }
 
 [data-theme="dark"] .console-glass-frame .agent-pay-textarea,
 [data-theme="dark"] .console-glass-frame .payload-field textarea {
-  background: hsla(213 44% 11% / .7);
-  border-color: hsla(210 40% 92% / .14);
+  background: hsla(278 44% 11% / .7);
+  border-color: hsla(275 40% 92% / .14);
   color: var(--box-ink);
 }
-[data-theme="dark"] .console-glass-frame .agent-pay-textarea:focus { border-color: hsla(210 40% 92% / .3); box-shadow: none; }
+[data-theme="dark"] .console-glass-frame .agent-pay-textarea:focus { border-color: hsla(275 40% 92% / .3); box-shadow: none; }
 
 /* Error alert */
 [data-theme="dark"] .console-glass-frame .error-banner {
-  background: color-mix(in oklab, var(--aspect-danger) 10%, hsla(213 46% 7% / .9));
+  background: color-mix(in oklab, var(--aspect-danger) 10%, hsla(278 46% 7% / .9));
   border-color: color-mix(in oklab, var(--aspect-danger) 30%, transparent);
   color: var(--aspect-danger);
 }
 
 /* Proof verdict states */
 [data-theme="dark"] .console-glass-frame .proof-verdict {
-  background: hsla(213 46% 7% / .82);
+  background: hsla(278 46% 7% / .82);
   border-color: var(--box-line);
 }
 [data-theme="dark"] .console-glass-frame .proof-verdict.is-clear {
   border-color: color-mix(in oklab, var(--aspect-clear) 30%, var(--box-line));
-  background: color-mix(in oklab, var(--aspect-clear) 5%, hsla(213 46% 7% / .82));
+  background: color-mix(in oklab, var(--aspect-clear) 5%, hsla(278 46% 7% / .82));
 }
 [data-theme="dark"] .console-glass-frame .proof-verdict.is-danger {
   border-color: color-mix(in oklab, var(--aspect-danger) 30%, var(--box-line));
-  background: color-mix(in oklab, var(--aspect-danger) 5%, hsla(213 46% 7% / .82));
+  background: color-mix(in oklab, var(--aspect-danger) 5%, hsla(278 46% 7% / .82));
 }
 [data-theme="dark"] .console-glass-frame .proof-verdict-note { color: var(--box-ink-2); }
 [data-theme="dark"] .console-glass-frame .proof-anchors dt { color: var(--box-brass); }
@@ -3543,13 +3590,13 @@ code {
 [data-theme="dark"] .console-glass-frame .payment-readiness.ready,
 [data-theme="dark"] .console-glass-frame .payment-readiness.pass {
   --readiness-aspect: var(--aspect-clear);
-  background: color-mix(in oklab, var(--aspect-clear) 5%, hsla(213 46% 7% / .82));
+  background: color-mix(in oklab, var(--aspect-clear) 5%, hsla(278 46% 7% / .82));
 }
 [data-theme="dark"] .console-glass-frame .payment-readiness.configuration_required,
 [data-theme="dark"] .console-glass-frame .payment-readiness.missing,
 [data-theme="dark"] .console-glass-frame .payment-readiness.payment_required {
   --readiness-aspect: var(--aspect-caution);
-  background: color-mix(in oklab, var(--aspect-caution) 5%, hsla(213 46% 7% / .82));
+  background: color-mix(in oklab, var(--aspect-caution) 5%, hsla(278 46% 7% / .82));
 }
 [data-theme="dark"] .console-glass-frame .payment-readiness.facilitator_unavailable,
 [data-theme="dark"] .console-glass-frame .payment-readiness.facilitator_unsupported,
@@ -3557,13 +3604,13 @@ code {
 [data-theme="dark"] .console-glass-frame .payment-readiness.error,
 [data-theme="dark"] .console-glass-frame .payment-readiness.fail {
   --readiness-aspect: var(--aspect-danger);
-  background: color-mix(in oklab, var(--aspect-danger) 5%, hsla(213 46% 7% / .82));
+  background: color-mix(in oklab, var(--aspect-danger) 5%, hsla(278 46% 7% / .82));
 }
 
 /* Decision receipt */
 [data-theme="dark"] .console-glass-frame .decision-receipt {
   border-color: color-mix(in oklab, var(--aspect-clear) 25%, var(--box-line));
-  background: color-mix(in oklab, var(--aspect-clear) 5%, hsla(213 46% 7% / .82));
+  background: color-mix(in oklab, var(--aspect-clear) 5%, hsla(278 46% 7% / .82));
 }
 [data-theme="dark"] .console-glass-frame .receipt-heading { color: var(--aspect-clear); }
 
@@ -3601,13 +3648,13 @@ code {
 
 /* Connection panel — remove green gradient, use dark glass */
 [data-theme="dark"] .console-glass-frame .agent-connection-panel {
-  background: hsla(213 46% 7% / .82);
+  background: hsla(278 46% 7% / .82);
   border-color: var(--box-line);
-  box-shadow: inset 0 1px 0 hsla(210 40% 92% / .07), 0 24px 64px -16px hsla(213 60% 4% / .65);
+  box-shadow: inset 0 1px 0 hsla(275 40% 92% / .07), 0 24px 64px -16px hsla(278 60% 4% / .65);
   color: var(--box-ink);
 }
 [data-theme="dark"] .console-glass-frame .agent-connection-panel.connected {
-  background: hsla(213 46% 7% / .82);
+  background: hsla(278 46% 7% / .82);
   border-color: var(--box-line);
 }
 [data-theme="dark"] .console-glass-frame .connection-copy h2,
@@ -3618,41 +3665,41 @@ code {
 
 /* Secondary buttons inside glass frame */
 [data-theme="dark"] .console-glass-frame .secondary-action {
-  background: hsla(213 38% 16% / .9);
+  background: hsla(278 38% 16% / .9);
   border-color: var(--box-line);
   color: var(--box-ink);
 }
 [data-theme="dark"] .console-glass-frame .secondary-action:hover {
-  background: hsla(213 38% 20% / .9);
-  border-color: hsla(210 40% 92% / .2);
+  background: hsla(278 38% 20% / .9);
+  border-color: hsla(275 40% 92% / .2);
   color: var(--box-ink);
 }
 
 /* Icon action buttons */
 [data-theme="dark"] .console-glass-frame .icon-action {
-  background: hsla(213 38% 16% / .9);
+  background: hsla(278 38% 16% / .9);
   border-color: var(--box-line);
   color: var(--box-ink);
 }
 [data-theme="dark"] .console-glass-frame .icon-action:hover {
-  background: hsla(213 38% 20% / .9);
-  border-color: hsla(210 40% 92% / .2);
+  background: hsla(278 38% 20% / .9);
+  border-color: hsla(275 40% 92% / .2);
 }
 
 /* Source row inside source list */
 [data-theme="dark"] .console-glass-frame .source-list .agent-pay-table {
-  background: hsla(213 38% 11% / .7);
+  background: hsla(278 38% 11% / .7);
   border-color: var(--box-line);
 }
 [data-theme="dark"] .console-glass-frame .source-row {
-  background: hsla(213 38% 11% / .7);
+  background: hsla(278 38% 11% / .7);
 }
 [data-theme="dark"] .console-glass-frame .source-row strong { color: var(--box-ink); }
 [data-theme="dark"] .console-glass-frame .source-row span { color: var(--box-ink-2); }
 
 /* Proof row rail */
 [data-theme="dark"] .console-glass-frame .proof-row {
-  background: hsla(213 38% 11% / .7);
+  background: hsla(278 38% 11% / .7);
   border-color: var(--box-line);
 }
 [data-theme="dark"] .console-glass-frame .proof-row::before { background: var(--box-line); }
@@ -3787,7 +3834,7 @@ code {
   margin-top: 10px;
   font-size: clamp(1.8rem, 4vw, 3rem);
   font-weight: 800;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   line-height: 1.06;
 }
 
@@ -3916,7 +3963,7 @@ code {
 .verdict-aspect {
   font-size: clamp(2.2rem, 5vw, 3.6rem);
   font-weight: 900;
-  letter-spacing: -0.03em;
+  letter-spacing: 0;
   line-height: 1;
 }
 
@@ -4016,15 +4063,15 @@ code {
 
 /* Theme-aware: dark keeps the dusk stage, light stays on the page bg. */
 .page-fog{position:relative;min-height:100dvh;overflow:hidden;background:var(--bg);isolation:isolate}
-[data-theme="dark"].page-fog,.dark .page-fog{background:hsl(213 40% 5%)}
-[data-theme="dark"].page-fog::before,.dark .page-fog::before{content:"";position:absolute;inset:0;z-index:-2;background:radial-gradient(120% 90% at 72% 18%, hsl(213 38% 12%) 0%, hsl(213 40% 7%) 48%, hsl(213 42% 5%) 100%);pointer-events:none}
+[data-theme="dark"].page-fog,.dark .page-fog{background:hsl(278 40% 5%)}
+[data-theme="dark"].page-fog::before,.dark .page-fog::before{content:"";position:absolute;inset:0;z-index:-2;background:radial-gradient(120% 90% at 72% 18%, hsl(278 38% 12%) 0%, hsl(278 40% 7%) 48%, hsl(278 42% 5%) 100%);pointer-events:none}
 .page-fog::after{content:"";position:absolute;inset:-10% -20%;z-index:-1;pointer-events:none}
 
 /* Light frame is a plain card; the glass treatment belongs to the dark stage. */
 .glass-frame{position:relative;margin:clamp(12px,2vw,24px);border:1px solid var(--line);border-radius:12px;background:var(--surface);box-shadow:var(--shadow-m)}
-[data-theme="dark"] .glass-frame,.dark .glass-frame{border-color:hsla(210 40% 92% / .1);background:hsla(213 44% 8% / .55);backdrop-filter:blur(20px) saturate(1.15);-webkit-backdrop-filter:blur(20px) saturate(1.15);box-shadow:inset 0 1px 0 hsla(210 40% 92% / .08),0 40px 100px -32px hsla(213 60% 3% / .7)}
+[data-theme="dark"] .glass-frame,.dark .glass-frame{border-color:hsla(275 40% 92% / .1);background:hsla(278 44% 8% / .55);backdrop-filter:blur(20px) saturate(1.15);-webkit-backdrop-filter:blur(20px) saturate(1.15);box-shadow:inset 0 1px 0 hsla(275 40% 92% / .08),0 40px 100px -32px hsla(278 60% 3% / .7)}
 
-.glass-card{border:1px solid var(--box-line);border-radius:10px;background:hsla(213 46% 7% / .82);backdrop-filter:blur(24px) saturate(1.1);-webkit-backdrop-filter:blur(24px) saturate(1.1);box-shadow:inset 0 1px 0 hsla(210 40% 92% / .07),0 24px 64px -16px hsla(213 60% 4% / .65),0 4px 16px -4px hsla(213 60% 4% / .45);color:var(--box-ink)}
+.glass-card{border:1px solid var(--box-line);border-radius:10px;background:hsla(278 46% 7% / .82);backdrop-filter:blur(24px) saturate(1.1);-webkit-backdrop-filter:blur(24px) saturate(1.1);box-shadow:inset 0 1px 0 hsla(275 40% 92% / .07),0 24px 64px -16px hsla(278 60% 4% / .65),0 4px 16px -4px hsla(278 60% 4% / .45);color:var(--box-ink)}
 /* The VerdictCard is the primary result surface on the theme-aware /check and
    /counterparty pages. On the light theme, relight the glass card and remap its
    box-/aspect- tokens to readable light values so it belongs to the page instead
@@ -4048,11 +4095,11 @@ code {
   background:var(--ink);color:var(--surface);
 }
 
-.glass-input{width:100%;font-family:var(--font-mono);font-size:.9rem;color:var(--box-ink);background:hsla(213 44% 11% / .7);border:1px solid hsla(210 40% 92% / .14);border-radius:var(--radius-m);padding:.7rem .85rem;transition:border-color 180ms var(--ease)}
-.glass-input::placeholder{color:hsla(208 36% 70% / .4)}
-.glass-input:focus,.glass-input:focus-visible{outline:none;border-color:hsla(210 40% 92% / .3)}
+.glass-input{width:100%;font-family:var(--font-mono);font-size:.9rem;color:var(--box-ink);background:hsla(278 44% 11% / .7);border:1px solid hsla(275 40% 92% / .14);border-radius:var(--radius-m);padding:.7rem .85rem;transition:border-color 180ms var(--ease)}
+.glass-input::placeholder{color:hsla(273 36% 70% / .4)}
+.glass-input:focus,.glass-input:focus-visible{outline:none;border-color:hsla(275 40% 92% / .3)}
 
-.btn-pill-primary{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;font-family:var(--font-body);font-weight:650;color:hsl(213 36% 12%);background:hsl(206 30% 96%);border:none;border-radius:var(--radius-pill);padding:.7rem 1.1rem;cursor:pointer;transition:transform 160ms var(--ease),background-color 160ms var(--ease)}
+.btn-pill-primary{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;font-family:var(--font-body);font-weight:650;color:hsl(278 36% 12%);background:hsl(271 30% 96%);border:none;border-radius:var(--radius-pill);padding:.7rem 1.1rem;cursor:pointer;transition:transform 160ms var(--ease),background-color 160ms var(--ease)}
 .btn-pill-primary:hover{transform:translateY(-1px)}
 .btn-pill-primary:active{transform:translateY(0)}
 .btn-pill-primary:disabled{opacity:.6;cursor:default;transform:none}
@@ -4109,12 +4156,12 @@ code {
   justify-content: space-between;
   gap: 20px;
   padding: clamp(14px, 2vh, 22px) clamp(20px, 3vw, 40px);
-  border-bottom: 1px solid hsla(210, 40%, 92%, 0.07);
+  border-bottom: 1px solid hsla(275, 40%, 92%, 0.07);
 }
 
 .ask-frame-links {
-  border-color: hsla(210, 40%, 92%, 0.12);
-  background: hsla(213, 44%, 10%, 0.6);
+  border-color: hsla(275, 40%, 92%, 0.12);
+  background: hsla(278, 44%, 10%, 0.6);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
@@ -4132,8 +4179,8 @@ code {
 }
 
 .ask-frame-links a:hover {
-  color: hsl(206, 34%, 96%);
-  background: hsla(210, 40%, 92%, 0.08);
+  color: hsl(271, 34%, 96%);
+  background: hsla(275, 40%, 92%, 0.08);
 }
 
 /* Focal area: vertically centered card */
@@ -4159,7 +4206,7 @@ code {
 .ask-lead {
   font-size: clamp(1.16rem, 2vw, 1.44rem);
   font-weight: 750;
-  letter-spacing: -0.015em;
+  letter-spacing: 0;
   line-height: 1.2;
   color: var(--box-ink);
   margin: 0;
@@ -4192,7 +4239,7 @@ code {
 .ask-input:focus,
 .ask-input:focus-visible {
   outline: none;
-  border-color: hsla(210, 40%, 92%, 0.38);
+  border-color: hsla(275, 40%, 92%, 0.38);
   box-shadow: none;
 }
 
@@ -4230,7 +4277,7 @@ code {
   align-items: center;
   gap: 14px;
   padding-top: 8px;
-  border-top: 1px solid hsla(210, 40%, 92%, 0.08);
+  border-top: 1px solid hsla(275, 40%, 92%, 0.08);
 }
 
 .ask-legend-item {
@@ -4242,7 +4289,7 @@ code {
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: hsla(206, 34%, 88%, 0.55);
+  color: hsla(271, 34%, 88%, 0.55);
 }
 
 /* Loading progress card */
@@ -4310,7 +4357,7 @@ code {
   padding: 14px 16px;
   border: 1px solid color-mix(in oklab, var(--aspect-danger) 40%, transparent);
   border-radius: clamp(12px, 1.6vw, 20px);
-  background: color-mix(in oklab, var(--aspect-danger) 8%, hsla(213 46% 7% / .82));
+  background: color-mix(in oklab, var(--aspect-danger) 8%, hsla(278 46% 7% / .82));
   color: var(--box-ink);
   font-size: 0.88rem;
   line-height: 1.5;
@@ -4389,7 +4436,7 @@ code {
   margin: 0;
   font-size: clamp(2.4rem, 6vw, 3.4rem);
   font-weight: 800;
-  letter-spacing: -0.03em;
+  letter-spacing: 0;
   line-height: 1;
   /* color set inline from --vc-aspect */
   animation: aspect-word-in 360ms 80ms ease-out both;
@@ -4553,7 +4600,7 @@ code {
   color: var(--box-ink);
   font-size: 0.98rem;
   font-weight: 720;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   line-height: 1.2;
 }
 
@@ -4670,7 +4717,7 @@ code {
   color: var(--box-ink-2);
   text-align: center;
   padding-top: 4px;
-  border-top: 1px solid hsla(210, 40%, 92%, 0.07);
+  border-top: 1px solid hsla(275, 40%, 92%, 0.07);
   line-height: 1.4;
 }
 
@@ -4737,7 +4784,7 @@ code {
   justify-content: space-between;
   gap: 20px;
   padding: clamp(14px, 2vh, 22px) clamp(20px, 3vw, 40px);
-  border-bottom: 1px solid hsla(210, 40%, 92%, 0.07);
+  border-bottom: 1px solid hsla(275, 40%, 92%, 0.07);
 }
 
 .agents-brand {
@@ -4761,9 +4808,9 @@ code {
   align-items: center;
   gap: 4px;
   padding: 4px;
-  border: 1px solid hsla(210, 40%, 92%, 0.12);
+  border: 1px solid hsla(275, 40%, 92%, 0.12);
   border-radius: var(--radius-pill);
-  background: hsla(213, 44%, 10%, 0.6);
+  background: hsla(278, 44%, 10%, 0.6);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
@@ -4784,8 +4831,8 @@ code {
 }
 
 .agents-frame-links button:hover {
-  color: hsl(206, 34%, 96%);
-  background: hsla(210, 40%, 92%, 0.08);
+  color: hsl(271, 34%, 96%);
+  background: hsla(275, 40%, 92%, 0.08);
 }
 
 .agents-hero {
@@ -4860,7 +4907,7 @@ code {
   border: 1px solid var(--box-line);
   border-radius: 50%;
   color: var(--aspect-caution);
-  background: hsla(210, 40%, 92%, 0.05);
+  background: hsla(275, 40%, 92%, 0.05);
 }
 
 .agents-code-block {
@@ -4869,7 +4916,7 @@ code {
   padding: 14px;
   border: 1px solid var(--box-line);
   border-radius: 8px;
-  background: hsla(213, 44%, 5%, 0.72);
+  background: hsla(278, 44%, 5%, 0.72);
 }
 
 .agents-code-block code {
@@ -4969,7 +5016,7 @@ code {
   padding: 15px;
   border: 1px solid var(--box-line);
   border-radius: 8px;
-  background: hsla(213, 46%, 7%, 0.66);
+  background: hsla(278, 46%, 7%, 0.66);
   animation: agents-step-in 420ms var(--ease) both;
   animation-delay: calc(var(--step-index) * 70ms);
 }
@@ -4980,10 +5027,10 @@ code {
   justify-content: center;
   width: 36px;
   height: 36px;
-  border: 1px solid hsla(210, 40%, 92%, 0.12);
+  border: 1px solid hsla(275, 40%, 92%, 0.12);
   border-radius: 50%;
   color: var(--aspect-caution);
-  background: hsla(210, 40%, 92%, 0.05);
+  background: hsla(275, 40%, 92%, 0.05);
 }
 
 .agents-flow-step h3 {
@@ -5100,7 +5147,7 @@ code {
 /* ===== HARD OVERRIDE: zero glowing dots / ambient lights (user directive) ===== */
 .hero-cin-lamp-glow, .hero-swap-token-glow { display: none !important; }
 .page-fog::after, .agent-pay-landing::before, .agent-pay-landing::after { background: none !important; box-shadow: none !important; }
-.hero-cin-backdrop, .hero-cin-fog-a, .hero-cin-fog-b, .hero-cin-scene-wrap { background: hsl(213 40% 6%) !important; box-shadow: none !important; }
+.hero-cin-backdrop, .hero-cin-fog-a, .hero-cin-fog-b, .hero-cin-scene-wrap { background: hsl(278 40% 6%) !important; box-shadow: none !important; }
 .lamp-lens, .hero-cin-dot, .check-progress-dot, .sig-lamp, .sig-lamp-halo, .hero-signal i, .proof-layer::before, .aspect-chip::before, .hero-cin-status-dot { box-shadow: none !important; filter: none !important; }
 .lamp-lens, .aspect-chip, .check-progress-dot, .hero-signal i, .sig-lamp, .sig-lamp-halo { animation: none !important; }
 [class*="sheet"] { background-image: none !important; }
@@ -5117,8 +5164,8 @@ code {
 
 /* ===== FLAT BG: no gradient page background (user directive; dark stage only) ===== */
 [data-theme="dark"].page-fog, [data-theme="dark"].page-fog::before,
-.dark .page-fog, .dark .page-fog::before { background: hsl(213 40% 6%) !important; }
-.dark .agent-pay-landing { background: hsl(213 40% 6%) !important; }
+.dark .page-fog, .dark .page-fog::before { background: hsl(278 40% 6%) !important; }
+.dark .agent-pay-landing { background: hsl(278 40% 6%) !important; }
 .hero-cin-scene-wrap, .hero-cin-swap-wrap { background: transparent !important; }
 
 /* ---- Hero token list (discoverability card) ----------------------- */
@@ -5164,7 +5211,7 @@ code {
   padding: 10px 12px;
   border: 1px solid color-mix(in oklab, var(--row-tint) 18%, var(--box-line));
   border-radius: var(--radius-m);
-  background: hsla(210 40% 92% / 0.03);
+  background: hsla(275 40% 92% / 0.03);
   color: var(--box-ink);
   cursor: pointer;
   text-align: left;
@@ -5199,7 +5246,7 @@ code {
   font-family: var(--font-body);
   font-weight: 650;
   font-size: 0.92rem;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   color: var(--box-ink);
 }
 
@@ -5238,13 +5285,13 @@ code {
   flex: 1 1 auto; min-width: 0; width: 100%;
   background: transparent; border: none; outline: none;
   font-family: var(--font-body); font-weight: 700;
-  font-size: clamp(1.35rem, 2vw, 1.85rem); letter-spacing: -0.02em;
+  font-size: clamp(1.35rem, 2vw, 1.85rem); letter-spacing: 0;
   color: var(--box-ink); padding: 0;
 }
 .hero-swap-amount-input:focus { color: #fff; }
 .hero-swap-token-logo {
   width: 22px; height: 22px; border-radius: 50%; object-fit: cover;
-  background: hsl(213 30% 18%); flex: none; display: block;
+  background: hsl(278 30% 18%); flex: none; display: block;
 }
 .hero-swap-cta { cursor: pointer; transition: transform 160ms var(--ease), filter 160ms var(--ease); }
 .hero-swap-cta:hover { transform: translateY(-1px); filter: brightness(1.06); }
@@ -5294,4 +5341,329 @@ code {
 .agentpay-sr-only {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Console v2 — minimal modern: one narrow centered column, small     */
+/*  quiet cards, no page-wide frames. Scoped under .console-v2 so the  */
+/*  older console chrome cannot leak in.                               */
+/* ------------------------------------------------------------------ */
+
+.console-v2 {
+  background: var(--bg);
+}
+
+.console-v2 .console-shell {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 18px clamp(16px, 4vw, 24px) 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.console-v2 .app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.console-v2 .agent-pay-console {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.console-v2 .console-header {
+  padding: 8px 0 0;
+}
+.console-v2 .console-heading h2 {
+  font-size: 1.5rem;
+  letter-spacing: 0;
+}
+.console-v2 .console-heading .muted {
+  max-width: 58ch;
+  font-size: 0.92rem;
+}
+
+/* the run input is the whole idle screen */
+.console-v2 .console-run {
+  padding: 14px;
+  border-radius: 16px;
+}
+.console-v2 .hero-run {
+  display: flex;
+  gap: 10px;
+  /* the hero variant used this as a divider under the verdict; the run card
+     is the whole card, so there is nothing to divide */
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+.console-v2 .hero-run-input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* compact every surface in the column */
+.console-v2 .agent-pay-console > :not(.agentpay-sr-only),
+.console-v2 .agent-pay-workspace > * {
+  width: 100%;
+}
+.console-v2 .agent-pay-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.console-v2 .agent-pay-workspace .operation-card,
+.console-v2 .agent-pay-workspace .workspace-panel {
+  padding: 16px;
+  border-radius: 16px;
+  box-shadow: var(--shadow-s);
+}
+.console-v2 .agent-pay-workspace h2 {
+  font-size: 1.02rem;
+}
+
+.console-v2 .agent-pay-verdict-hero {
+  padding: 18px;
+  border-radius: 16px;
+}
+.console-v2 .verdict-word {
+  font-size: clamp(1.8rem, 5vw, 2.6rem);
+}
+
+/* slim pipeline rail */
+.console-v2 .agent-pay-pipeline-rail,
+.console-v2 [class*="pipeline"] {
+  gap: 8px;
+}
+
+/* bridge status: a footnote, not a panel */
+.console-v2 .bridge-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 2px;
+  font-size: 0.8rem;
+  color: var(--ink-2);
+  border: 0;
+  order: 99; /* always the last line of the column */
+}
+.console-v2 .bridge-strip .connection-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-data);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.console-v2 .bridge-strip .bridge-state {
+  font-family: var(--font-data);
+  font-size: 0.74rem;
+}
+.console-v2 .bridge-strip .bridge-state.is-live { color: var(--clear); }
+.console-v2 .bridge-strip .bridge-state.is-down { color: var(--ink-3); }
+.console-v2 .bridge-last { font-family: var(--font-data); font-size: 0.74rem; }
+
+@media (max-width: 560px) {
+  .console-v2 .hero-run { flex-direction: column; }
+  .console-v2 .hero-run-network { width: 100%; flex-basis: auto; }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Shared page chrome: SiteNav + SiteFooter (every page but landing)  */
+/* ------------------------------------------------------------------ */
+
+.site-nav {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: clamp(12px, 2.5vw, 26px);
+  min-height: 60px;
+  padding: 9px clamp(16px, 4vw, 48px);
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.05);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.05);
+  border-bottom: 1px solid var(--line);
+}
+
+.site-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+  border-radius: var(--radius-m);
+}
+
+.site-brand .agent-pay-logo img {
+  width: 32px;
+  height: 32px;
+}
+
+.site-brand-copy {
+  display: grid;
+  gap: 1px;
+}
+
+.site-brand-name {
+  color: var(--ink);
+  font-weight: 800;
+  font-size: 0.94rem;
+  line-height: 1.1;
+}
+
+.site-brand-sub {
+  color: var(--ink-2);
+  font-family: var(--font-data);
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.site-links {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.site-links::-webkit-scrollbar {
+  display: none;
+}
+
+.site-links a {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 11px;
+  border-radius: var(--radius-pill);
+  color: var(--ink-2);
+  font-size: 0.83rem;
+  font-weight: 600;
+  white-space: nowrap;
+  transition:
+    color 200ms var(--ease),
+    background 200ms var(--ease);
+}
+
+.site-links a:hover {
+  color: var(--ink);
+  background: var(--surface-2);
+}
+
+.site-links a[aria-current="page"] {
+  color: var(--brand-ink);
+  background: var(--brand-soft);
+}
+
+.site-nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+/* In the console header the shared links sit between the brand lockup and the
+   window controls; guarantee separation even when flex space runs out. */
+.app-header .site-links {
+  padding-left: 18px;
+  margin-right: 6px;
+}
+
+.site-footer {
+  margin-top: clamp(44px, 8vh, 88px);
+  border-top: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface) 55%, var(--bg));
+}
+
+.site-footer-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px 32px;
+  width: min(var(--container), 100%);
+  margin: 0 auto;
+  padding: 26px clamp(16px, 4vw, 48px) 16px;
+}
+
+.site-footer-brand {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.site-footer-name {
+  color: var(--ink);
+  font-weight: 800;
+  font-size: 0.94rem;
+}
+
+.site-footer-line {
+  color: var(--ink-2);
+  font-size: 0.85rem;
+}
+
+.site-footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 4px;
+  max-width: 640px;
+}
+
+.site-footer-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: var(--radius-pill);
+  color: var(--ink-2);
+  font-size: 0.82rem;
+  font-weight: 600;
+  transition:
+    color 200ms var(--ease),
+    background 200ms var(--ease);
+}
+
+.site-footer-links a:hover {
+  color: var(--ink);
+  background: var(--surface-2);
+}
+
+.site-footer-links a[aria-current="page"] {
+  color: var(--brand-ink);
+}
+
+.site-footer-base {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px 24px;
+  width: min(var(--container), 100%);
+  margin: 0 auto;
+  padding: 0 clamp(16px, 4vw, 48px) 20px;
+  color: var(--ink-3);
+  font-size: 0.78rem;
+}
+
+@media (max-width: 640px) {
+  .site-brand-sub {
+    display: none;
+  }
 }

@@ -67,6 +67,8 @@ class SqliteRepository implements SqliteAuditorRepository {
   }
 
   saveChallenge(challenge: AuthChallenge): boolean {
+    const now = isoTimestamp(this.now().toISOString(), "repository.now");
+    this.database.prepare("DELETE FROM auth_challenges WHERE expires_at <= ?").run(now);
     return this.insert(
       `INSERT OR IGNORE INTO auth_challenges
         (id, operator_key, origin, purpose, nonce, issued_at, expires_at, used_at, json)
@@ -216,6 +218,13 @@ class SqliteRepository implements SqliteAuditorRepository {
   getAgentToken(id: string): AgentTokenRecord | null {
     const row = this.maybeRow("SELECT json, revoked_at FROM agent_tokens WHERE id = ?", id);
     return row ? tokenFromRow(row) : null;
+  }
+
+  listAgentTokens(operatorPublicKey: string): AgentTokenRecord[] {
+    return this.rows(
+      "SELECT json, revoked_at FROM agent_tokens WHERE operator_key = ? ORDER BY revision DESC",
+      normalizeKey(operatorPublicKey)
+    ).map(tokenFromRow);
   }
 
   findAgentTokenByHash(tokenHash: string): AgentTokenRecord | null {

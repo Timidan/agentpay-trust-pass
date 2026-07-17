@@ -42,6 +42,26 @@ afterEach(async () => {
 });
 
 describe("openSqliteRepository", () => {
+  it("prunes expired authentication challenges when a new one is saved", () => {
+    let now = new Date(NOW);
+    const repository = open(":memory:", () => now);
+    const expired = makeChallenge();
+
+    expect(repository.saveChallenge(expired)).toBe(true);
+    now = new Date("2026-07-15T23:00:00.000Z");
+    const fresh: AuthChallenge = {
+      ...makeChallenge(),
+      id: "challenge-2",
+      nonce: "b".repeat(64),
+      issuedAt: now.toISOString(),
+      expiresAt: "2026-07-16T00:00:00.000Z"
+    };
+    expect(repository.saveChallenge(fresh)).toBe(true);
+
+    expect(repository.getChallenge(expired.id)).toBeNull();
+    expect(repository.getChallenge(fresh.id)).toEqual(fresh);
+  });
+
   it("migrates once and persists every audit artifact across a restart", async () => {
     const databasePath = await temporaryDatabasePath();
     const first = open(databasePath);
@@ -518,8 +538,8 @@ function makeEvidence(): PaymentAssetEvidence {
     name: "Casper X402 Token",
     symbol: "X402",
     decimals: 9,
-    mintAuthorityOpen: null,
-    supplyMutable: null,
+    mintBurnEnabled: null,
+    publicMintEntrypoint: false,
     holderConcentrationPct: null,
     contractAgeBlocks: null,
     apiVersion: "2.0.0",

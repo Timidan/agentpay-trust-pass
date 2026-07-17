@@ -1,7 +1,12 @@
 import { createServer, type IncomingMessage } from "node:http";
+import { buildX402PaymentSignature, createCasperSigner } from "@agent-pay/client";
 import request from "supertest";
-import { afterEach, describe, expect, it } from "vitest";
-import { createReportApp } from "../src/app";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  createReportApp as createProductionReportApp,
+  type CreateReportAppOptions,
+  type PaymentAssetEvidenceLoader
+} from "../src/app";
 
 // Every quote is subject-scoped now. These are well-formed but nonexistent
 // package hashes: token-state degrades to "not checked", so the quote/x402
@@ -12,7 +17,37 @@ const QUOTE_SUBJECT_B = "b".repeat(64);
 
 const envSnapshot = { ...process.env };
 
+const testPaymentAssetEvidenceLoader: PaymentAssetEvidenceLoader = async (requirement) => ({
+  network: "casper:casper-test",
+  packageHash: requirement.asset,
+  packageExists: true,
+  activeContractHash: "4".repeat(64),
+  authorizationEntrypoint: true,
+  name: requirement.extra.name,
+  symbol: requirement.extra.symbol ?? null,
+  decimals: requirement.extra.decimals === undefined ? null : Number(requirement.extra.decimals),
+  mintBurnEnabled: false,
+  publicMintEntrypoint: false,
+  holderConcentrationPct: null,
+  contractAgeBlocks: null,
+  apiVersion: "2.0.0",
+  observedBlockHash: "7".repeat(64),
+  observedBlockHeight: 8_449_100,
+  observedAt: new Date().toISOString(),
+  missing: [],
+  sourceErrors: [],
+  evidenceHash: "a".repeat(64)
+});
+
+function createReportApp(options: CreateReportAppOptions = {}) {
+  return createProductionReportApp({
+    paymentAssetEvidenceLoader: testPaymentAssetEvidenceLoader,
+    ...options
+  });
+}
+
 afterEach(() => {
+  vi.unstubAllGlobals();
   for (const key of Object.keys(process.env)) {
     if (!(key in envSnapshot)) {
       delete process.env[key];
@@ -23,6 +58,7 @@ afterEach(() => {
 
 describe("report API", () => {
   it("serves the agent skill with the request origin substituted for local development", async () => {
+    delete process.env.AGENTPAY_PUBLIC_ORIGIN;
     delete process.env.AGENT_PAY_PUBLIC_ORIGIN;
 
     const response = await dispatchReportApp("/skill.md", { host: "agentpay.local:4021" });
@@ -34,8 +70,9 @@ describe("report API", () => {
     expect(response.body).not.toContain("$AGENT_PAY_BASE_URL");
   });
 
-  it("pins served skill examples to AGENT_PAY_PUBLIC_ORIGIN despite forged Host headers", async () => {
-    process.env.AGENT_PAY_PUBLIC_ORIGIN = "https://agentpay.example/";
+  it("pins served skill examples to AGENTPAY_PUBLIC_ORIGIN despite forged Host headers", async () => {
+    process.env.AGENTPAY_PUBLIC_ORIGIN = "https://agentpay.example/";
+    process.env.AGENT_PAY_PUBLIC_ORIGIN = "https://legacy.example/";
 
     const response = await dispatchReportApp("/skill", {
       host: "evil.example",
@@ -48,6 +85,74 @@ describe("report API", () => {
     expect(response.body).not.toContain("$AGENT_PAY_BASE_URL");
   });
 
+  it("keeps the public API path in hosted skill examples", async () => {
+    process.env.AGENT_PAY_RESOURCE_BASE_URL = "https://agentpay.example/api/";
+    process.env.AGENTPAY_PUBLIC_ORIGIN = "https://agentpay.example";
+
+    const response = await dispatchReportApp("/skill.md", { host: "evil.example" });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toContain("https://agentpay.example/api/skill.md");
+    expect(response.body).not.toContain("https://agentpay.example/skill.md");
+    expect(response.body).not.toContain("evil.example");
+  });
+
+  it("uses the canonical public origin for quoted x402 resource URLs", async () => {
+    await withSupportedFacilitator(async (facilitatorUrl) => {
+      configureX402Payment(facilitatorUrl);
+      delete process.env.AGENT_PAY_RESOURCE_BASE_URL;
+      delete process.env.REPORT_API_PUBLIC_URL;
+      process.env.REPORT_API_URL = "http://127.0.0.1:4021";
+      process.env.AGENTPAY_PUBLIC_ORIGIN = "https://agentpay.example";
+
+      const response = await request(createReportApp())
+        .get(`/reports/quote?subject=${QUOTE_SUBJECT}`)
+        .expect(200);
+
+      expect(response.body.paymentResource.url).toBe(
+        `https://agentpay.example/reports/buy/${response.body.quoteId}`
+      );
+    });
+  }, 20_000);
+
+  it("never exposes the internal report API URL in a quoted payment resource", async () => {
+    await withSupportedFacilitator(async (facilitatorUrl) => {
+      configureX402Payment(facilitatorUrl);
+      delete process.env.AGENT_PAY_PUBLIC_API_URL;
+      delete process.env.AGENT_PAY_RESOURCE_BASE_URL;
+      delete process.env.REPORT_API_PUBLIC_URL;
+      delete process.env.AGENTPAY_PUBLIC_ORIGIN;
+      delete process.env.AGENT_PAY_PUBLIC_ORIGIN;
+      process.env.REPORT_API_URL = "http://127.0.0.1:4021";
+
+      const response = await request(createReportApp())
+        .get(`/reports/quote?subject=${QUOTE_SUBJECT}`)
+        .set("host", "agentpay.example")
+        .set("x-forwarded-proto", "https")
+        .expect(200);
+
+      expect(response.body.paymentResource.url).toBe(
+        `https://agentpay.example/reports/buy/${response.body.quoteId}`
+      );
+      expect(JSON.stringify(response.body)).not.toContain("127.0.0.1");
+    });
+  }, 20_000);
+
+  it("requires an explicit HTTPS public API base in production", () => {
+    process.env.NODE_ENV = "production";
+    delete process.env.AGENT_PAY_PUBLIC_API_URL;
+    delete process.env.AGENT_PAY_RESOURCE_BASE_URL;
+    delete process.env.REPORT_API_PUBLIC_URL;
+    delete process.env.AGENTPAY_PUBLIC_ORIGIN;
+    delete process.env.AGENT_PAY_PUBLIC_ORIGIN;
+    process.env.REPORT_API_URL = "http://127.0.0.1:4021";
+
+    expect(() => createReportApp()).toThrow("AGENT_PAY_RESOURCE_BASE_URL is required in production");
+
+    process.env.AGENT_PAY_RESOURCE_BASE_URL = "http://127.0.0.1:4021";
+    expect(() => createReportApp()).toThrow("public API base must use HTTPS in production");
+  });
+
   it("quotes subject-scoped Casper evidence", async () => {
     await withSupportedFacilitator(async (facilitatorUrl) => {
       configureX402Payment(facilitatorUrl);
@@ -57,7 +162,18 @@ describe("report API", () => {
 
       expect(response.body.quoteId).toMatch(/^trust-/);
       expect(response.body.datasetRoot).toMatch(/^[0-9a-f]{64}$/);
+      expect(response.body.evidenceNetwork).toBe("casper-testnet");
+      expect(
+        response.body.sourceSummary.every(
+          (source: { network: string }) => source.network === "casper-testnet"
+        )
+      ).toBe(true);
       expect(response.body.sourceSummary.length).toBeGreaterThanOrEqual(2);
+      expect(
+        response.body.sourceSummary.every(
+          (source: { sourceUrl?: string }) => typeof source.sourceUrl === "string"
+        )
+      ).toBe(true);
       expect(response.body.sourceSummary.map((source: { product: string }) => source.product)).toContain(
         "Casper Token Authority"
       );
@@ -82,6 +198,14 @@ describe("report API", () => {
           network: "casper:casper-test"
         }
       });
+      expect(response.body.paymentReadiness).not.toHaveProperty("facilitatorUrl");
+      expect(response.body.paymentReadiness).not.toHaveProperty("supportedKind.feePayer");
+      expect(JSON.stringify(response.body)).not.toContain(facilitatorUrl);
+
+      const paymentStatus = await request(app).get("/reports/payment-status").expect(200);
+      expect(paymentStatus.body).not.toHaveProperty("facilitatorUrl");
+      expect(paymentStatus.body).not.toHaveProperty("supportedKind.feePayer");
+      expect(JSON.stringify(paymentStatus.body)).not.toContain(facilitatorUrl);
       expect(response.body.paymentResource.url).toContain(`/reports/buy/${response.body.quoteId}`);
     });
   }, 20_000);
@@ -99,12 +223,52 @@ describe("report API", () => {
         reason: "PAYMENT-SIGNATURE header is required"
       });
       expect(response.body.accepts[0]).toMatchObject({ scheme: "exact" });
+      expect(response.body.quote.paymentReadiness).not.toHaveProperty("facilitatorUrl");
+      expect(JSON.stringify(response.body)).not.toContain(facilitatorUrl);
       expect(response.headers["payment-required"]).toBeTruthy();
     });
   }, 20_000);
 
-  it("does not release a paid report when settlement omits the Casper transaction hash", async () => {
-    await withSettlementFacilitator({ settleBody: { success: true } }, async (facilitatorUrl) => {
+  it("returns the x402 challenge for a bare POST without a content type", async () => {
+    configureX402Payment("https://facilitator.test");
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>(async (rawUrl, init) => {
+      if (String(rawUrl).endsWith("/supported")) {
+        return Response.json(supportedFacilitatorPayload());
+      }
+      const requestBody = JSON.parse(String(init?.body)) as { id?: string };
+      return Response.json({
+        jsonrpc: "2.0",
+        id: requestBody.id,
+        error: { code: -32000, message: "Evidence unavailable in this fixture" }
+      });
+    }));
+    const app = createReportApp();
+    const quoteResponse = await dispatchReportApp(
+      `/reports/quote?subject=${QUOTE_SUBJECT}`,
+      { host: "127.0.0.1:4021" },
+      { app }
+    );
+    expect(quoteResponse.status).toBe(200);
+    const quote = JSON.parse(quoteResponse.body) as { quoteId: string };
+
+    const response = await dispatchReportApp(
+      `/reports/buy/${quote.quoteId}`,
+      { host: "127.0.0.1:4021" },
+      { app, method: "POST" }
+    );
+
+    expect(response.status).toBe(402);
+    expect(JSON.parse(response.body)).toMatchObject({
+      error: "payment_required",
+      reason: "PAYMENT-SIGNATURE header is required"
+    });
+    expect(response.headers["payment-required"]).toBeTruthy();
+  }, 20_000);
+
+  it("does not release a paid report or upstream internals when settlement omits the Casper transaction hash", async () => {
+    await withSettlementFacilitator({
+      settleBody: { success: true, internalToken: "facilitator-secret-must-not-leak" }
+    }, async (facilitatorUrl) => {
       configureX402Payment(facilitatorUrl);
       const app = createReportApp();
       const quote = await request(app).get(`/reports/quote?subject=${QUOTE_SUBJECT}`).expect(200);
@@ -126,6 +290,8 @@ describe("report API", () => {
         isValid: false,
         invalidReason: "missing_transaction_hash"
       });
+      expect(JSON.stringify(paymentResponse)).not.toContain("facilitator-secret-must-not-leak");
+      expect(paymentResponse).not.toHaveProperty("settle");
     });
   }, 20_000);
 
@@ -275,6 +441,14 @@ describe("report API", () => {
         };
       }
 
+      if (requestBody.method === "query_global_state") {
+        return {
+          jsonrpc: "2.0",
+          id: requestBody.id,
+          error: { code: -32003, message: "Token package state is unavailable in this fixture" }
+        };
+      }
+
       expect(requestBody.method).toBe("info_get_transaction");
       confirmationCalls += 1;
       expect(requestBody.params).toMatchObject({
@@ -284,15 +458,10 @@ describe("report API", () => {
       return {
         jsonrpc: "2.0",
         id: requestBody.id,
-        result: {
-          api_version: "2.0.0",
-          transaction: { hash: { Version1: transactionHash } },
-          execution_info: {
-            block_hash: blockHash,
-            block_height: 8135708,
-            execution_result: { Version2: { error_message: null } }
-          }
-        }
+        result: matchingPaymentTransaction(transactionHash, {
+          blockHash,
+          blockHeight: 8135708
+        })
       };
     });
 
@@ -327,6 +496,111 @@ describe("report API", () => {
         });
         expect(confirmationCalls).toBe(1);
       });
+    } finally {
+      await rpc.close();
+    }
+  }, 20_000);
+
+  it("waits longer than the generic HTTP timeout for Casper facilitator settlement", async () => {
+    const transactionHash = "d".repeat(64);
+    const rpc = await withExecutedPaymentRpc(transactionHash);
+
+    try {
+      await withSettlementFacilitator(
+        {
+          settleBody: { success: true, transaction: transactionHash },
+          settleDelayMs: 5_100
+        },
+        async (facilitatorUrl) => {
+          configureX402Payment(facilitatorUrl);
+          process.env.CASPER_RPC_URL = rpc.url;
+          process.env.CASPER_CONFIRMATION_ATTEMPTS = "1";
+          process.env.CASPER_CONFIRMATION_DELAY_MS = "0";
+          const app = createReportApp();
+          const quote = await request(app).get(`/reports/quote?subject=${QUOTE_SUBJECT}`).expect(200);
+
+          const response = await request(app)
+            .post(`/reports/buy/${quote.body.quoteId}`)
+            .set("PAYMENT-SIGNATURE", encodePaymentPayload(boundPaymentPayload(quote.body)))
+            .send({})
+            .expect(200);
+
+          expect(response.body.payment).toMatchObject({
+            status: "settled",
+            transactionHash
+          });
+        }
+      );
+    } finally {
+      await rpc.close();
+    }
+  }, 15_000);
+
+  it("does not release a report for an executed Casper transaction that differs from the signed payment", async () => {
+    const transactionHash = "3".repeat(64);
+    const rpc = await withRpcServer(async (requestBody) => {
+      if (requestBody.method === "info_get_status") {
+        return {
+          jsonrpc: "2.0",
+          id: requestBody.id,
+          result: {
+            api_version: "2.0.0",
+            last_added_block_info: { hash: "6".repeat(64), height: 8135708 }
+          }
+        };
+      }
+      if (requestBody.method === "chain_get_block") {
+        return {
+          jsonrpc: "2.0",
+          id: requestBody.id,
+          result: {
+            block_with_signatures: {
+              block: {
+                hash: "7".repeat(64),
+                header: { height: 8135708 },
+                body: { transactions: {} }
+              }
+            }
+          }
+        };
+      }
+      return {
+        jsonrpc: "2.0",
+        id: requestBody.id,
+        result: matchingPaymentTransaction(
+          transactionHash,
+          { blockHash: "5".repeat(64), blockHeight: 8135708 },
+          { amount: "1" }
+        )
+      };
+    });
+
+    try {
+      await withSettlementFacilitator(
+        { settleBody: { success: true, transaction: transactionHash } },
+        async (facilitatorUrl) => {
+          configureX402Payment(facilitatorUrl);
+          process.env.CASPER_RPC_URL = rpc.url;
+          process.env.CASPER_CONFIRMATION_ATTEMPTS = "1";
+          process.env.CASPER_CONFIRMATION_DELAY_MS = "0";
+          const app = createReportApp();
+          const quote = await request(app).get(`/reports/quote?subject=${QUOTE_SUBJECT}`).expect(200);
+
+          const response = await request(app)
+            .post(`/reports/buy/${quote.body.quoteId}`)
+            .set("PAYMENT-SIGNATURE", encodePaymentPayload(boundPaymentPayload(quote.body)))
+            .send({})
+            .expect(402);
+
+          const paymentResponse = JSON.parse(
+            Buffer.from(response.headers["payment-response"], "base64").toString("utf8")
+          );
+          expect(paymentResponse).toMatchObject({
+            isValid: false,
+            invalidReason: "settlement_transaction_mismatch"
+          });
+        }
+      );
     } finally {
       await rpc.close();
     }
@@ -378,6 +652,50 @@ describe("report API", () => {
               transactionHash
             }
           });
+          expect(verifyCalls).toBe(1);
+          expect(settleCalls).toBe(1);
+        }
+      );
+    } finally {
+      await rpc.close();
+    }
+  }, 20_000);
+
+  it("coalesces concurrent retries for the same quote and payment", async () => {
+    const transactionHash = "e".repeat(64);
+    const rpc = await withExecutedPaymentRpc(transactionHash);
+    let verifyCalls = 0;
+    let settleCalls = 0;
+
+    try {
+      await withSettlementFacilitator(
+        {
+          settleBody: { success: true, transaction: transactionHash },
+          settleDelayMs: 100,
+          onRequest: (path) => {
+            if (path === "/verify") verifyCalls += 1;
+            if (path === "/settle") settleCalls += 1;
+          }
+        },
+        async (facilitatorUrl) => {
+          configureX402Payment(facilitatorUrl);
+          process.env.CASPER_RPC_URL = rpc.url;
+          process.env.CASPER_CONFIRMATION_ATTEMPTS = "1";
+          process.env.CASPER_CONFIRMATION_DELAY_MS = "0";
+          const app = createReportApp();
+          const quote = await request(app).get(`/reports/quote?subject=${QUOTE_SUBJECT}`).expect(200);
+          const paymentHeader = encodePaymentPayload(boundPaymentPayload(quote.body));
+          const buy = () =>
+            request(app)
+              .post(`/reports/buy/${quote.body.quoteId}`)
+              .set("PAYMENT-SIGNATURE", paymentHeader)
+              .send({})
+              .expect(200);
+
+          const [first, second] = await Promise.all([buy(), buy()]);
+
+          expect(second.body.paymentReceiptHash).toBe(first.body.paymentReceiptHash);
+          expect(first.body.payment.transactionHash).toBe(transactionHash);
           expect(verifyCalls).toBe(1);
           expect(settleCalls).toBe(1);
         }
@@ -469,11 +787,7 @@ describe("report API", () => {
       return {
         jsonrpc: "2.0",
         id: requestBody.id,
-        result: {
-          api_version: "2.0.0",
-          transaction: { hash: { Version1: transactionHash } },
-          execution_info: null
-        }
+          result: matchingPaymentTransaction(transactionHash, null)
       };
     });
 
@@ -562,6 +876,32 @@ describe("report API", () => {
     }
   }, 20_000);
 
+  it("rejects zero or non-canonical report prices before advertising payment", async () => {
+    const rpc = await withExecutedPaymentRpc("e".repeat(64));
+
+    try {
+      clearX402Payment();
+      process.env.CASPER_RPC_URL = rpc.url;
+      process.env.X402_ASSET_PACKAGE_HASH = "9".repeat(64);
+      process.env.PAYEE_ADDRESS = `00${"8".repeat(64)}`;
+      process.env.AGENT_PAY_REPORT_AMOUNT = "0";
+      process.env.X402_TOKEN_NAME = "Cep18x402";
+      process.env.X402_TOKEN_VERSION = "1";
+      process.env.X402_TOKEN_DECIMALS = "9";
+      process.env.X402_TOKEN_SYMBOL = "X402";
+      const app = createReportApp();
+
+      const quote = await request(app).get(`/reports/quote?subject=${QUOTE_SUBJECT}`).expect(200);
+
+      expect(quote.body.paymentRequirements).toEqual([]);
+      expect(quote.body.paymentConfigurationReason).toBe(
+        "agent_pay_report_amount_must_be_positive_u256_base_units"
+      );
+    } finally {
+      await rpc.close();
+    }
+  }, 20_000);
+
   it("quotes subject-scoped evidence when ?subject= is a valid 64-hex package hash", async () => {
     const rpc = await withRpcServer(async (requestBody) => {
       // buildSubjectEvidence calls chain_get_block for latestBlock
@@ -637,7 +977,7 @@ describe("report API", () => {
 
       expect(response.body.sourceSummary.every((source: { network: string }) => source.network !== "casper-testnet-fixture")).toBe(true);
       expect(response.body.sourceSummary.flatMap((source: { facts: Record<string, unknown> }) => Object.keys(source.facts))).not.toEqual(
-        expect.arrayContaining(["mintAuthorityOpen", "supplyRenounced", "holderCount", "topHolderPct"])
+        expect.arrayContaining(["mintBurnEnabled", "holderCount", "topHolderPct"])
       );
     } finally {
       await rpc.close();
@@ -663,15 +1003,67 @@ describe("report API", () => {
 
     expect(response.body).toMatchObject({ error: "subject_required" });
   });
+
+  it("rejects an unsupported evidence network before reading any source", async () => {
+    const response = await request(createReportApp())
+      .get(`/reports/quote?subject=${QUOTE_SUBJECT}&network=casper:casper-test`)
+      .expect(400);
+
+    expect(response.body).toEqual({
+      error: "invalid_evidence_network",
+      allowed: ["casper-mainnet", "casper-testnet"]
+    });
+  });
+
+  it("surfaces unavailable token-list discovery instead of returning an empty healthy list", async () => {
+    delete process.env.CSPR_CLOUD_ACCESS_TOKEN;
+
+    const response = await dispatchReportApp("/tokens", { host: "127.0.0.1:4021" });
+
+    expect(response.status).toBe(503);
+    expect(JSON.parse(response.body)).toEqual({
+      code: "source_unavailable",
+      message: "CSPR.cloud token discovery is unavailable.",
+      retryable: true,
+      field: null,
+      expected: "available CSPR.cloud token discovery source",
+      received: null
+    });
+  });
+
+  it("surfaces an unavailable CSPR.trade source instead of reporting a symbol as unlisted", async () => {
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>(async () => {
+      throw new Error("CSPR.trade unavailable in this fixture");
+    }));
+
+    const response = await dispatchReportApp(
+      "/resolve?symbol=WCSPR",
+      { host: "127.0.0.1:4021" }
+    );
+
+    expect(response.status).toBe(503);
+    expect(JSON.parse(response.body)).toEqual({
+      code: "source_unavailable",
+      message: "CSPR.trade token discovery is unavailable.",
+      retryable: true,
+      field: null,
+      expected: "available CSPR.trade token discovery source",
+      received: null
+    });
+  });
 });
 
-async function dispatchReportApp(path: string, headers: Record<string, string>) {
-  const app = createReportApp();
+async function dispatchReportApp(
+  path: string,
+  headers: Record<string, string>,
+  options: { app?: ReturnType<typeof createReportApp>; method?: "GET" | "POST" } = {}
+) {
+  const app = options.app ?? createReportApp();
   return new Promise<{ status: number; headers: Record<string, string>; body: string }>((resolve, reject) => {
     const responseHeaders: Record<string, string> = {};
     let body = "";
     const requestLike = {
-      method: "GET",
+      method: options.method ?? "GET",
       url: path,
       headers,
       socket: { remoteAddress: "127.0.0.1" }
@@ -720,6 +1112,21 @@ async function dispatchReportApp(path: string, headers: Record<string, string>) 
   });
 }
 
+function supportedFacilitatorPayload() {
+  return {
+    kinds: [
+      {
+        x402Version: 2,
+        scheme: "exact",
+        network: "casper:casper-test",
+        extra: { feePayer: "7".repeat(64) }
+      }
+    ],
+    extensions: [],
+    signers: { "casper:*": ["7".repeat(64)] }
+  };
+}
+
 async function withSupportedFacilitator<T>(fn: (facilitatorUrl: string) => Promise<T>): Promise<T> {
   const server = createServer((request, response) => {
     if (request.url === "/supported") {
@@ -762,7 +1169,11 @@ async function withSupportedFacilitator<T>(fn: (facilitatorUrl: string) => Promi
 }
 
 async function withSettlementFacilitator<T>(
-  input: { settleBody: unknown | (() => unknown); onRequest?: (path: "/supported" | "/verify" | "/settle") => void },
+  input: {
+    settleBody: unknown | (() => unknown);
+    settleDelayMs?: number;
+    onRequest?: (path: "/supported" | "/verify" | "/settle") => void;
+  },
   fn: (facilitatorUrl: string) => Promise<T>
 ): Promise<T> {
   const server = createServer((request, response) => {
@@ -796,7 +1207,14 @@ async function withSettlementFacilitator<T>(
     }
     if (request.url === "/settle") {
       input.onRequest?.("/settle");
-      response.end(JSON.stringify(typeof input.settleBody === "function" ? input.settleBody() : input.settleBody));
+      const settle = () => {
+        response.end(JSON.stringify(typeof input.settleBody === "function" ? input.settleBody() : input.settleBody));
+      };
+      if (input.settleDelayMs) {
+        setTimeout(settle, input.settleDelayMs);
+      } else {
+        settle();
+      }
       return;
     }
     response.statusCode = 404;
@@ -887,15 +1305,10 @@ async function withExecutedPaymentRpc(transactionHash: string): Promise<{ url: s
     return {
       jsonrpc: "2.0",
       id: requestBody.id,
-      result: {
-        api_version: "2.0.0",
-        transaction: { hash: { Version1: transactionHash } },
-        execution_info: {
-          block_hash: "5".repeat(64),
-          block_height: 8135710,
-          execution_result: { Version2: { error_message: null } }
-        }
-      }
+      result: matchingPaymentTransaction(transactionHash, {
+        blockHash: "5".repeat(64),
+        blockHeight: 8135710
+      })
     };
   });
 }
@@ -917,6 +1330,7 @@ function configureX402Payment(facilitatorUrl: string) {
   process.env.X402_FACILITATOR_URL = facilitatorUrl;
   process.env.X402_TOKEN_NAME = "Cep18x402";
   process.env.X402_TOKEN_VERSION = "1";
+  process.env.X402_TOKEN_DECIMALS = "9";
   process.env.X402_TOKEN_SYMBOL = "CSPR";
 }
 
@@ -929,6 +1343,7 @@ function clearX402Payment() {
   delete process.env.X402_FACILITATOR_URL;
   delete process.env.X402_TOKEN_NAME;
   delete process.env.X402_TOKEN_VERSION;
+  delete process.env.X402_TOKEN_DECIMALS;
   delete process.env.X402_TOKEN_SYMBOL;
 }
 
@@ -936,12 +1351,90 @@ function boundPaymentPayload(quote: {
   paymentRequirements: [Record<string, unknown>, ...Record<string, unknown>[]];
   paymentResource: Record<string, unknown>;
 }) {
-  return {
-    x402Version: 2,
-    accepted: quote.paymentRequirements[0],
-    resource: quote.paymentResource,
-    payload: "signed"
+  return buildX402PaymentSignature({
+    requirement: quote.paymentRequirements[0] as never,
+    resource: quote.paymentResource as never,
+    signer: TEST_PAYMENT_SIGNER,
+    now: TEST_PAYMENT_NOW,
+    nonce: TEST_PAYMENT_NONCE
+  }).paymentPayload;
+}
+
+const TEST_PAYMENT_SIGNER = createCasperSigner("secp256k1", new Uint8Array(32).fill(7));
+const TEST_PAYMENT_NOW = Math.floor(Date.now() / 1_000);
+const TEST_PAYMENT_NONCE = new Uint8Array(32).fill(4);
+
+function matchingPaymentTransaction(
+  transactionHash: string,
+  execution: { blockHash: string; blockHeight: number } | null,
+  overrides: { amount?: string } = {}
+) {
+  const built = buildX402PaymentSignature({
+    requirement: {
+      scheme: "exact",
+      network: "casper:casper-test",
+      asset: "9".repeat(64),
+      amount: "10000",
+      payTo: `00${"8".repeat(64)}`,
+      maxTimeoutSeconds: 300,
+      extra: { name: "Cep18x402", version: "1", symbol: "CSPR" }
+    },
+    resource: { url: "https://agentpay.invalid/report", description: "fixture", mimeType: "application/json" },
+    signer: TEST_PAYMENT_SIGNER,
+    now: TEST_PAYMENT_NOW,
+    nonce: TEST_PAYMENT_NONCE
+  });
+  const authorization = built.authorization;
+  const payload = built.paymentPayload.payload as {
+    signature: string;
+    publicKey: string;
   };
+  return {
+    api_version: "2.0.0",
+    transaction: {
+      Version1: {
+        hash: transactionHash,
+        payload: {
+          chain_name: "casper-test",
+          fields: {
+            target: { Stored: { id: { ByPackageHash: { addr: "9".repeat(64) } } } },
+            entry_point: { Custom: "transfer_with_authorization" },
+            args: {
+              Named: [
+                ["from", keyArgument(authorization.from)],
+                ["to", keyArgument(authorization.to)],
+                ["amount", integerArgument("U256", overrides.amount ?? authorization.value)],
+                ["valid_after", integerArgument("U64", authorization.validAfter)],
+                ["valid_before", integerArgument("U64", authorization.validBefore)],
+                ["nonce", byteListArgument(authorization.nonce)],
+                ["public_key", { cl_type: "PublicKey", parsed: payload.publicKey }],
+                ["signature", byteListArgument(payload.signature)]
+              ]
+            }
+          }
+        }
+      }
+    },
+    execution_info: execution
+      ? {
+          block_hash: execution.blockHash,
+          block_height: execution.blockHeight,
+          execution_result: { Version2: { error_message: null } }
+        }
+      : null
+  };
+}
+
+function keyArgument(address: string) {
+  return { cl_type: "Key", parsed: `account-hash-${address.slice(2)}` };
+}
+
+function integerArgument(clType: "U64" | "U256", value: string) {
+  return { cl_type: clType, parsed: value };
+}
+
+function byteListArgument(value: string) {
+  return { cl_type: { List: "U8" }, parsed: [...Buffer.from(value, "hex")] };
 }
 
 function encodePaymentPayload(payload: unknown): string {

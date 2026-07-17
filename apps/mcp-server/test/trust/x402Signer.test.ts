@@ -107,6 +107,27 @@ describe("MCP x402 signer spend policy", () => {
     ).toThrow(/amount exceeds.*expected <= 9999.*actual 10000/i);
     expect(signer.sign).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ["zero", "0", /positive integer in base units/i],
+    ["leading zeros", "010000", /positive integer in base units/i],
+    ["negative", "-1", /positive integer in base units/i],
+    ["non-integer", "1.5", /positive integer in base units/i],
+    ["above U256", (1n << 256n).toString(), /exceeds the U256 transfer limit/i]
+  ] as const)("rejects a %s amount before signing", (_label, amount, message) => {
+    const signer = mockSigner();
+
+    expect(() =>
+      buildX402PaymentSignature({
+        requirement: { ...requirement, amount },
+        resource,
+        signer,
+        now: 1_700_000_000,
+        nonce: new Uint8Array(32).fill(3)
+      })
+    ).toThrow(message);
+    expect(signer.sign).not.toHaveBeenCalled();
+  });
 });
 
 function mockSigner(): X402Signer & { sign: ReturnType<typeof vi.fn> } {

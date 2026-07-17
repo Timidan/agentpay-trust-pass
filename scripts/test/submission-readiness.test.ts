@@ -8,6 +8,7 @@ import {
   formatSubmissionReadinessMarkdown,
   loadSubmissionEnv,
   parseEnvFile,
+  prohibitedSourceLineSignals,
   type SubmissionReadinessInput
 } from "../submission-readiness";
 
@@ -87,6 +88,33 @@ describe("AgentPay submission readiness evaluator", () => {
       status: "fail",
       message: "AGENT_PAY_DECISION_TX_HASH is still pending on Casper"
     });
+  });
+
+  it("does not require a private indexer credential for public holder and age evidence", () => {
+    const report = evaluateSubmissionReadiness(baseInput({
+      env: {
+        CASPER_RPC_URL: "https://node.testnet.casper.network/rpc"
+      }
+    }));
+
+    expect(report.checks.some((check) => check.id === "token_evidence_indexer")).toBe(false);
+    expect(report.blockers.join(" ")).not.toContain("CSPR.cloud access token");
+  });
+
+  it("does not expose a self-hosted facilitator URL in readiness output", () => {
+    const report = evaluateSubmissionReadiness(baseInput({
+      env: {
+        X402_ASSET_PACKAGE_HASH: "e".repeat(64),
+        PAYEE_ADDRESS: `00${"f".repeat(64)}`,
+        X402_FACILITATOR_URL: "http://127.0.0.1:4022"
+      }
+    }));
+
+    expect(report.checks.find((check) => check.id === "x402_configuration")).toMatchObject({
+      status: "pass",
+      message: "x402 asset, payee, and self-hosted facilitator are configured"
+    });
+    expect(JSON.stringify(report)).not.toContain("127.0.0.1:4022");
   });
 
   it("reports Casper 2.0 execution errors as failed", async () => {
@@ -292,6 +320,23 @@ describe("AgentPay submission readiness evaluator", () => {
       message: "Remove prohibited fake evidence markers: apps/web/src/App.tsx:10 fake receipt marker"
     });
     expect(report.blockers).toContain("Remove fake/manual runtime evidence markers from submission-facing files.");
+  });
+
+  it("detects fabricated evidence sentinels even when they avoid fake or mock wording", () => {
+    expect(prohibitedSourceLineSignals(
+      'sourceUrl: "https://agentpay.invalid", observedAt: "1970-01-01T00:00:00.000Z"',
+      true
+    )).toEqual(expect.arrayContaining([
+      "placeholder evidence source",
+      "placeholder evidence timestamp"
+    ]));
+    expect(prohibitedSourceLineSignals('rawHash: "0".repeat(64)', true)).toContain(
+      "generated zero evidence hash"
+    );
+    expect(prohibitedSourceLineSignals(
+      'sourceUrl: "https://api.cspr.cloud", rawHash: hashJson(payload)',
+      true
+    )).toEqual([]);
   });
 
   it("requires a funded Casper account for Testnet deploys", () => {

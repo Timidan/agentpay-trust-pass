@@ -22,9 +22,17 @@ export function agentPaySkillMarkdown(origin = agentPayPublicOrigin()) {
 }
 
 export function agentPayPublicOrigin() {
-  const configured = process.env.AGENT_PAY_PUBLIC_ORIGIN?.trim();
+  const configured =
+    process.env.AGENT_PAY_PUBLIC_API_URL?.trim() ||
+    process.env.AGENT_PAY_RESOURCE_BASE_URL?.trim() ||
+    process.env.REPORT_API_PUBLIC_URL?.trim() ||
+    process.env.AGENTPAY_PUBLIC_ORIGIN?.trim() ||
+    process.env.AGENT_PAY_PUBLIC_ORIGIN?.trim();
   if (configured) {
     return configured.replace(/\/+$/, "");
+  }
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("AGENT_PAY_RESOURCE_BASE_URL is required for the public AgentPay skill");
   }
   return process.env.REPORT_API_URL ?? `http://127.0.0.1:${process.env.REPORT_API_PORT ?? 4021}`;
 }

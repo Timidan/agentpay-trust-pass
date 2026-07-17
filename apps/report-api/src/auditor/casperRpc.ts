@@ -152,14 +152,14 @@ export class NodeRpcClient {
     const mutable: MutableEvidence = {
       network: input.network,
       packageHash: input.packageHash.toLowerCase(),
-      packageExists: false,
+      packageExists: null,
       activeContractHash: null,
-      authorizationEntrypoint: false,
+      authorizationEntrypoint: null,
       name: null,
       symbol: null,
       decimals: null,
-      mintAuthorityOpen: null,
-      supplyMutable: null,
+      mintBurnEnabled: null,
+      publicMintEntrypoint: null,
       holderConcentrationPct: null,
       contractAgeBlocks: null,
       apiVersion: null,
@@ -178,23 +178,30 @@ export class NodeRpcClient {
       );
       recordObservation(packageResult, mutable);
     } catch (error) {
+      if (isMissingGlobalStateValue(error)) {
+        mutable.packageExists = false;
+        mutable.authorizationEntrypoint = false;
+      }
       mutable.sourceErrors.push(`package: ${errorMessage(error)}`);
-      mutable.missing.push("package", "activeContractHash", "authorizationEntrypoint", "name", "symbol", "decimals");
+      mutable.missing.push("package", "activeContractHash", "authorizationEntrypoint", "name", "symbol", "decimals", "supplyControl");
       return finalizeEvidence(mutable);
     }
 
     const contractPackage = storedVariant(packageResult, "ContractPackage");
     if (!contractPackage) {
+      mutable.packageExists = false;
+      mutable.authorizationEntrypoint = false;
       mutable.sourceErrors.push("package: stored value is not a ContractPackage");
-      mutable.missing.push("package", "activeContractHash", "authorizationEntrypoint", "name", "symbol", "decimals");
+      mutable.missing.push("package", "activeContractHash", "authorizationEntrypoint", "name", "symbol", "decimals", "supplyControl");
       return finalizeEvidence(mutable);
     }
     mutable.packageExists = true;
 
     const activeContractHash = selectActiveContractHash(contractPackage);
     if (!activeContractHash) {
+      mutable.authorizationEntrypoint = false;
       mutable.sourceErrors.push("package: no active contract version could be resolved");
-      mutable.missing.push("activeContractHash", "authorizationEntrypoint", "name", "symbol", "decimals");
+      mutable.missing.push("activeContractHash", "authorizationEntrypoint", "name", "symbol", "decimals", "supplyControl");
       return finalizeEvidence(mutable);
     }
     mutable.activeContractHash = activeContractHash;
@@ -208,24 +215,27 @@ export class NodeRpcClient {
       recordObservation(contractResult, mutable);
     } catch (error) {
       mutable.sourceErrors.push(`contract: ${errorMessage(error)}`);
-      mutable.missing.push("authorizationEntrypoint", "name", "symbol", "decimals");
+      mutable.missing.push("authorizationEntrypoint", "name", "symbol", "decimals", "supplyControl");
       return finalizeEvidence(mutable);
     }
 
     const contract = storedVariant(contractResult, "Contract");
     if (!contract) {
+      mutable.authorizationEntrypoint = false;
       mutable.sourceErrors.push("contract: stored value is not a Contract");
-      mutable.missing.push("authorizationEntrypoint", "name", "symbol", "decimals");
+      mutable.missing.push("authorizationEntrypoint", "name", "symbol", "decimals", "supplyControl");
       return finalizeEvidence(mutable);
     }
     if (stripHashPrefix(contract.contract_package_hash, "contract-package-") !== mutable.packageHash) {
+      mutable.authorizationEntrypoint = false;
       mutable.sourceErrors.push("contract: contract_package_hash does not match the queried package");
-      mutable.missing.push("authorizationEntrypoint", "name", "symbol", "decimals");
+      mutable.missing.push("authorizationEntrypoint", "name", "symbol", "decimals", "supplyControl");
       return finalizeEvidence(mutable);
     }
 
     mutable.authorizationEntrypoint = hasExactAuthorizationEntryPoint(contract.entry_points);
     if (!mutable.authorizationEntrypoint) mutable.missing.push("authorizationEntrypoint");
+    mutable.publicMintEntrypoint = hasPublicMintEntryPoint(contract.entry_points);
 
     const namedKeys = readNamedKeys(contract.named_keys);
     for (const metadataName of ["name", "symbol", "decimals"] as const) {
@@ -252,6 +262,27 @@ export class NodeRpcClient {
       }
     }
 
+    const mintBurnKey = namedKeys.get("enable_mint_burn");
+    if (!mintBurnKey) {
+      // Many current Casper tokens do not use the legacy install flag. The
+      // exact public entry-point scan above remains available as supply-control evidence.
+    } else {
+      try {
+        const result = requireRecord(
+          await this.queryGlobalState(mintBurnKey, signal),
+          "enable_mint_burn response"
+        );
+        recordObservation(result, mutable);
+        mutable.mintBurnEnabled = readMintBurnEnabled(result);
+      } catch (error) {
+        mutable.sourceErrors.push(`mintBurnEnabled: ${errorMessage(error)}`);
+      }
+    }
+
+    if (mutable.mintBurnEnabled === null && mutable.publicMintEntrypoint === null) {
+      mutable.missing.push("supplyControl");
+    }
+
     return finalizeEvidence(mutable);
   }
 
@@ -276,6 +307,10 @@ export class NodeRpcError extends Error {
     this.code = code;
     this.data = data;
   }
+}
+
+function isMissingGlobalStateValue(error: unknown): boolean {
+  return error instanceof NodeRpcError && /(?:not found|value.*missing)/i.test(error.message);
 }
 
 type MutableEvidence = Omit<PaymentAssetEvidence, "evidenceHash">;
@@ -306,9 +341,9 @@ function selectActiveContractHash(contractPackage: Record<string, unknown>): str
   const disabled = new Set<string>();
   if (Array.isArray(contractPackage.disabled_versions)) {
     for (const value of contractPackage.disabled_versions) {
-      const version = asRecord(value);
-      const major = nonNegativeInteger(version?.protocol_version_major);
-      const contractVersion = nonNegativeInteger(version?.contract_version);
+      const version = packageVersionTuple(value);
+      const major = version?.major ?? null;
+      const contractVersion = version?.contractVersion ?? null;
       if (major !== null && contractVersion !== null) disabled.add(`${major}:${contractVersion}`);
     }
   }
@@ -327,6 +362,18 @@ function selectActiveContractHash(contractPackage: Record<string, unknown>): str
     .sort((left, right) => right.contractVersion - left.contractVersion || right.major - left.major);
 
   return active[0]?.contractHash ?? null;
+}
+
+function packageVersionTuple(value: unknown): { major: number; contractVersion: number } | null {
+  if (Array.isArray(value) && value.length === 2) {
+    const major = nonNegativeInteger(value[0]);
+    const contractVersion = nonNegativeInteger(value[1]);
+    return major === null || contractVersion === null ? null : { major, contractVersion };
+  }
+  const record = asRecord(value);
+  const major = nonNegativeInteger(record?.protocol_version_major);
+  const contractVersion = nonNegativeInteger(record?.contract_version);
+  return major === null || contractVersion === null ? null : { major, contractVersion };
 }
 
 function hasExactAuthorizationEntryPoint(value: unknown): boolean {
@@ -348,6 +395,14 @@ function hasExactAuthorizationEntryPoint(value: unknown): boolean {
       const argument = asRecord(entryPointArgs[index]);
       return argument?.name === expectedName && sameClType(argument.cl_type, expectedType);
     });
+  });
+}
+
+function hasPublicMintEntryPoint(value: unknown): boolean | null {
+  if (!Array.isArray(value)) return null;
+  return value.some((candidate) => {
+    const entryPoint = asRecord(candidate);
+    return entryPoint?.name === "mint" && entryPoint.access === "Public";
   });
 }
 
@@ -397,6 +452,21 @@ function readMetadataValue(
     throw new Error("expected a parsed String value");
   }
   return clValue.parsed;
+}
+
+function readMintBurnEnabled(result: Record<string, unknown>): boolean {
+  const clValue = storedVariant(result, "CLValue");
+  if (
+    !clValue ||
+    clValue.cl_type !== "U8" ||
+    typeof clValue.parsed !== "number" ||
+    !Number.isInteger(clValue.parsed) ||
+    clValue.parsed < 0 ||
+    clValue.parsed > 255
+  ) {
+    throw new Error("expected enable_mint_burn to be a parsed U8 value");
+  }
+  return clValue.parsed !== 0;
 }
 
 function recordObservation(result: Record<string, unknown>, evidence: MutableEvidence): void {

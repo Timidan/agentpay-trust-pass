@@ -12,6 +12,9 @@
     "test:scripts": "vitest run scripts/test/*.test.ts",
     "test": "npm run test:scripts && npm run test --workspaces --if-present && npm run build:contract && cargo test --manifest-path contracts/agent-pay-registry/Cargo.toml",
     "smoke": "bash scripts/smoke.sh",
+    "auditor:ui-e2e": "node --import tsx scripts/e2e-auditor-ui.ts",
+    "trust:ui-e2e": "node --import tsx scripts/e2e-trust-ui.ts",
+    "production:check": "node --import tsx scripts/verify-production.ts",
     "submission:check": "tsx scripts/submission-readiness.ts",
     "submission:deploy-registry": "tsx scripts/submission-deploy-registry.ts",
     "submission:evidence": "tsx scripts/submission-evidence.ts",
@@ -24,7 +27,7 @@
     "build": "npm run build --workspaces --if-present && cargo build --manifest-path contracts/agent-pay-registry/Cargo.toml && npm run build:contract"
   },
   "engines": {
-    "node": ">=22.12.0",
+    "node": ">=22.13.0",
     "npm": ">=10.0.0"
   },
   "devDependencies": {

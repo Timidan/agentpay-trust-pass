@@ -48,7 +48,10 @@ export type ResponseObservationInput = {
 
 export type ObservationResult = {
   created: boolean;
-  observation: { checkId: string; [key: string]: unknown };
+  observation: ResponseObservationInput & {
+    checkId: string;
+    observationHash: string;
+  };
   receipt: PurchaseReceipt;
 };
 

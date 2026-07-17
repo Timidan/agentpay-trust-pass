@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod/v4";
 import {
+  assessAccountTool,
   assessSubjectTool,
   buyReportTool,
   checkX402PaymentTool,
@@ -15,6 +16,7 @@ import {
 import { AGENT_PAY_SKILL_URI, agentPaySkillMarkdown } from "./agentSkill.js";
 
 const reportApiUrl = z.string().url().optional();
+const evidenceNetwork = z.enum(["casper-mainnet", "casper-testnet"]).optional();
 const hex64 = z.string().regex(/^[0-9a-f]{64}$/i);
 const paymentRequest = z.object({
   method: z.string(),
@@ -50,7 +52,7 @@ export function createAgentPayMcpServer() {
     AGENT_PAY_SKILL_URI,
     {
       title: "AgentPay Skill",
-      description: "Machine-readable AgentPay Trust Signal integration contract.",
+      description: "Machine-readable AgentPay payment and Casper-check integration contract.",
       mimeType: "text/markdown"
     },
     async (uri) => ({
@@ -69,9 +71,10 @@ export function createAgentPayMcpServer() {
     {
       title: "Quote report",
       description:
-        "Quote an x402 price for a live AgentPay evidence report scoped to a subject (token package hash or Casper account).",
+        "Get the price and payment terms for a live AgentPay check of a Casper token or account.",
       inputSchema: {
-        subject: z.string().describe("Token package hash (64 hex / hash-<64 hex>) or account (account-hash-<64 hex> / public key)"),
+        subject: z.string().describe("CSPR.trade token symbol, token package hash, CSPR.name, Casper account hash, or Casper public key"),
+        evidenceNetwork,
         reportApiUrl
       }
     },
@@ -162,13 +165,29 @@ export function createAgentPayMcpServer() {
     {
       title: "Assess subject",
       description:
-        "Full Trust Signal rail: quotes evidence, pays x402, verifies Merkle proofs, scores deterministically, narrates, and stamps the verdict on Casper. Returns a Verdict.",
+        "Read live Casper evidence, pay over x402, verify every proof, apply fixed rules, and record the verdict on Casper Testnet.",
       inputSchema: {
-        subject: z.string().describe("Casper package hash (64 hex chars or hash-<64 hex>)"),
+        subject: z.string().describe("CSPR.trade token symbol, token package hash, Casper account hash, or Casper public key"),
+        evidenceNetwork,
         reportApiUrl: reportApiUrl
       }
     },
     async (input) => textResult(await assessSubjectTool(input))
+  );
+
+  server.registerTool(
+    "assess_account",
+    {
+      title: "Assess account",
+      description:
+        "Check a Casper account's existence, CSPR balance, and multisig control; score it with the account policy and stamp the verdict on Casper.",
+      inputSchema: {
+        account: z.string().describe("CSPR.name, account-hash-<64 hex>, bare 64-hex account hash, or Casper public key"),
+        evidenceNetwork,
+        reportApiUrl
+      }
+    },
+    async (input) => textResult(await assessAccountTool(input))
   );
 
   server.registerTool(

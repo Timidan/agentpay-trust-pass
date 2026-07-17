@@ -3,7 +3,7 @@ import { AgentPayCodeBlock, AgentPaySurface } from "./AgentPayUi";
 
 export function AgentPayProofPath({ proof }: { proof: ProofStep[] }) {
   if (proof.length === 0) {
-    return <p className="muted">AgentPay proof path appears after the report is paid.</p>;
+    return <p className="muted">Verification steps appear after the report is paid.</p>;
   }
 
   return (

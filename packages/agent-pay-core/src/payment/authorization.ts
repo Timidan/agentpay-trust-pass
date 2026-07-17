@@ -1,6 +1,7 @@
 import { ed25519 } from "@noble/curves/ed25519";
 import { secp256k1 } from "@noble/curves/secp256k1";
 import { sha256 } from "@noble/hashes/sha256";
+import { bytesToHex, hexToBytes } from "@noble/hashes/utils";
 import {
   buildDomain,
   CASPER_DOMAIN_TYPES,
@@ -42,7 +43,24 @@ export type TransferAuthorizationDigestInput = {
   nonce: string;
 };
 
-export function transferWithAuthorizationDigest(input: TransferAuthorizationDigestInput): string {
+export type TransferAuthorizationTypedData = {
+  domain: Record<string, unknown>;
+  types: Record<string, Array<{ name: string; type: string }>>;
+  primaryType: "TransferWithAuthorization";
+  message: {
+    from: string;
+    to: string;
+    value: string;
+    validAfter: string;
+    validBefore: string;
+    nonce: string;
+  };
+  domainTypes: Array<{ name: string; type: string }>;
+};
+
+export function transferWithAuthorizationTypedData(
+  input: TransferAuthorizationDigestInput
+): TransferAuthorizationTypedData {
   const asset = normalizePackageHash(input.assetPackageHash);
   const from = normalizeAddress(input.from, "from");
   const to = normalizeAddress(input.to, "to");
@@ -54,22 +72,36 @@ export function transferWithAuthorizationDigest(input: TransferAuthorizationDige
     throw new TypeError("Authorization domain fields must be non-empty strings");
   }
 
-  const domain = buildDomain(input.tokenName, input.tokenVersion, input.network, `0x${asset}`);
-  const digest = hashTypedData(
-    domain,
-    TRANSFER_WITH_AUTHORIZATION_TYPES,
-    "TransferWithAuthorization",
-    {
+  return {
+    domain: buildDomain(input.tokenName, input.tokenVersion, input.network, `0x${asset}`),
+    types: {
+      TransferWithAuthorization: TRANSFER_WITH_AUTHORIZATION_TYPES.TransferWithAuthorization.map(
+        (field) => ({ ...field })
+      )
+    },
+    primaryType: "TransferWithAuthorization",
+    message: {
       from: `0x${from}`,
       to: `0x${to}`,
-      value: BigInt(value),
-      validAfter: BigInt(validAfter),
-      validBefore: BigInt(validBefore),
+      value: uint256Hex(value),
+      validAfter: uint256Hex(validAfter),
+      validBefore: uint256Hex(validBefore),
       nonce: `0x${nonce}`
     },
-    { domainTypes: CASPER_DOMAIN_TYPES }
+    domainTypes: CASPER_DOMAIN_TYPES.map((field) => ({ ...field }))
+  };
+}
+
+export function transferWithAuthorizationDigest(input: TransferAuthorizationDigestInput): string {
+  const typedData = transferWithAuthorizationTypedData(input);
+  const digest = hashTypedData(
+    typedData.domain,
+    typedData.types,
+    typedData.primaryType,
+    typedData.message,
+    { domainTypes: typedData.domainTypes }
   );
-  return Buffer.from(digest).toString("hex");
+  return bytesToHex(digest);
 }
 
 export function buildAuthorizationIntent(input: {
@@ -149,7 +181,7 @@ export function verifyAuthorizationSignature(intent: AuthorizationIntent, signat
     if (computedDigest !== intent.digest.toLowerCase()) return false;
     const publicKey = parseCasperPublicKey(intent.payerPublicKey);
     const signature = parseCasperSignature(signatureHex, publicKey.algorithmTag, false);
-    const digest = new Uint8Array(Buffer.from(computedDigest, "hex"));
+    const digest = hexToBytes(computedDigest);
 
     return publicKey.algorithm === "ed25519"
       ? ed25519.verify(signature, digest, publicKey.rawKey)
@@ -180,4 +212,8 @@ function normalizeNonce(value: string): string {
   const normalized = value.trim().toLowerCase().replace(/^0x/, "");
   if (!HEX_64.test(normalized)) throw new TypeError("nonce must be 32 bytes of hexadecimal data");
   return normalized;
+}
+
+function uint256Hex(value: string): string {
+  return `0x${BigInt(value).toString(16).padStart(64, "0")}`;
 }

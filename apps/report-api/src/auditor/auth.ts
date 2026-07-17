@@ -90,12 +90,14 @@ export class AuthError extends Error {
 export type AuditorAuthOptions = {
   repository: AuditorRepository;
   publicOrigin: string;
+  cookiePath?: string;
   now?: () => Date;
 };
 
 export class AuditorAuth {
   readonly publicOrigin: string;
   readonly cookieName = "agentpay_session";
+  readonly cookiePath: string;
 
   private readonly repository: AuditorRepository;
   private readonly now: () => Date;
@@ -111,6 +113,7 @@ export class AuditorAuth {
     }
     this.repository = options.repository;
     this.publicOrigin = origin.origin;
+    this.cookiePath = sessionCookiePath(options.cookiePath ?? "/v1");
     this.domain = origin.host;
     this.now = options.now ?? (() => new Date());
   }
@@ -261,7 +264,7 @@ export class AuditorAuth {
 
   sessionCookie(token: string, expiresAt: string): string {
     const maximumAge = Math.max(0, Math.floor((Date.parse(expiresAt) - this.nowDate().getTime()) / 1_000));
-    return `${this.cookieName}=${token}; Path=/v1; Max-Age=${maximumAge}; HttpOnly; Secure; SameSite=Strict`;
+    return `${this.cookieName}=${token}; Path=${this.cookiePath}; Max-Age=${maximumAge}; HttpOnly; Secure; SameSite=Strict`;
   }
 
   currentTime(): string {
@@ -437,4 +440,11 @@ function constantTimeStringEqual(left: string, right: string): boolean {
   const leftHash = createHash("sha256").update(left).digest();
   const rightHash = createHash("sha256").update(right).digest();
   return timingSafeEqual(leftHash, rightHash);
+}
+
+function sessionCookiePath(value: string): string {
+  if (!/^\/[A-Za-z0-9._~!$&'()*+,=:@%/-]*$/.test(value)) {
+    throw new TypeError("AgentPay session cookie path must be an absolute URL path without a query or fragment");
+  }
+  return value;
 }

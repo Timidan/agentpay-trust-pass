@@ -48,6 +48,7 @@ export type ProbeTransport = (input: ProbeTransportInput) => Promise<ProbeTransp
 
 export type X402ProbeOptions = {
   allowHttp: boolean;
+  allowLoopback?: boolean;
   timeoutMs?: number;
   maxRequestBytes?: number;
   maxResponseBytes?: number;
@@ -66,6 +67,7 @@ export type ProbeResult = {
     bodyHash: string;
     observedAt: string;
   };
+  paymentRequired: unknown | null;
   terms: PaymentTerms | null;
   advisories: Reason[];
   redirects: string[];
@@ -73,6 +75,7 @@ export type ProbeResult = {
 
 export class X402Probe {
   private readonly allowHttp: boolean;
+  private readonly allowLoopback: boolean;
   private readonly timeoutMs: number;
   private readonly maxRequestBytes: number;
   private readonly maxResponseBytes: number;
@@ -83,6 +86,7 @@ export class X402Probe {
 
   constructor(options: X402ProbeOptions) {
     this.allowHttp = options.allowHttp;
+    this.allowLoopback = options.allowLoopback ?? false;
     this.timeoutMs = positiveInteger(options.timeoutMs ?? DEFAULT_TIMEOUT_MS, "timeoutMs");
     this.maxRequestBytes = positiveInteger(
       options.maxRequestBytes ?? DEFAULT_MAX_REQUEST_BYTES,
@@ -111,19 +115,15 @@ export class X402Probe {
     const deadline = performance.now() + this.timeoutMs;
 
     for (;;) {
-      const address = await this.withDeadline(this.resolve(url), deadline);
-      const response = await this.withDeadline(
-        this.transport({
-          url,
-          address,
-          method,
-          headers,
-          body,
-          timeoutMs: remainingMilliseconds(deadline),
-          maxResponseBytes: this.maxResponseBytes
-        }),
+      const addresses = await this.withDeadline(this.resolve(url), deadline);
+      const response = await this.requestResolved({
+        url,
+        addresses,
+        method,
+        headers,
+        body,
         deadline
-      );
+      });
       validateTransportResponse(response, this.maxResponseBytes);
       const responseHeaders = normalizedResponseHeaders(response.headers);
 
@@ -176,7 +176,14 @@ export class X402Probe {
       };
 
       if (response.status !== 402) {
-        return { request, response: responseMetadata, terms: null, advisories: [], redirects };
+        return {
+          request,
+          response: responseMetadata,
+          paymentRequired: null,
+          terms: null,
+          advisories: [],
+          redirects
+        };
       }
       const encodedPaymentRequired = responseHeaders["payment-required"];
       if (!encodedPaymentRequired || Buffer.byteLength(encodedPaymentRequired, "utf8") > MAX_PAYMENT_HEADER_BYTES) {
@@ -205,6 +212,7 @@ export class X402Probe {
       return {
         request: normalized.request,
         response: responseMetadata,
+        paymentRequired,
         terms: normalized.terms,
         advisories: normalized.advisories,
         redirects
@@ -212,7 +220,7 @@ export class X402Probe {
     }
   }
 
-  private async resolve(url: URL): Promise<ProbeAddress> {
+  private async resolve(url: URL): Promise<ProbeAddress[]> {
     const hostname = unbracketedHostname(url.hostname);
     const literalFamily = isIP(hostname);
     let addresses: ProbeAddress[];
@@ -236,15 +244,54 @@ export class X402Probe {
       });
     }
     for (const address of addresses) {
-      if (isIP(address.address) !== address.family || !isPublicAddress(address.address)) {
+      const permittedAddress = isPublicAddress(address.address) ||
+        (this.allowLoopback && isLoopbackAddress(address.address));
+      if (isIP(address.address) !== address.family || !permittedAddress) {
         throw new AuthError("probe_target_forbidden", "Probe target resolves to a non-public address", 400, {
           field: "url",
-          expected: "public internet address",
+          expected: this.allowLoopback ? "public internet or loopback address" : "public internet address",
           received: url.hostname
         });
       }
     }
-    return addresses[0];
+    return [...addresses].sort((left, right) => left.family - right.family);
+  }
+
+  private async requestResolved(input: {
+    url: URL;
+    addresses: ProbeAddress[];
+    method: "GET" | "POST";
+    headers: Record<string, string>;
+    body: Uint8Array;
+    deadline: number;
+  }): Promise<ProbeTransportResponse> {
+    let lastError: unknown;
+    for (let index = 0; index < input.addresses.length; index += 1) {
+      const attemptsLeft = input.addresses.length - index;
+      const timeoutMs = Math.max(1, Math.floor(remainingMilliseconds(input.deadline) / attemptsLeft));
+      const attemptDeadline = Math.min(input.deadline, performance.now() + timeoutMs);
+      try {
+        return await this.withDeadline(
+          this.transport({
+            url: input.url,
+            address: input.addresses[index],
+            method: input.method,
+            headers: input.headers,
+            body: input.body,
+            timeoutMs,
+            maxResponseBytes: this.maxResponseBytes
+          }),
+          attemptDeadline
+        );
+      } catch (error) {
+        lastError = error;
+        const canRetry = error instanceof AuthError && error.retryable;
+        if (!canRetry || index === input.addresses.length - 1) throw error;
+      }
+    }
+    throw lastError ?? new AuthError("probe_transport_failed", "Probe could not reach the target", 502, {
+      retryable: true
+    });
   }
 
   private async withDeadline<T>(operation: Promise<T>, deadline: number): Promise<T> {
@@ -373,6 +420,20 @@ function isPublicAddress(address: string): boolean {
   if (family === 4) return isPublicIpv4(address);
   if (family === 6) return isPublicIpv6(address);
   return false;
+}
+
+function isLoopbackAddress(address: string): boolean {
+  const family = isIP(address);
+  if (family === 4) {
+    return address.split(".").map(Number)[0] === 127;
+  }
+  if (family !== 6) return false;
+  const bytes = ipv6Bytes(address);
+  if (!bytes) return false;
+  const ipv6Loopback = bytes.slice(0, 15).every((byte) => byte === 0) && bytes[15] === 1;
+  const ipv4Mapped = bytes.slice(0, 10).every((byte) => byte === 0) &&
+    bytes[10] === 0xff && bytes[11] === 0xff;
+  return ipv6Loopback || (ipv4Mapped && bytes[12] === 127);
 }
 
 function isPublicIpv4(address: string): boolean {

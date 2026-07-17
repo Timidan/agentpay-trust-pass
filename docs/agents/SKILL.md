@@ -1,37 +1,51 @@
 ---
-name: agentpay-trust-signal
-description: Use AgentPay before deciding whether to approve, reject, or review a Casper token or package. AgentPay sells x402-paid evidence reports, verifies Merkle proofs, scores the subject with deterministic rules, and records the decision on Casper.
+name: agentpay
+description: Check a Casper x402 charge before signing it, verify what settled, or run a paid check on a Casper token, CSPR.name, or account.
 ---
 
-# AgentPay Trust Signal
+# AgentPay
 
-Install:
+AgentPay handles two related jobs:
+
+1. It checks an x402 charge before the buyer signs it and returns `PAY`,
+   `REVIEW`, or `BLOCK`.
+2. It can buy a live check of a Casper token or account, verify every evidence
+   proof, apply fixed rules, and record the result on Casper Testnet.
+
+The payment audit API does not read a buyer key. The buyer or CLI signs only
+after a `PAY` result. The one-call MCP assessment is different: the MCP process
+uses its configured `CASPER_SECRET_KEY_PATH` to pay the Testnet check fee and
+record the result. Do not send a private key in an HTTP or MCP payload.
+
+## Live Casper sources
+
+- **CSPR.trade** resolves a listed token symbol to its exact Mainnet package
+  hash. For example, `assess_subject` can accept a symbol instead of making the
+  caller guess a contract.
+- **CSPR.name** resolves a human-readable Mainnet name to its current account.
+  AgentPay validates the expiry and cross-checks the returned public key against
+  the account hash before reading that account from Casper.
+- **CSPR.live** supplies public indexed package versions, holders, and
+  contract-age data without exposing a server credential.
+- **Casper JSON-RPC** reads account state, total supply, supply controls, and
+  transaction execution independently of the indexer.
+- **CSPR.cloud** is optional. A deployment can use it for token discovery or a
+  hosted x402 facilitator, but AgentPay does not depend on it for token
+  evidence.
+
+Evidence can come from `casper-mainnet` or `casper-testnet`. The x402 check fee
+and AgentPay registry record use `casper:casper-test`. Every quote and verdict
+states both networks so they cannot be confused.
+
+## Connect
+
+Read this contract from a running AgentPay API:
 
 ```sh
-curl $AGENT_PAY_BASE_URL/skill.md
+curl "$AGENT_PAY_BASE_URL/skill.md"
 ```
 
-That request returns this file with `$AGENT_PAY_BASE_URL` replaced by the
-serving AgentPay origin. Treat this skill as the source of truth for agent
-integration.
-
-AgentPay is an evidence and payment rail for autonomous agents. It quotes an
-x402-paid report, releases the report only after a Casper x402 payment, verifies
-the report against a Merkle dataset root, scores the subject with deterministic
-rules, and records the decision on Casper.
-
-AgentPay never asks for, receives, stores, or transmits your private key. Your
-agent signs the x402 payment with its own Casper key. If you use the local MCP
-`assess_subject` shortcut, the MCP process reads your local `CASPER_SECRET_KEY_PATH`
-and signs locally.
-
-## Channels
-
-### Primary: MCP server
-
-Use the MCP server when your agent supports MCP tools/resources.
-
-Stdio entrypoint:
+For MCP over stdio:
 
 ```json
 {
@@ -41,434 +55,201 @@ Stdio entrypoint:
       "args": ["--filter", "@agent-pay/mcp-server", "stdio"],
       "env": {
         "REPORT_API_URL": "$AGENT_PAY_BASE_URL",
-        "AGENT_PAY_PUBLIC_ORIGIN": "$AGENT_PAY_BASE_URL"
+        "CASPER_SECRET_KEY_PATH": "/absolute/path/to/testnet_secret_key.pem"
       }
     }
   }
 }
 ```
 
-Skill resource:
+The MCP resource URI is `skill://agentpay`.
+
+For the HTTP bridge, set `AGENT_PAY_MCP_URL` to the full bridge base URL. The
+hosted AgentPay deployment uses `https://agentpay.timidan.xyz/bridge` while
+`AGENT_PAY_BASE_URL` is `https://agentpay.timidan.xyz/api`.
+
+```sh
+curl "$AGENT_PAY_MCP_URL/tools"
+curl -X POST "$AGENT_PAY_MCP_URL/tools/payment_status" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+Server and agent calls to protected HTTP tools require:
 
 ```text
-skill://agentpay
+Authorization: Bearer <MCP_SERVER_AUTH_TOKEN>
 ```
 
-Read that MCP resource to load this same contract without HTTP.
-
-### Secondary: HTTP bridge
-
-The MCP bridge exposes the same tools over HTTP:
-
-```sh
-curl "$AGENT_PAY_BASE_URL/tools"
-```
-
-Call a tool:
-
-```sh
-curl -X POST "$AGENT_PAY_BASE_URL/tools/quote_report" \
-  -H "Content-Type: application/json" \
-  -d '{"subject":"hash-<64 hex package hash>","reportApiUrl":"$AGENT_PAY_BASE_URL"}'
-```
-
-If your deployment runs the bridge and seller API on separate origins, use the
-bridge origin for `/tools/...` and pass the seller API origin as `reportApiUrl`.
-All URLs in this skill use `$AGENT_PAY_BASE_URL` so a served skill can be
-rewritten safely for one public origin.
+Only `payment_status` and `registry_status` are public status calls. A
+deployment may also allow browser-origin calls to `assess_subject` and
+`assess_account` under a Testnet budget. That browser exception requires an
+exact allowed `Origin`; it is not an unauthenticated server API.
 
 ## Tools
 
-### `quote_report`
+| Tool | Use |
+| --- | --- |
+| `check_x402_payment` | Check captured x402 terms and an unsigned Casper authorization before signing. |
+| `verify_x402_settlement` | Compare an executed Casper transaction with the exact approved charge. |
+| `get_payment_receipt` | Read the receipt and its Casper anchor state. |
+| `quote_report` | Price a live token or account check. Accepts a CSPR.trade symbol, CSPR.name, or exact Casper identifier. |
+| `buy_report` | Pay an accepted quote and release its evidence. |
+| `verify_report` | Verify one released evidence record against the dataset root. |
+| `assess_subject` | Resolve, quote, pay, verify, score, and record a token or account check in one call. |
+| `assess_account` | Run the one-call flow for a CSPR.name, account hash, or public key. |
+| `record_decision` | Record an already verified check result on Casper Testnet. |
+| `payment_status` | Check x402 facilitator readiness. |
+| `registry_status` | Check Casper registry readiness. |
 
-Quotes an x402 price for an AgentPay report scoped to a subject: a token package
-hash or a Casper account. A subject is required.
+## Check a charge
 
-Input:
+Capture the original service request and the server's x402 response before
+signing. Submit those values with the unsigned authorization intent:
 
 ```json
 {
-  "subject": "hash-<64 hex package hash> or account-hash-<64 hex> or public key",
-  "reportApiUrl": "$AGENT_PAY_BASE_URL"
-}
-```
-
-Output:
-
-```json
-{
-  "quoteId": "string",
-  "reportId": "string",
-  "reportHash": "string",
-  "datasetId": "string",
-  "datasetRoot": "64 hex chars",
-  "amount": "string",
-  "asset": "string",
-  "network": "string",
-  "expiresAt": "ISO timestamp",
-  "expiresInSeconds": 300,
-  "paymentResource": {
-    "url": "$AGENT_PAY_BASE_URL/reports/buy/<quoteId>",
-    "description": "string",
-    "mimeType": "application/json"
+  "request": {
+    "method": "GET",
+    "url": "https://service.example/resource",
+    "bodyHash": "<64 hex>",
+    "bodyBytes": 0,
+    "capturedAt": "<ISO timestamp>",
+    "adapterVersion": "my-agent/1"
   },
-  "paymentRequirements": [
-    {
-      "scheme": "exact",
-      "network": "casper:casper-test",
-      "asset": "64 hex package hash",
-      "amount": "string",
-      "payTo": "00 + 64 hex chars",
-      "maxTimeoutSeconds": 300,
-      "extra": {
-        "name": "Cep18x402",
-        "version": "1",
-        "decimals": "2",
-        "symbol": "CSPR"
-      }
-    }
-  ],
-  "paymentConfigurationRequired": false,
-  "paymentConfigurationReason": null,
-  "paymentReadiness": {
-    "status": "ready | configuration_required | facilitator_unavailable | facilitator_unsupported",
-    "reason": null,
-    "checkedAt": "ISO timestamp",
-    "facilitatorUrl": "string",
-    "checks": [],
-    "supportedKind": {
-      "x402Version": 2,
-      "scheme": "exact",
-      "network": "casper:casper-test",
-      "feePayer": "64 hex chars or null"
-    }
-  },
-  "sourceSummary": [
-    {
-      "product": "string",
-      "network": "string",
-      "subject": "string",
-      "observedAt": "ISO timestamp",
-      "recordHash": "string",
-      "facts": {}
-    }
-  ]
-}
-```
-
-### `payment_status`
-
-Checks whether AgentPay's configured Casper x402 facilitator path is ready to
-accept payment.
-
-Input:
-
-```json
-{ "reportApiUrl": "$AGENT_PAY_BASE_URL" }
-```
-
-Output: the `paymentReadiness` object shown under `quote_report`.
-
-### `registry_status`
-
-Checks whether AgentPay's Casper registry recording path is configured and
-reachable.
-
-Input:
-
-```json
-{}
-```
-
-Output:
-
-```json
-{
-  "status": "ready | configuration_required | rpc_unavailable",
-  "reason": "string or null",
-  "checkedAt": "ISO timestamp",
-  "checks": [],
-  "registryPackageHash": "64 hex chars or null",
-  "recordScript": "string",
-  "rpc": {
-    "url": "string",
-    "apiVersion": "string or null",
-    "chainspecName": "string or null",
-    "latestBlockHeight": 0,
-    "latestBlockHash": "string or null"
-  }
-}
-```
-
-### `buy_report`
-
-Buys the evidence report with an x402 payment payload.
-
-Input:
-
-```json
-{
-  "reportApiUrl": "$AGENT_PAY_BASE_URL",
-  "quoteId": "quote id from quote_report",
-  "paymentPayload": {
+  "paymentRequired": {
     "x402Version": 2,
-    "accepted": {},
     "resource": {},
-    "payload": "buyer-signed Casper x402 payload"
-  }
-}
-```
-
-Output:
-
-```json
-{
-  "datasetId": "string",
-  "datasetRoot": "64 hex chars",
-  "reportId": "string",
-  "report": {
-    "id": "string",
-    "product": "string",
-    "network": "string",
-    "subject": "string",
-    "observedAt": "ISO timestamp",
-    "sourceUrl": "string",
-    "facts": {},
-    "rawHash": "string"
+    "accepts": []
   },
-  "reportHash": "string",
-  "proof": [{ "position": "left | right", "hash": "64 hex chars" }],
-  "evidence": [],
-  "paymentReceiptHash": "string",
-  "payment": {
-    "scheme": "x402",
-    "status": "settled",
-    "transactionHash": "64 hex chars",
-    "confirmation": {
-      "rpcUrl": "string",
-      "method": "info_get_transaction",
-      "apiVersion": "string or null",
-      "executionState": "executed | pending | unknown",
-      "blockHash": "string or null",
-      "attempts": 1,
-      "observedAt": "ISO timestamp"
-    },
-    "facilitatorHash": "string"
-  }
-}
-```
-
-### `verify_report`
-
-Verifies a report Merkle proof against the dataset root.
-
-Input:
-
-```json
-{
-  "reportApiUrl": "$AGENT_PAY_BASE_URL",
-  "record": {
-    "id": "string",
-    "product": "string",
-    "network": "string",
-    "subject": "string",
-    "observedAt": "ISO timestamp",
-    "sourceUrl": "string",
-    "facts": {},
-    "rawHash": "string"
+  "authorization": {
+    "payerPublicKey": "<Casper public key>",
+    "from": "00<64 hex>",
+    "to": "00<64 hex>"
+    "amount": "<integer>",
+    "validAfter": "<Unix seconds>",
+    "validBefore": "<Unix seconds>",
+    "nonce": "<64 hex>",
+    "network": "casper:casper-test",
+    "asset": "<64 hex package hash>",
+    "tokenName": "<on-chain token name>",
+    "tokenVersion": "<authorization domain version>",
+    "digest": "<64 hex>"
   },
-  "proof": [{ "position": "left", "hash": "64 hex chars" }],
-  "datasetRoot": "64 hex chars"
+  "idempotencyKey": "<stable retry key>"
 }
 ```
 
-Output:
+Call `check_x402_payment`. Act on the result as follows:
 
-```json
-{ "verified": true }
-```
+| Result | Action |
+| --- | --- |
+| `PAY` | The checked terms match active policy. The buyer may sign locally. |
+| `REVIEW` | Stop and request operator review. A required approval or fact is missing. |
+| `BLOCK` | Do not sign. A hard rule failed. |
 
-### `record_decision`
+After the buyer submits the transaction, call `verify_x402_settlement` with the
+returned `checkId` and the exact transaction hash. Treat only `match` as a
+successful settlement. Then read the receipt with `get_payment_receipt`.
 
-Records an AgentPay trust decision through the Casper boundary.
+## Check a CSPR.trade token
 
-Input:
-
-```json
-{
-  "datasetId": "string",
-  "datasetRoot": "64 hex chars",
-  "reportHash": "string",
-  "paymentReceiptHash": "string",
-  "decision": "approved | rejected | needs_review"
-}
-```
-
-Output:
+This is the shortest live-project path:
 
 ```json
 {
-  "mode": "submitted",
-  "txHash": "string",
-  "hashKind": "transaction | deploy",
-  "confirmation": {
-    "rpcUrl": "string",
-    "method": "info_get_transaction | info_get_deploy",
-    "apiVersion": "string or null",
-    "executionState": "executed | pending | unknown",
-    "blockHash": "string or null",
-    "attempts": 1,
-    "observedAt": "ISO timestamp"
-  },
-  "input": {
-    "datasetId": "string",
-    "datasetRoot": "64 hex chars",
-    "reportHash": "string",
-    "paymentReceiptHash": "string",
-    "decision": "approved | rejected | needs_review"
-  }
+  "subject": "WCSPR",
+  "evidenceNetwork": "casper-mainnet"
 }
 ```
 
-### `assess_subject`
+Call `assess_subject`. AgentPay asks CSPR.trade for the exact package hash,
+reads Mainnet evidence for that package, pays the check fee over x402 on
+Testnet, verifies all Merkle leaves, applies the token policy, and records the
+decision on Testnet.
 
-Runs the full Trust Signal rail: quote, pay x402, verify Merkle proofs, score
-deterministically, narrate, and stamp the verdict on Casper.
-
-Input:
-
-```json
-{
-  "subject": "64 hex chars or hash-<64 hex chars>",
-  "reportApiUrl": "$AGENT_PAY_BASE_URL"
-}
-```
-
-Output:
+The result includes:
 
 ```json
 {
   "aspect": "CLEAR | CAUTION | DANGER",
   "decision": "approved | needs_review | rejected",
-  "flags": [{ "code": "string", "severity": "danger | caution", "message": "string" }],
-  "notChecked": ["string"],
-  "rationale": "string",
-  "notCheckedNote": "string",
-  "subject": { "kind": "cep18_token", "packageHash": "64 hex chars", "raw": "string" },
-  "paymentReceiptHash": "string",
-  "settlementTxHash": "string",
-  "decisionTxHash": "string",
-  "datasetRoot": "64 hex chars",
-  "policyHash": "64 hex chars",
+  "subject": {},
+  "resolvedToken": {
+    "symbol": "string",
+    "packageHash": "hash-<64 hex>",
+    "network": "casper-mainnet",
+    "source": "CSPR.trade"
+  },
+  "evidenceNetwork": "casper-mainnet",
+  "payment": {
+    "amount": "raw integer base units",
+    "amountDisplay": "human-readable decimal amount",
+    "asset": "<64 hex package hash>",
+    "assetSymbol": "string",
+    "assetDecimals": 9,
+    "network": "casper:casper-test"
+  },
+  "flags": [],
+  "passed": [],
+  "notChecked": [],
+  "datasetRoot": "<64 hex>",
+  "paymentReceiptHash": "<64 hex>",
+  "settlementTxHash": "<64 hex>",
+  "decisionTxHash": "<64 hex>",
+  "settlementExplorerUrl": "https://testnet.cspr.live/transaction/<hash>",
   "explorerUrl": "https://testnet.cspr.live/transaction/<hash>"
 }
 ```
 
-## Flow
+For an exact token package, pass `hash-<64 hex>` and choose
+`casper-mainnet` or `casper-testnet`. For an account, use `assess_account`
+with a `.cspr` name, `account-hash-<64 hex>` value, or Casper public key.
 
-### One-call MCP flow
-
-Use `assess_subject` when your agent can run the local MCP server with its own
-Casper signing key available:
+For example:
 
 ```json
 {
-  "method": "tools/call",
-  "params": {
-    "name": "assess_subject",
-    "arguments": {
-      "subject": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      "reportApiUrl": "$AGENT_PAY_BASE_URL"
-    }
-  }
+  "account": "alice.cspr",
+  "evidenceNetwork": "casper-mainnet"
 }
 ```
 
-The MCP process quotes the report, signs the x402 payload locally with your
-Casper key, buys the report, verifies each evidence proof, computes the verdict,
-and records the decision.
+The result includes `resolvedAccount` with the CSPR.name, canonical account
+hash, optional public key, expiry, and source URL. CSPR.name is Mainnet-only;
+the check fee and AgentPay registry record still use Casper Testnet.
 
-### Manual flow
+## Evidence verdicts
 
-Use the manual flow when your agent has its own payment/signing path.
+| Verdict | Meaning |
+| --- | --- |
+| `CLEAR` | Every fact required by this policy was read and every required check passed. Review the evidence before acting. |
+| `CAUTION` | A caution rule fired or AgentPay could not read a required fact. |
+| `DANGER` | A required check found a concrete risk. Do not continue until you understand it. |
 
-1. Quote:
+Token CLEAR requires all of these facts:
 
-```sh
-curl -X POST "$AGENT_PAY_BASE_URL/tools/quote_report" \
-  -H "Content-Type: application/json" \
-  -d '{"subject":"hash-<64 hex package hash>","reportApiUrl":"$AGENT_PAY_BASE_URL"}'
-```
+- the CEP-18 mint and burn functions are disabled;
+- contract age is at least 1,000 blocks;
+- holder count was read;
+- top-holder concentration was read and is below 95%.
 
-2. Sign the x402 requirement with your own Casper key. The accepted requirement
-   is `paymentRequirements[0]`; the protected resource is `paymentResource`.
-   Do not send AgentPay a private key.
+Account checks cover only facts AgentPay can prove from Casper state: account
+existence, CSPR balance, associated keys, and action thresholds. They do not
+prove a person's identity or promise that an account is trustworthy.
 
-3. Buy with a `PAYMENT-SIGNATURE` header against the seller API:
+## Manual paid-report flow
 
-```sh
-curl -X POST "$AGENT_PAY_BASE_URL/reports/buy/$QUOTE_ID" \
-  -H "Content-Type: application/json" \
-  -H "PAYMENT-SIGNATURE: $BUYER_SIGNED_X402_PAYLOAD" \
-  -d '{}'
-```
+Use this path when the caller has its own x402 signer:
 
-4. Verify the released report:
+1. Call `quote_report` with `subject` and `evidenceNetwork`.
+2. Confirm `paymentReadiness.status` is `ready`.
+3. Sign `paymentRequirements[0]` for `paymentResource` locally.
+4. Call `buy_report` with the quote ID and signed x402 payload.
+5. Check that the paid `datasetId`, `datasetRoot`, `evidenceNetwork`, payment
+   amount, asset, and network match the accepted quote.
+6. Call `verify_report` for every evidence leaf.
+7. Apply the deterministic policy or call the one-call assessment tool.
 
-```sh
-curl -X POST "$AGENT_PAY_BASE_URL/tools/verify_report" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "reportApiUrl": "$AGENT_PAY_BASE_URL",
-    "record": { "id": "...", "product": "...", "network": "...", "subject": "...", "observedAt": "...", "sourceUrl": "...", "facts": {}, "rawHash": "..." },
-    "proof": [{ "position": "left", "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }],
-    "datasetRoot": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-  }'
-```
-
-5. Score locally from the released evidence or use `assess_subject`. If you
-   score locally, follow the same verdict vocabulary and decision mapping below.
-
-6. Record the decision:
-
-```sh
-curl -X POST "$AGENT_PAY_BASE_URL/tools/record_decision" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "datasetId": "agent-pay-live-...",
-    "datasetRoot": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-    "reportHash": "sha256:...",
-    "paymentReceiptHash": "sha256:...",
-    "decision": "approved"
-  }'
-```
-
-## Verdict vocabulary
-
-AgentPay uses exactly three aspects:
-
-| aspect | decision | meaning |
-| --- | --- | --- |
-| `CLEAR` | `approved` | No danger/caution flags and mandatory checked signals resolved. |
-| `CAUTION` | `needs_review` | A caution flag exists or a mandatory signal was not checked. Pause for review. |
-| `DANGER` | `rejected` | A danger rule fired. Do not approve the subject. |
-
-The deterministic rule engine is authoritative. It extracts signals from the
-verified evidence, runs pure rules, and returns the aspect/decision. The LLM
-narrator is optional and can only explain the verdict; it cannot change or
-override `CLEAR`, `CAUTION`, `DANGER`, or the recorded decision.
-
-Rule signals include `mintAuthorityOpen`, `supplyRenounced`, `holderCount`,
-`topHolderPct`, `contractAgeBlocks`, `lpHolderCount`, and `liquidityDepth`.
-Danger flags include open mint authority, non-renounced supply, single LP
-holder, and extreme holder concentration. A very new contract is a caution.
-
-## Security rules
-
-- Never send AgentPay a private key, seed phrase, PEM file, or raw wallet
-  secret.
-- Pay with your own Casper key. `PAYMENT-SIGNATURE` carries the signed x402
-  payload, not the key.
-- Verify the Merkle proof before acting on a paid report.
-- Treat `DANGER` as a hard rejection. Treat `CAUTION` as human review. Treat
-  `CLEAR` as acceptable only if your own policy also allows the action.
+Never accept a paid report whose network, payment details, dataset identity, or
+Merkle proof differs from the quote.

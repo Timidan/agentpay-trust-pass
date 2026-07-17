@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
+  artifactHash,
   operatorPolicyHash,
   providerDecisionHash,
   type OperatorPolicy,
@@ -26,6 +27,33 @@ export type ProviderDecisionInput = {
   promptedByCheckId: string;
 };
 
+export type AgentTokenScope =
+  | "checks:write"
+  | "settlements:write"
+  | "observations:write"
+  | "receipts:read";
+
+export type AgentTokenPublicRecord = {
+  id: string;
+  operatorPublicKey: string;
+  agentName: string;
+  scopes: AgentTokenScope[];
+  allowedPayerPublicKeys: string[];
+  revision: number;
+  actionHash: string;
+  signature: string;
+  createdAt: string;
+  expiresAt: string | null;
+  revokedAt: string | null;
+};
+
+export type AgentTokenIssueInput = {
+  agentName: string;
+  scopes: AgentTokenScope[];
+  allowedPayerPublicKeys: string[];
+  expiresAt: string | null;
+};
+
 export class OperatorClient {
   private readonly baseUrl: string;
   private readonly origin: string;
@@ -33,13 +61,13 @@ export class OperatorClient {
 
   constructor(options: OperatorClientOptions) {
     const url = new URL(options.baseUrl);
-    if (url.origin !== options.baseUrl.replace(/\/+$/, "")) {
-      throw new TypeError("AgentPay operator API URL must be an origin without a path");
+    if (url.username || url.password || url.search || url.hash) {
+      throw new TypeError("AgentPay operator API URL must not include credentials, query parameters, or a fragment");
     }
     if (url.protocol !== "https:" && !isLocalHostname(url.hostname)) {
       throw new TypeError("AgentPay operator API URL must use HTTPS outside localhost");
     }
-    this.baseUrl = url.origin;
+    this.baseUrl = url.toString().replace(/\/+$/, "");
     this.origin = url.origin;
     this.fetchImpl = options.fetchImpl ?? fetch;
   }
@@ -66,7 +94,7 @@ export class OperatorClient {
 
   async currentPolicy(token: string): Promise<OperatorPolicy | null> {
     try {
-      const result = await this.request<{ policy: OperatorPolicy }>("/v1/policies/current", {
+      const result = await this.request<{ policy: OperatorPolicy | null }>("/v1/policies/current", {
         method: "GET",
         token
       });
@@ -83,6 +111,61 @@ export class OperatorClient {
       token
     });
     return result.decisions;
+  }
+
+  async agentTokens(token: string): Promise<AgentTokenPublicRecord[]> {
+    return (await this.agentTokenState(token)).records;
+  }
+
+  async issueAgentToken(
+    input: AgentTokenIssueInput,
+    signer: CasperSigner,
+    token: string
+  ): Promise<{ token: string; record: AgentTokenPublicRecord }> {
+    const revision = (await this.agentTokenState(token)).nextRevision;
+    const spec = {
+      operatorPublicKey: signer.publicKeyHex,
+      revision,
+      agentName: input.agentName,
+      scopes: input.scopes,
+      allowedPayerPublicKeys: input.allowedPayerPublicKeys,
+      expiresAt: input.expiresAt
+    };
+    const actionHash = artifactHash({ kind: "agent_token_issue", ...spec });
+    const signed = await this.signAction("agent_token_issue", revision, actionHash, signer, token);
+    return this.request<{ token: string; record: AgentTokenPublicRecord }>("/v1/agent-tokens", {
+      method: "POST",
+      token,
+      body: {
+        challengeId: signed.challengeId,
+        spec,
+        signature: signed.signature
+      }
+    });
+  }
+
+  async revokeAgentToken(
+    tokenId: string,
+    signer: CasperSigner,
+    token: string
+  ): Promise<void> {
+    const revision = (await this.agentTokenState(token)).nextRevision;
+    const actionHash = artifactHash({
+      kind: "agent_token_revoke",
+      operatorPublicKey: signer.publicKeyHex,
+      tokenId,
+      revision
+    });
+    const signed = await this.signAction("agent_token_revoke", revision, actionHash, signer, token);
+    await this.request<void>(`/v1/agent-tokens/${encodeURIComponent(tokenId)}`, {
+      method: "DELETE",
+      token,
+      body: {
+        challengeId: signed.challengeId,
+        revision,
+        signature: signed.signature
+      }
+    });
   }
 
   async installPolicy(input: Record<string, unknown>, signer: CasperSigner, token: string): Promise<OperatorPolicy> {
@@ -167,7 +250,7 @@ export class OperatorClient {
   }
 
   private async signAction(
-    kind: "policy_revision" | "provider_decision",
+    kind: "policy_revision" | "provider_decision" | "agent_token_issue" | "agent_token_revoke",
     revision: number,
     artifactHash: string,
     signer: CasperSigner,
@@ -189,9 +272,13 @@ export class OperatorClient {
     };
   }
 
+  private agentTokenState(token: string): Promise<{ records: AgentTokenPublicRecord[]; nextRevision: number }> {
+    return this.request("/v1/agent-tokens", { method: "GET", token });
+  }
+
   private async request<T>(
     path: string,
-    input: { method: "GET" | "POST"; token?: string; body?: unknown }
+    input: { method: "GET" | "POST" | "DELETE"; token?: string; body?: unknown }
   ): Promise<T> {
     const headers = new Headers({ origin: this.origin });
     if (input.token) headers.set("authorization", `Bearer ${input.token}`);

@@ -50,7 +50,7 @@ export function AgentPayDecisionReceipt({
 }) {
   if (!receipt) {
     return (
-      <p className="muted">The registry receipt appears here once a live run records its decision on Casper.</p>
+      <p className="muted">The Casper receipt appears here once a live run records its decision.</p>
     );
   }
 
@@ -65,16 +65,16 @@ export function AgentPayDecisionReceipt({
           <dd className={`receipt-verdict is-${aspect.toLowerCase()}`}>{aspect}</dd>
         </div>
         <div>
-          <dt>Dataset</dt>
+          <dt>Evidence set</dt>
           <dd><code>{receipt.input.datasetId}</code></dd>
         </div>
         <div>
-          <dt>Dataset root</dt>
-          <dd><HashValue value={receipt.input.datasetRoot} label="dataset root" /></dd>
+          <dt>Evidence fingerprint</dt>
+          <dd><HashValue value={receipt.input.datasetRoot} label="evidence fingerprint" /></dd>
         </div>
         {typeof proofDepth === "number" && proofDepth > 0 ? (
           <div>
-            <dt>Proof path</dt>
+            <dt>Verification path</dt>
             <dd>{proofDepth} {proofDepth === 1 ? "step" : "steps"}</dd>
           </div>
         ) : null}

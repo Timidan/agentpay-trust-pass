@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractSignals } from "../../src/trust/signals.js";
+import { extractSignals, subjectSignalsFromFacts } from "../../src/trust/signals.js";
 import type { EvidenceRecord } from "../../src/types.js";
 
 function rec(subject: string, facts: Record<string, string | number | boolean | null>): EvidenceRecord {
@@ -8,22 +8,36 @@ function rec(subject: string, facts: Record<string, string | number | boolean | 
 }
 
 describe("extractSignals", () => {
-  it("maps token-authority + supply + age facts to signals", () => {
+  it("maps token authority, holder, and age facts to signals", () => {
     const s = extractSignals([
-      rec("token_authority", { mintAuthorityOpen: true, supplyRenounced: false }),
+      rec("token_authority", { mintBurnEnabled: true, publicMintEntrypoint: true }),
       rec("token_holders", { holderCount: 1, topHolderPct: 100 }),
       rec("token_age", { contractAgeBlocks: 12 }),
     ]);
-    expect(s.mintAuthorityOpen).toBe(true);
-    expect(s.supplyRenounced).toBe(false);
+    expect(s.mintBurnEnabled).toBe(true);
+    expect(s.publicMintEntrypoint).toBe(true);
     expect(s.holderCount).toBe(1);
     expect(s.topHolderPct).toBe(100);
     expect(s.contractAgeBlocks).toBe(12);
   });
   it("defaults absent signals to null (not checked)", () => {
     const s = extractSignals([rec("token_age", { contractAgeBlocks: 5 })]);
-    expect(s.mintAuthorityOpen).toBeNull();
+    expect(s.mintBurnEnabled).toBeNull();
+    expect(s.publicMintEntrypoint).toBeNull();
     expect(s.lpHolderCount).toBeNull();
     expect(s.liquidityDepth).toBeNull();
+  });
+
+  it("normalizes submitted token facts without creating an evidence record", () => {
+    expect(subjectSignalsFromFacts({
+      mintBurnEnabled: false,
+      holderCount: 42,
+      topHolderPct: "not-a-number"
+    })).toMatchObject({
+      mintBurnEnabled: false,
+      holderCount: 42,
+      topHolderPct: null,
+      contractAgeBlocks: null
+    });
   });
 });

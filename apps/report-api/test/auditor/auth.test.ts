@@ -261,6 +261,27 @@ describe("AuditorAuth", () => {
       received: null
     });
   });
+
+  it("scopes session cookies to the configured API path", () => {
+    const repository = openSqliteRepository(":memory:");
+    try {
+      const auth = new AuditorAuth({
+        repository,
+        publicOrigin: ORIGIN,
+        cookiePath: "/api/v1",
+        now: () => new Date(NOW)
+      });
+      expect(auth.sessionCookie("session-token", "2026-07-15T22:00:00.000Z"))
+        .toContain("Path=/api/v1;");
+      expect(() => new AuditorAuth({
+        repository,
+        publicOrigin: ORIGIN,
+        cookiePath: "/api/v1; SameSite=None"
+      })).toThrow(/cookie path/i);
+    } finally {
+      repository.close();
+    }
+  });
 });
 
 function createContext() {

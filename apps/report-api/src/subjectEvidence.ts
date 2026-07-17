@@ -6,29 +6,46 @@ import {
   type EvidenceRecord
 } from "@agent-pay/core";
 import type { SubjectRef } from "@agent-pay/core";
-import type { LiveEvidenceDataset } from "./liveEvidence.js";
+import {
+  fetchCsprTradeMarketState,
+  type CsprTradeMarketState,
+  type LiveEvidenceDataset
+} from "./liveEvidence.js";
+import { fetchBoundedJson } from "./httpJson.js";
 import { fetchSubjectTokenState } from "./csprCloud.js";
-
-const DEFAULT_CASPER_RPC_URL = "https://node.testnet.casper.network/rpc";
+import {
+  csprCloudEndpoints,
+  defaultEvidenceNetwork,
+  evidenceRpcUrl,
+  type EvidenceNetwork
+} from "./evidenceNetwork.js";
 
 export type TokenState = {
-  mintAuthorityOpen: boolean | null;
-  supplyRenounced: boolean | null;
+  mintBurnEnabled: boolean | null;
+  publicMintEntrypoint?: boolean | null;
   holderCount: number | null;
   topHolderPct: number | null;
   installBlock: number | null;
   latestBlock: number | null;
   /** Verbatim package creation timestamp (ISO) when the indexer exposes it. */
   packageCreatedAt?: string | null;
+  authoritySourceUrl?: string;
+  holdersSourceUrl?: string;
+  ageSourceUrl?: string;
 };
 
 export type EvidenceDeps = {
   fetchTokenState?: (subject: SubjectRef) => Promise<TokenState>;
-  network?: string;
+  fetchTradeMarket?: (packageHash: string) => Promise<CsprTradeMarketState>;
+  network?: EvidenceNetwork;
+  rpcUrl?: string;
 };
 
-async function defaultFetchTokenState(subject: SubjectRef): Promise<TokenState> {
-  const rpcUrl = process.env.CASPER_RPC_URL ?? DEFAULT_CASPER_RPC_URL;
+async function defaultFetchTokenState(
+  subject: SubjectRef,
+  network: EvidenceNetwork,
+  rpcUrl: string
+): Promise<TokenState> {
   let latestBlock: number | null = null;
 
   try {
@@ -41,29 +58,47 @@ async function defaultFetchTokenState(subject: SubjectRef): Promise<TokenState> 
     // best-effort — null means "not checked"
   }
 
-  // Real holders + concentration from CSPR.cloud (best-effort; nulls stay "not checked").
+  let mintBurnEnabled: boolean | null = null;
+  let publicMintEntrypoint: boolean | null = null;
   let holderCount: number | null = null;
   let topHolderPct: number | null = null;
+  let installBlock: number | null = null;
   let packageCreatedAt: string | null = null;
+  let authoritySourceUrl = rpcUrl;
+  let holdersSourceUrl = rpcUrl;
+  let ageSourceUrl = rpcUrl;
   try {
-    const live = await fetchSubjectTokenState(subject.packageHash);
+    const endpoints = csprCloudEndpoints(network);
+    const live = await fetchSubjectTokenState(subject.packageHash, {
+      network,
+      restBase: endpoints.restBase,
+      nodeRpcUrl: endpoints.nodeRpcUrl,
+      casperRpcUrl: rpcUrl
+    });
+    mintBurnEnabled = live.mintBurnEnabled;
+    publicMintEntrypoint = live.publicMintEntrypoint;
     holderCount = live.holderCount;
     topHolderPct = live.topHolderPct;
+    installBlock = live.installBlock;
     packageCreatedAt = live.packageCreatedAt;
+    authoritySourceUrl = live.authoritySourceUrl;
+    holdersSourceUrl = live.holdersSourceUrl;
+    ageSourceUrl = live.ageSourceUrl;
   } catch {
     // leave as "not checked"
   }
 
   return {
-    // mint authority + supply renouncement aren't cleanly exposed by CSPR.cloud,
-    // so they stay "not checked" — which the rules correctly surface as CAUTION.
-    mintAuthorityOpen: null,
-    supplyRenounced: null,
+    mintBurnEnabled,
+    publicMintEntrypoint,
     holderCount,
     topHolderPct,
-    installBlock: null,
+    installBlock,
     latestBlock,
-    packageCreatedAt
+    packageCreatedAt,
+    authoritySourceUrl,
+    holdersSourceUrl,
+    ageSourceUrl
   };
 }
 
@@ -71,23 +106,30 @@ export async function buildSubjectEvidence(
   subject: SubjectRef,
   deps: EvidenceDeps = {}
 ): Promise<LiveEvidenceDataset> {
-  const rpcUrl = process.env.CASPER_RPC_URL ?? DEFAULT_CASPER_RPC_URL;
-  const network = deps.network ?? "casper-testnet";
-  const fetchTokenState = deps.fetchTokenState ?? defaultFetchTokenState;
+  const network = deps.network ?? defaultEvidenceNetwork();
+  const rpcUrl = deps.rpcUrl ?? evidenceRpcUrl(network);
   const observedAt = new Date().toISOString();
-  const state = await fetchTokenState(subject);
+  const state = deps.fetchTokenState
+    ? await deps.fetchTokenState(subject)
+    : await defaultFetchTokenState(subject, network, rpcUrl);
 
   const contractAgeBlocks =
-    state.latestBlock != null && state.installBlock != null
+    state.latestBlock != null &&
+    state.installBlock != null &&
+    state.latestBlock >= state.installBlock
       ? state.latestBlock - state.installBlock
       : null;
 
-  const datasetId = `trust-${subject.packageHash.slice(0, 16)}-${state.latestBlock ?? "na"}`;
+  const datasetId =
+    `trust-${network}-${subject.packageHash.slice(0, 16)}-${state.latestBlock ?? "na"}-${randomUUID().replaceAll("-", "").slice(0, 12)}`;
 
-  // token_authority record: mintAuthorityOpen + supplyRenounced
+  // Keep the install flag and the active contract's public mint surface as
+  // separate facts. One must never be inferred from the other.
   const authorityFacts: Record<string, EvidenceFactValue> = {};
-  if (state.mintAuthorityOpen != null) authorityFacts.mintAuthorityOpen = state.mintAuthorityOpen;
-  if (state.supplyRenounced != null) authorityFacts.supplyRenounced = state.supplyRenounced;
+  if (state.mintBurnEnabled != null) authorityFacts.mintBurnEnabled = state.mintBurnEnabled;
+  if (state.publicMintEntrypoint != null) {
+    authorityFacts.publicMintEntrypoint = state.publicMintEntrypoint;
+  }
 
   const authorityRecord: EvidenceRecord = {
     id: `token-authority-${subject.packageHash.slice(0, 16)}`,
@@ -95,7 +137,7 @@ export async function buildSubjectEvidence(
     network,
     subject: "token_authority",
     observedAt,
-    sourceUrl: rpcUrl,
+    sourceUrl: state.authoritySourceUrl ?? rpcUrl,
     facts: authorityFacts,
     rawHash: hashJson({ subject: subject.packageHash, ...authorityFacts })
   };
@@ -111,7 +153,7 @@ export async function buildSubjectEvidence(
     network,
     subject: "token_holders",
     observedAt,
-    sourceUrl: rpcUrl,
+    sourceUrl: state.holdersSourceUrl ?? rpcUrl,
     facts: holderFacts,
     rawHash: hashJson({ subject: subject.packageHash, ...holderFacts })
   };
@@ -129,12 +171,46 @@ export async function buildSubjectEvidence(
     network,
     subject: "token_age",
     observedAt,
-    sourceUrl: rpcUrl,
+    sourceUrl: state.ageSourceUrl ?? rpcUrl,
     facts: ageFacts,
     rawHash: hashJson({ subject: subject.packageHash, ...ageFacts })
   };
 
   const records = [authorityRecord, holdersRecord, ageRecord];
+  if (network === "casper-mainnet") {
+    const marketSourceUrl = process.env.CSPR_TRADE_MCP_URL ?? "https://mcp.cspr.trade/mcp";
+    try {
+      const market = await (deps.fetchTradeMarket ?? fetchCsprTradeMarketState)(subject.packageHash);
+      const marketFacts: Record<string, EvidenceFactValue> = {
+        listedOnCsprTrade: market.listedOnCsprTrade,
+        pairCount: market.pairCount,
+        pricedPairCount: market.pricedPairCount,
+        pricedLiquidityUsd: market.pricedLiquidityUsd
+      };
+      if (market.pricedPairCount > 0) marketFacts.liquidityDepth = market.pricedLiquidityUsd;
+      records.push({
+        id: `cspr-trade-market-${subject.packageHash.slice(0, 16)}`,
+        product: "CSPR.trade Market",
+        network,
+        subject: "token_market",
+        observedAt,
+        sourceUrl: market.sourceUrl,
+        facts: marketFacts,
+        rawHash: market.rawHash
+      });
+    } catch {
+      records.push({
+        id: `cspr-trade-market-${subject.packageHash.slice(0, 16)}-unavailable`,
+        product: "CSPR.trade Market",
+        network,
+        subject: "token_market",
+        observedAt,
+        sourceUrl: marketSourceUrl,
+        facts: { status: "unavailable" },
+        rawHash: hashJson({ packageHash: subject.packageHash, status: "unavailable" })
+      });
+    }
+  }
   const dataset = buildDataset(datasetId, records);
 
   return {
@@ -144,6 +220,7 @@ export async function buildSubjectEvidence(
       network: report.record.network,
       subject: report.record.subject,
       observedAt: report.record.observedAt,
+      sourceUrl: report.record.sourceUrl,
       recordHash: report.reportHash,
       facts: report.record.facts
     }))
@@ -151,12 +228,11 @@ export async function buildSubjectEvidence(
 }
 
 async function casperRpc<T>(rpcUrl: string, method: string, params: unknown[]): Promise<T> {
-  const response = await fetch(rpcUrl, {
+  const { response, body } = await fetchBoundedJson<{ result?: T; error?: { message?: string } }>(rpcUrl, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ jsonrpc: "2.0", id: randomUUID(), method, params })
   });
-  const body = (await response.json()) as { result?: T; error?: { message?: string } };
   if (!response.ok || body.error || !body.result) {
     throw new Error(body.error?.message ?? `Casper RPC ${method} failed with ${response.status}`);
   }

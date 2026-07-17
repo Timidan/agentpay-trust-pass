@@ -10,11 +10,13 @@ import { labelForNotChecked } from "../lib/not-checked-labels";
 export function AgentPayCheckList({
   flags,
   notChecked,
-  passed
+  passed,
+  notCheckedNote
 }: {
   flags: Flag[];
   notChecked: string[];
   passed: string[];
+  notCheckedNote?: string;
 }) {
   const dangers = flags.filter((f) => f.severity === "danger");
   const cautions = flags.filter((f) => f.severity === "caution");
@@ -23,9 +25,9 @@ export function AgentPayCheckList({
   return (
     <div className="check-list">
       <p className="check-summary">
-        <span className="check-count">{total} checks read</span>
+        <span className="check-count">{total} check results</span>
         <span className="check-breakdown">
-          {flags.length} flagged · {notChecked.length} not checked · {passed.length} passed
+          {flags.length} need attention · {notChecked.length} unavailable · {passed.length} passed
         </span>
       </p>
       <ul>
@@ -51,10 +53,13 @@ export function AgentPayCheckList({
           <li key={key} className="check-row is-unchecked">
             <Minus size={15} weight="bold" aria-hidden="true" />
             <span>{labelForNotChecked(key)}</span>
-            <span className="check-tag">not checked this run</span>
+            <span className="check-tag">data unavailable</span>
           </li>
         ))}
       </ul>
+      {notChecked.length > 0 && notCheckedNote ? (
+        <p className="check-missing-note">{notCheckedNote} Unavailable facts are never treated as passes.</p>
+      ) : null}
     </div>
   );
 }

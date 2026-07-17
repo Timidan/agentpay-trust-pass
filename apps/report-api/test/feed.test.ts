@@ -1,7 +1,12 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import request from "supertest";
 import { describe, expect, it } from "vitest";
 import { createReportApp } from "../src/app.js";
 import type { VerdictCardData } from "../src/card.js";
+import { openSqlitePublicArtifactStore } from "../src/publicArtifacts.js";
+import { acceptDecisionRecord, createVerdictSubmission } from "./verdictSubmission.js";
 
 const dangerVerdict: VerdictCardData = {
   aspect: "DANGER",
@@ -15,13 +20,22 @@ const dangerVerdict: VerdictCardData = {
 };
 
 describe("/feed routes", () => {
+  it("rejects a display-only card that has no verifiable Casper decision proof", async () => {
+    const response = await request(createReportApp())
+      .post("/card")
+      .send(dangerVerdict)
+      .expect(400);
+
+    expect(response.body).toEqual({ error: "card_proof_required" });
+  });
+
   it("(a) POST /feed/share with optIn:false → 403 share_not_opted_in and GET /feed stays empty", async () => {
-    const app = createReportApp();
+    const app = createReportApp({ decisionRecordVerifier: acceptDecisionRecord });
 
     // First store a card to get a valid cardId
     const postCard = await request(app)
       .post("/card")
-      .send(dangerVerdict)
+      .send(createVerdictSubmission())
       .expect(200);
     const cardId = postCard.body.id as string;
 
@@ -39,12 +53,23 @@ describe("/feed routes", () => {
   });
 
   it("(b) POST /card then POST /feed/share {cardId, optIn:true} → ok, and GET /feed returns that entry", async () => {
-    const app = createReportApp();
+    const submission = createVerdictSubmission({
+      signals: {
+        mintBurnEnabled: true,
+        publicMintEntrypoint: true,
+        holderCount: 1,
+        topHolderPct: 100,
+        contractAgeBlocks: 100,
+        lpHolderCount: 1,
+        liquidityDepth: null
+      }
+    });
+    const app = createReportApp({ decisionRecordVerifier: acceptDecisionRecord });
 
     // Store a card
     const postCard = await request(app)
       .post("/card")
-      .send(dangerVerdict)
+      .send(submission)
       .expect(200);
     const cardId = postCard.body.id as string;
 
@@ -61,8 +86,8 @@ describe("/feed routes", () => {
     expect(feedRes.body.entries).toHaveLength(1);
     expect(feedRes.body.entries[0]).toMatchObject({
       id: cardId,
-      aspect: dangerVerdict.aspect,
-      subjectShortHash: dangerVerdict.subjectShortHash,
+      aspect: submission.card.aspect,
+      subjectShortHash: submission.card.subjectShortHash,
       cardImageUrl: `/card/${cardId}.png`
     });
   });
@@ -78,13 +103,22 @@ describe("/feed routes", () => {
     expect(shareRes.body).toMatchObject({ error: "unknown_card" });
   });
 
+  it("rejects malformed card ids without surfacing an internal error", async () => {
+    const response = await request(createReportApp())
+      .post("/feed/share")
+      .send({ cardId: "../not-a-card", optIn: true })
+      .expect(400);
+
+    expect(response.body).toEqual({ error: "invalid_card_id" });
+  });
+
   it("POST /feed/share is idempotent — sharing same cardId twice yields one entry", async () => {
-    const app = createReportApp();
+    const app = createReportApp({ decisionRecordVerifier: acceptDecisionRecord });
 
     // store a card
     const storeRes = await request(app)
       .post("/card")
-      .send(dangerVerdict)
+      .send(createVerdictSubmission())
       .expect(200);
     const { id } = storeRes.body as { id: string };
 
@@ -99,16 +133,9 @@ describe("/feed routes", () => {
   });
 
   it("GET /feed returns entries most-recent-first by insertion order", async () => {
-    const app = createReportApp();
-
-    const firstVerdict: VerdictCardData = {
-      ...dangerVerdict,
-      subjectShortHash: "aaaa1111"
-    };
-    const secondVerdict: VerdictCardData = {
-      ...dangerVerdict,
-      subjectShortHash: "bbbb2222"
-    };
+    const app = createReportApp({ decisionRecordVerifier: acceptDecisionRecord });
+    const firstVerdict = createVerdictSubmission({ packageHash: "a".repeat(64) });
+    const secondVerdict = createVerdictSubmission({ packageHash: "b".repeat(64) });
 
     const first = await request(app).post("/card").send(firstVerdict).expect(200);
     const second = await request(app).post("/card").send(secondVerdict).expect(200);
@@ -126,7 +153,40 @@ describe("/feed routes", () => {
     const feedRes = await request(app).get("/feed").expect(200);
     expect(feedRes.body.entries).toHaveLength(2);
     // Most-recent-first: second was inserted after first
-    expect(feedRes.body.entries[0].subjectShortHash).toBe("bbbb2222");
-    expect(feedRes.body.entries[1].subjectShortHash).toBe("aaaa1111");
+    expect(feedRes.body.entries[0].subjectShortHash).toBe("bbbbbbbb");
+    expect(feedRes.body.entries[1].subjectShortHash).toBe("aaaaaaaa");
+  });
+
+  it("serves cards and shared entries after the SQLite store is reopened", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "agentpay-feed-restart-"));
+    const databasePath = join(directory, "agentpay.sqlite");
+    try {
+      const firstStore = openSqlitePublicArtifactStore(databasePath);
+      const firstApp = createReportApp({
+        publicArtifactStore: firstStore,
+        decisionRecordVerifier: acceptDecisionRecord
+      });
+      const stored = await request(firstApp)
+        .post("/card")
+        .send(createVerdictSubmission())
+        .expect(200);
+      await request(firstApp)
+        .post("/feed/share")
+        .send({ cardId: stored.body.id, optIn: true })
+        .expect(200);
+      firstStore.close();
+
+      const reopenedStore = openSqlitePublicArtifactStore(databasePath);
+      try {
+        const restartedApp = createReportApp({ publicArtifactStore: reopenedStore });
+        const feed = await request(restartedApp).get("/feed").expect(200);
+        expect(feed.body.entries).toMatchObject([{ id: stored.body.id }]);
+        await request(restartedApp).get(`/card/${stored.body.id}.svg`).expect(200);
+      } finally {
+        reopenedStore.close();
+      }
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 });

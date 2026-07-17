@@ -16,6 +16,7 @@ import {
 
 const ROOT = resolve(import.meta.dirname, "../../..");
 const TOKEN = "test-agent-token-that-is-longer-than-32-characters";
+const ISSUED_TOKEN = "issued-agent-token-that-is-longer-than-32-characters";
 const temporaryDirectories: string[] = [];
 
 afterEach(async () => {
@@ -71,7 +72,12 @@ describe("agentpay CLI", () => {
 
   it("shows receipts and maps invalid offline receipt verification to exit code 4", async () => {
     await withApi({}, async (apiUrl) => {
-      const shown = await runCli(["receipt", "show", "--id", "receipt-1", "--json"], apiUrl);
+      const key = await secretKeyFile();
+      const shown = await runCli(
+        ["receipt", "show", "--id", "receipt-1", "--key", key, "--json"],
+        apiUrl,
+        { configuredTokens: false }
+      );
       expect(shown.code).toBe(0);
       expect(JSON.parse(shown.stdout)).toMatchObject({
         receipt: { receiptId: "receipt-1" },
@@ -95,6 +101,60 @@ describe("agentpay CLI", () => {
       expect(JSON.parse(policy.stdout)).toMatchObject({ policy: { revision: 1 } });
       expect(providers.code).toBe(0);
       expect(JSON.parse(providers.stdout)).toEqual({ decisions: [] });
+    });
+  });
+
+  it("creates an operator session through a deployed /api base path", async () => {
+    await withApi({}, async (apiUrl) => {
+      const key = await secretKeyFile();
+      const result = await runCli(
+        ["session", "create", "--key", key, "--json"],
+        `${apiUrl}/api`,
+        { configuredTokens: false }
+      );
+
+      expect(result.code, `${result.stdout}\n${result.stderr}`).toBe(0);
+      expect(JSON.parse(result.stdout)).toEqual({ token: TOKEN });
+    });
+  });
+
+  it("issues, lists, and revokes scoped agent tokens", async () => {
+    const behavior: ApiBehavior = { agentTokens: [], nextAgentTokenRevision: 1 };
+    await withApi(behavior, async (apiUrl) => {
+      const key = await secretKeyFile();
+      const issued = await runCli([
+        "agent-token",
+        "issue",
+        "--name",
+        "checkout-agent",
+        "--scope",
+        "checks:write",
+        "--key",
+        key,
+        "--json"
+      ], apiUrl, { configuredTokens: false });
+      expect(issued.code, `${issued.stdout}\n${issued.stderr}`).toBe(0);
+      expect(JSON.parse(issued.stdout)).toMatchObject({
+        token: ISSUED_TOKEN,
+        record: { id: "agent-token-1", agentName: "checkout-agent", scopes: ["checks:write"] }
+      });
+
+      const listed = await runCli(["agent-token", "list", "--json"], apiUrl);
+      expect(listed.code).toBe(0);
+      expect(JSON.parse(listed.stdout)).toMatchObject({ records: [{ id: "agent-token-1" }] });
+      expect(listed.stdout).not.toContain(ISSUED_TOKEN);
+
+      const revoked = await runCli([
+        "agent-token",
+        "revoke",
+        "--id",
+        "agent-token-1",
+        "--key",
+        key,
+        "--json"
+      ], apiUrl, { configuredTokens: false });
+      expect(revoked.code, `${revoked.stdout}\n${revoked.stderr}`).toBe(0);
+      expect(JSON.parse(revoked.stdout)).toEqual({ id: "agent-token-1", revoked: true });
     });
   });
 
@@ -169,6 +229,8 @@ type ApiBehavior = {
   policy?: Record<string, unknown> | null;
   decisions?: Array<Record<string, unknown>>;
   paymentRequired?: Record<string, unknown>;
+  agentTokens?: Array<Record<string, unknown>>;
+  nextAgentTokenRevision?: number;
 };
 
 async function withApi<T>(behavior: ApiBehavior, fn: (url: string) => Promise<T>): Promise<T> {
@@ -185,21 +247,22 @@ async function withApi<T>(behavior: ApiBehavior, fn: (url: string) => Promise<T>
 }
 
 async function handleRequest(request: IncomingMessage, response: ServerResponse, behavior: ApiBehavior): Promise<void> {
-  if (request.url === "/v1/auth/challenges") {
+  const path = request.url?.replace(/^\/api(?=\/)/, "") ?? "";
+  if (path === "/v1/auth/challenges") {
     await consume(request);
     sendJson(response, 201, { challengeId: "challenge-1", message: "AgentPay CLI test challenge" });
     return;
   }
-  if (request.url === "/v1/auth/sessions") {
+  if (path === "/v1/auth/sessions") {
     await consume(request);
     sendJson(response, 201, { token: TOKEN, expiresAt: "2026-07-16T01:00:00.000Z" });
     return;
   }
   if (request.headers.authorization !== `Bearer ${TOKEN}`) {
-    sendJson(response, 401, { code: "invalid_credentials" });
+    sendJson(response, 401, { code: "invalid_credentials", message: `Unexpected credentials for ${request.method} ${path}` });
     return;
   }
-  if (request.url === "/v1/checks") {
+  if (path === "/v1/checks") {
     const body = await readRequestJson(request);
     if (behavior.paymentRequired) {
       const originalRequest = normalizeOriginalRequest(body.request as OriginalRequestInput);
@@ -233,7 +296,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
     sendJson(response, 201, { created: true, check: { id: "check-1", decision: { verdict: behavior.verdict ?? "pay" } } });
     return;
   }
-  if (request.url === "/v1/checks/check-1/verify-settlement") {
+  if (path === "/v1/checks/check-1/verify-settlement") {
     await consume(request);
     const verdict = behavior.settlementVerdict ?? "match";
     sendJson(response, 200, {
@@ -244,7 +307,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
     });
     return;
   }
-  if (request.url === "/v1/checks/check-1/response-observations") {
+  if (path === "/v1/checks/check-1/response-observations") {
     await consume(request);
     sendJson(response, 201, {
       created: true,
@@ -253,33 +316,63 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
     });
     return;
   }
-  if (request.url === "/v1/receipts/receipt-1") {
+  if (path === "/v1/receipts/receipt-1") {
     sendJson(response, 200, {
       receipt: { receiptId: "receipt-1", checkId: "check-1" },
       anchorState: { status: "anchored", transactionHash: "a".repeat(64) }
     });
     return;
   }
-  if (request.url === "/v1/policies/current") {
+  if (path === "/v1/policies/current") {
     if (behavior.policy === null) sendJson(response, 404, { code: "policy_not_found", message: "No policy" });
     else sendJson(response, 200, { policy: behavior.policy ?? policyFixture() });
     return;
   }
-  if (request.url === "/v1/provider-decisions" && request.method === "GET") {
+  if (path === "/v1/provider-decisions" && request.method === "GET") {
     sendJson(response, 200, { decisions: behavior.decisions ?? [] });
     return;
   }
-  if (request.url === "/v1/policies/revisions") {
+  if (path === "/v1/policies/revisions") {
     const body = await readRequestJson(request);
     sendJson(response, 201, { policy: body.policy });
     return;
   }
-  if (request.url === "/v1/provider-decisions" && request.method === "POST") {
+  if (path === "/v1/provider-decisions" && request.method === "POST") {
     const body = await readRequestJson(request);
     sendJson(response, 201, { decision: body.decision });
     return;
   }
-  sendJson(response, 404, { code: "not_found" });
+  if (path === "/v1/agent-tokens" && request.method === "GET") {
+    sendJson(response, 200, {
+      records: behavior.agentTokens ?? [],
+      nextRevision: behavior.nextAgentTokenRevision ?? 1
+    });
+    return;
+  }
+  if (path === "/v1/agent-tokens" && request.method === "POST") {
+    const body = await readRequestJson(request);
+    const spec = body.spec as Record<string, unknown>;
+    const record = {
+      id: "agent-token-1",
+      ...spec,
+      actionHash: "a".repeat(64),
+      signature: "b".repeat(128),
+      createdAt: "2026-07-16T00:00:00.000Z",
+      revokedAt: null
+    };
+    behavior.agentTokens = [record];
+    behavior.nextAgentTokenRevision = Number(spec.revision) + 1;
+    sendJson(response, 201, { token: ISSUED_TOKEN, record });
+    return;
+  }
+  if (path === "/v1/agent-tokens/agent-token-1" && request.method === "DELETE") {
+    await consume(request);
+    behavior.nextAgentTokenRevision = (behavior.nextAgentTokenRevision ?? 1) + 1;
+    response.writeHead(204);
+    response.end();
+    return;
+  }
+  sendJson(response, 404, { code: "not_found", message: `Unhandled test route ${request.method} ${path}` });
 }
 
 async function runCli(

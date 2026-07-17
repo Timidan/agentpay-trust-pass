@@ -41,10 +41,9 @@ describe("AgentPay Casper funding status", () => {
     try {
       await writeFile(
         clientPath,
-        `#!/usr/bin/env node
-const args = process.argv.slice(2);
-if (args[0] !== "query-balance") process.exit(2);
-console.log(JSON.stringify({ result: { balance: "155000000000" } }));
+        `#!/usr/bin/env sh
+[ "$1" = "query-balance" ] || exit 2
+printf '%s' '{"result":{"balance":"155000000000"}}'
 `
       );
       await chmod(clientPath, 0o700);

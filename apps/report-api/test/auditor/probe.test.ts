@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import request from "supertest";
 import { describe, expect, it, vi } from "vitest";
 import { createReportApp } from "../../src/app.js";
-import { AuditorAuth, hashBearerToken } from "../../src/auditor/auth.js";
+import { AuditorAuth, AuthError, hashBearerToken } from "../../src/auditor/auth.js";
 import {
   X402Probe,
   type ProbeAddress,
@@ -67,11 +67,32 @@ describe("X402Probe", () => {
     expect(result).toMatchObject({
       request: { method: "POST", origin: "https://service.example" },
       response: { status: 402, contentType: "application/json" },
-      terms: { network: "casper:casper-test", asset: ASSET, payTo: PAYEE }
+      terms: { network: "casper:casper-test", asset: ASSET, payTo: PAYEE },
+      paymentRequired: paymentRequiredValue()
     });
     expect(result).not.toHaveProperty("body");
     expect(JSON.stringify(result)).not.toContain("payment required");
     expect(result.response.bodyHash).toBe(createHash("sha256").update("payment required").digest("hex"));
+  });
+
+  it("falls back to another validated public address after a retryable transport failure", async () => {
+    const unavailable: ProbeAddress = { address: "93.184.216.35", family: 4 };
+    const transport = vi.fn<ProbeTransport>(async ({ address }) => {
+      if (address.address === unavailable.address) {
+        throw new AuthError("probe_transport_failed", "address unavailable", 502, { retryable: true });
+      }
+      return response(402, { "payment-required": paymentRequiredHeader() }, "");
+    });
+    const probe = makeProbe({
+      transport,
+      lookup: async () => [unavailable, PUBLIC_ADDRESS]
+    });
+
+    const result = await probe.probe({ url: "https://service.example", method: "GET" });
+
+    expect(result.response.status).toBe(402);
+    expect(transport).toHaveBeenCalledTimes(2);
+    expect(transport.mock.calls.map(([input]) => input.address)).toEqual([unavailable, PUBLIC_ADDRESS]);
   });
 
   it.each([
@@ -92,6 +113,23 @@ describe("X402Probe", () => {
       code: "probe_target_forbidden"
     });
     expect(transport).not.toHaveBeenCalled();
+  });
+
+  it("allows a loopback target only when loopback development access is enabled", async () => {
+    const transport = vi.fn<ProbeTransport>(async () =>
+      response(402, { "payment-required": paymentRequiredHeader() }, "")
+    );
+    const probe = makeProbe({ allowLoopback: true, transport });
+
+    const result = await probe.probe({
+      url: "http://127.0.0.1:4021/reports/buy/quote-id",
+      method: "POST"
+    });
+
+    expect(result.response.status).toBe(402);
+    expect(transport).toHaveBeenCalledWith(expect.objectContaining({
+      address: { address: "127.0.0.1", family: 4 }
+    }));
   });
 
   it("rejects a hostname if any resolved address is private", async () => {
@@ -229,12 +267,14 @@ describe("X402Probe", () => {
 
 function makeProbe(overrides: {
   allowHttp?: boolean;
+  allowLoopback?: boolean;
   timeoutMs?: number;
   lookup?: (hostname: string) => Promise<ProbeAddress[]>;
   transport?: ProbeTransport;
 } = {}): X402Probe {
   return new X402Probe({
     allowHttp: overrides.allowHttp ?? true,
+    ...({ allowLoopback: overrides.allowLoopback ?? false } as object),
     timeoutMs: overrides.timeoutMs,
     now: () => new Date(NOW),
     lookup: overrides.lookup ?? (async () => [PUBLIC_ADDRESS]),
@@ -247,7 +287,11 @@ function response(status: number, headers: Record<string, string>, body: string)
 }
 
 function paymentRequiredHeader(): string {
-  const paymentRequired = {
+  return Buffer.from(JSON.stringify(paymentRequiredValue()), "utf8").toString("base64");
+}
+
+function paymentRequiredValue() {
+  return {
     x402Version: 2,
     resource: {
       url: "https://service.example/v1/generate",
@@ -264,5 +308,4 @@ function paymentRequiredHeader(): string {
       extra: { name: "Casper X402 Token", version: "1", decimals: "9", symbol: "X402" }
     }]
   };
-  return Buffer.from(JSON.stringify(paymentRequired), "utf8").toString("base64");
 }

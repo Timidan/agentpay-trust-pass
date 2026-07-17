@@ -18,6 +18,8 @@ const SOURCE_INTEGRITY_PATHS = [
   "apps/web/src",
   "apps/report-api/src",
   "apps/mcp-server/src",
+  "apps/cli/src",
+  "packages/agent-pay-client/src",
   "packages/agent-pay-core/src",
   "contracts/agent-pay-registry/src",
   "contracts/agent-pay-registry/scripts",
@@ -28,11 +30,42 @@ const SOURCE_INTEGRITY_PATHS = [
   "package.json"
 ];
 
-const PROHIBITED_SOURCE_PATTERNS = [
+type ProhibitedSourcePattern = {
+  label: string;
+  pattern: RegExp;
+  runtimeOnly?: boolean;
+};
+
+const PROHIBITED_SOURCE_PATTERNS: ProhibitedSourcePattern[] = [
   { label: "fake receipt marker", pattern: /\bfake receipt\b/i },
   { label: "fake payment marker", pattern: /\bfake payment\b/i },
   { label: "mock payment marker", pattern: /\bmock payment\b/i },
   { label: "mock receipt marker", pattern: /\bmock receipt\b/i },
+  {
+    label: "fabricated runtime marker",
+    pattern: /\b(?:fake|mock(?:ed)?|simulated|hardcoded)\s+(?:evidence|verdict|receipt|payment|settlement|transaction|success|result|hash)\b/i,
+    runtimeOnly: true
+  },
+  {
+    label: "hardcoded Casper identifier",
+    pattern: /["'`](?:hash-|account-hash-)?[0-9a-f]{64}["'`]/i,
+    runtimeOnly: true
+  },
+  {
+    label: "placeholder evidence source",
+    pattern: /\bsourceUrl\s*:\s*["'`]https?:\/\/[^"'`]*\.invalid(?:[/:]|["'`])/i,
+    runtimeOnly: true
+  },
+  {
+    label: "placeholder evidence timestamp",
+    pattern: /\bobservedAt\s*:\s*["'`]1970-01-01T00:00:00(?:\.000)?Z["'`]/i,
+    runtimeOnly: true
+  },
+  {
+    label: "generated zero evidence hash",
+    pattern: /\b(?:rawHash|recordHash|reportHash|receiptHash|transactionHash)\s*:\s*["'`]0["'`]\.repeat\(\s*64\s*\)/i,
+    runtimeOnly: true
+  },
   { label: "demo credential marker", pattern: /\bdemo credential\b/i },
   { label: "sample hash marker", pattern: /\bsample hash\b/i },
   { label: "example GitHub URL", pattern: /github\.com\/example\//i },
@@ -410,6 +443,12 @@ function sourceIntegrityCheck(prohibitedSignals: string[]): SubmissionReadinessC
   };
 }
 
+export function prohibitedSourceLineSignals(line: string, runtimeSource: boolean): string[] {
+  return PROHIBITED_SOURCE_PATTERNS
+    .filter(({ pattern, runtimeOnly }) => (!runtimeOnly || runtimeSource) && pattern.test(line))
+    .map(({ label }) => label);
+}
+
 function packageHashCheck(value: string | undefined): SubmissionReadinessCheck {
   if (!value) {
     return {
@@ -522,9 +561,9 @@ function x402ConfigurationCheck(env: Record<string, string | undefined>): Submis
       message: "PAYEE_ADDRESS must be 00 plus 64 hex chars"
     };
   }
-  // The facilitator auth token is only required for the hosted CSPR.cloud facilitator. A
-  // self-hosted casper-x402 facilitator (e.g. http://127.0.0.1:4022) needs no token, mirroring
-  // the report API's checkPaymentReadiness logic.
+  // The facilitator auth token is only required for the hosted CSPR.cloud
+  // facilitator. A self-hosted casper-x402 facilitator needs no token, matching
+  // the report API's readiness logic.
   const facilitatorUrl = env.X402_FACILITATOR_URL ?? "https://x402-facilitator.cspr.cloud";
   const requiresAuth = facilitatorUrl.includes("cspr.cloud");
   const hasAuth = Boolean(env.CSPR_CLOUD_ACCESS_TOKEN ?? env.X402_FACILITATOR_AUTH_TOKEN);
@@ -542,7 +581,7 @@ function x402ConfigurationCheck(env: Record<string, string | undefined>): Submis
     status: "pass",
     message: requiresAuth
       ? "x402 asset, payee, and CSPR.cloud facilitator auth are configured"
-      : `x402 asset, payee, and self-hosted facilitator (${facilitatorUrl}) are configured`
+      : "x402 asset, payee, and self-hosted facilitator are configured"
   };
 }
 
@@ -982,12 +1021,12 @@ async function scanSourceIntegrity(): Promise<string[]> {
 
   for (const file of files) {
     const content = await readFile(file, "utf8");
+    const projectPath = relative(REPO_ROOT, file);
+    const runtimeSource = /^(?:apps|contracts|packages|scripts)\//.test(projectPath);
     const lines = content.split(/\r?\n/);
     lines.forEach((line, index) => {
-      for (const { label, pattern } of PROHIBITED_SOURCE_PATTERNS) {
-        if (pattern.test(line)) {
-          signals.push(`${relative(REPO_ROOT, file)}:${index + 1} ${label}`);
-        }
+      for (const label of prohibitedSourceLineSignals(line, runtimeSource)) {
+        signals.push(`${projectPath}:${index + 1} ${label}`);
       }
     });
   }

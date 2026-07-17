@@ -1,7 +1,8 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { CircleNotch, MagnifyingGlass, Warning, ShieldCheck, WarningOctagon } from "@phosphor-icons/react";
-import { assessAccount, type Verdict } from "../api";
+import { assessAccount, type EvidenceNetwork, type Verdict } from "../api";
 import { friendlyError } from "../lib/friendly-errors";
+import { SiteFooter, SiteNav } from "../components/SiteChrome";
 import { VerdictCard } from "./VerdictCard";
 import "./ask-page.css";
 
@@ -9,39 +10,41 @@ type CheckState =
   | { status: "idle" }
   | { status: "loading" }
   | { status: "done"; verdict: Verdict }
-  | { status: "error"; message: string; detail?: string };
+  | { status: "error"; message: string };
 
 // account-hash-<64hex>, or an ed25519 (01…) / secp256k1 (02…) public key.
 const ACCOUNT_INPUT = /^(account-hash-[0-9a-f]{64}|01[0-9a-f]{64}|02[0-9a-f]{66})$/i;
+const CSPR_NAME_INPUT = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*\.cspr$/i;
 
-const RAIL_STOPS = ["Quote", "Settle x402", "Verify proof", "Record"] as const;
+const RAIL_STOPS = ["Price", "Pay on Testnet", "Read Casper data", "Record result"] as const;
 
 const MEANINGS = [
   {
     aspect: "clear",
     label: "Clear",
-    body: "Funded and sanely controlled. Reasonable to transact with.",
+    body: "The account exists, holds at least 1 CSPR, and its key setup passed the required checks.",
     Icon: ShieldCheck,
     color: "var(--aspect-clear-ink)"
   },
   {
     aspect: "caution",
     label: "Caution",
-    body: "Thin balance or loose key control. Look closer before you commit.",
+    body: "The balance is below 1 CSPR, the key setup needs attention, or a required fact was unavailable.",
     Icon: Warning,
     color: "var(--aspect-caution-ink)"
   },
   {
     aspect: "danger",
     label: "Danger",
-    body: "No account at this address, or a control red flag. Don't send.",
+    body: "Casper could not find this account.",
     Icon: WarningOctagon,
     color: "var(--aspect-danger-ink)"
   }
 ] as const;
 
-export default function CounterpartyPage({ onBack, onOpenCheck }: { onBack?: () => void; onOpenCheck?: () => void }) {
+export default function CounterpartyPage({ navigate }: { navigate?: (path: string) => void }) {
   const [account, setAccount] = useState("");
+  const [network, setNetwork] = useState<EvidenceNetwork>("casper-mainnet");
   const [state, setState] = useState<CheckState>({ status: "idle" });
   const [hint, setHint] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
@@ -64,18 +67,18 @@ export default function CounterpartyPage({ onBack, onOpenCheck }: { onBack?: () 
       setHint("Paste an account hash or public key first.");
       return;
     }
-    if (!ACCOUNT_INPUT.test(trimmed)) {
-      setHint("Enter an account-hash-… or a public key (starts with 01 or 02).");
+    if (!ACCOUNT_INPUT.test(trimmed) && !CSPR_NAME_INPUT.test(trimmed)) {
+      setHint("Enter a .cspr name, an account-hash-… value, or a public key that starts with 01 or 02.");
       return;
     }
     setHint(null);
     setState({ status: "loading" });
     try {
-      const verdict = await assessAccount(trimmed);
+      const verdict = await assessAccount(trimmed, network);
       setState({ status: "done", verdict });
     } catch (err) {
       const friendly = friendlyError(err);
-      setState({ status: "error", message: friendly.headline, detail: friendly.detail });
+      setState({ status: "error", message: friendly.headline });
     }
   }
 
@@ -86,34 +89,34 @@ export default function CounterpartyPage({ onBack, onOpenCheck }: { onBack?: () 
 
   return (
     <div className="ask2">
-      <nav className="ask2-nav" aria-label="AgentPay Trust Signal">
-        <div className="ask2-brand">
-          <span className="ask2-brand-name">AgentPay</span>
-          <span className="ask2-brand-sub">Counterparty</span>
-        </div>
-        <div className="ask2-navlinks">
-          <a href="/" onClick={navClick(onBack)}>Overview</a>
-          <a href="/check" onClick={navClick(onOpenCheck)}>Check a token</a>
-        </div>
-      </nav>
+      <SiteNav current="counterparty" sub="Wallet check" navigate={navigate} />
 
       <div className="ask2-main">
         {state.status === "done" ? (
           <div className="ask2-result ask2-reveal">
-            <h1 className="agentpay-sr-only">Counterparty check result</h1>
+            <h1 className="agentpay-sr-only">Wallet check result</h1>
             <button type="button" className="ask2-again" onClick={() => setState({ status: "idle" })}>
               ← Check another account
             </button>
-            <VerdictCard verdict={state.verdict} subjectLabel="Account" />
+            {state.verdict.resolvedAccount ? (
+              <p className="ask2-resolved">
+                {state.verdict.resolvedAccount.name} → <code>{shortAccount(state.verdict.resolvedAccount.accountHash)}</code>
+              </p>
+            ) : null}
+            <VerdictCard
+              verdict={state.verdict}
+              subjectLabel="Account"
+              subjectHint={state.verdict.resolvedAccount?.name}
+            />
           </div>
         ) : (
           <div className="ask2-grid">
             <section className="ask2-copy">
-              <p className="ask2-kicker">Counterparty check</p>
-              <h1 className="ask2-title">Buy a Trust Pass before you deal with the wallet.</h1>
+              <p className="ask2-kicker">Wallet check</p>
+              <h1 className="ask2-title">Check a Casper account before you send funds.</h1>
               <p className="ask2-lede">
-                Paste a Casper account and the agent reads it on-chain: does it exist, what it holds,
-                how its keys are controlled. Then it buys the evidence over x402 and returns a receipt.
+                Enter a CSPR.name, account hash, or public key. AgentPay resolves the name, reads the
+                account directly from Casper, covers the Testnet service fee, and gives you a receipt.
               </p>
               <ul className="ask2-meanings">
                 {MEANINGS.map((m) => (
@@ -131,20 +134,43 @@ export default function CounterpartyPage({ onBack, onOpenCheck }: { onBack?: () 
             <section className="ask2-panel">
               <div className="ask2-card">
                 <form onSubmit={handleSubmit} noValidate>
+                  <fieldset className="ask2-network">
+                    <legend>Casper network</legend>
+                    <div className="ask2-network-options">
+                      {(["casper-mainnet", "casper-testnet"] as const).map((option) => (
+                        <button
+                          aria-pressed={network === option}
+                          className={network === option ? "is-active" : undefined}
+                          disabled={option === "casper-testnet" && CSPR_NAME_INPUT.test(account.trim())}
+                          key={option}
+                          onClick={() => {
+                            setNetwork(option);
+                            setHint(null);
+                            if (state.status === "error") setState({ status: "idle" });
+                          }}
+                          type="button"
+                        >
+                          {option === "casper-mainnet" ? "Mainnet" : "Testnet"}
+                        </button>
+                      ))}
+                    </div>
+                  </fieldset>
                   <label className="ask2-field-label" htmlFor="cp-account">
-                    Account hash or public key
+                    CSPR.name, account hash, or public key
                   </label>
                   <input
                     autoComplete="off"
                     className="ask2-input"
                     id="cp-account"
-                    maxLength={128}
-                    placeholder="account-hash-… or a public key (01…)"
+                    maxLength={253}
+                    placeholder="alice.cspr, account-hash-…, or public key"
                     spellCheck={false}
                     type="text"
                     value={account}
                     onChange={(e) => {
-                      setAccount(e.target.value);
+                      const nextAccount = e.target.value;
+                      setAccount(nextAccount);
+                      if (CSPR_NAME_INPUT.test(nextAccount.trim())) setNetwork("casper-mainnet");
                       if (hint) setHint(null);
                       if (state.status === "error") setState({ status: "idle" });
                     }}
@@ -181,8 +207,8 @@ export default function CounterpartyPage({ onBack, onOpenCheck }: { onBack?: () 
                     </ol>
                     <span className="ask2-wait-sweep" aria-hidden="true" />
                     <p className="ask2-wait-copy">
-                      Reading the account on Casper, then running the paid rail: quote, x402, Merkle
-                      proof, on-chain record. On-chain confirmation time varies.
+                      AgentPay is reading the account, covering the Testnet fee, and recording the result
+                      on Casper. Confirmation time varies.
                       {elapsed > 2 ? <span className="ask2-wait-elapsed"> {elapsed}s</span> : null}
                     </p>
                   </div>
@@ -193,26 +219,22 @@ export default function CounterpartyPage({ onBack, onOpenCheck }: { onBack?: () 
                     <WarningOctagon size={16} weight="bold" style={{ color: "var(--aspect-danger-ink)", flexShrink: 0 }} aria-hidden="true" />
                     <span>
                       {state.message}
-                      {state.detail ? <code className="ask2-error-detail">{state.detail}</code> : null}
                     </span>
                   </div>
                 ) : null}
               </div>
-              <p className="ask2-foot">No wallet, no signup. Every Trust Pass is re-checkable on Casper.</p>
+              <p className="ask2-foot">The hosted check uses Testnet funds. You do not need a wallet or account.</p>
             </section>
           </div>
         )}
       </div>
+
+      <SiteFooter current="counterparty" navigate={navigate} />
     </div>
   );
 }
 
-function navClick(handler?: () => void) {
-  return (event: React.MouseEvent<HTMLAnchorElement>) => {
-    if (!handler || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
-      return;
-    }
-    event.preventDefault();
-    handler();
-  };
+function shortAccount(accountHash: string): string {
+  const value = accountHash.replace(/^account-hash-/, "");
+  return `${value.slice(0, 10)}…${value.slice(-8)}`;
 }

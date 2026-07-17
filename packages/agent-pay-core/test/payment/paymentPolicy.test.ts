@@ -50,6 +50,32 @@ describe("payment policy", () => {
     expect(result.reasons.map((reason) => reason.code)).toContain(code);
   });
 
+  it("explains first-time setup gaps without protocol jargon", () => {
+    const result = evaluatePayment(
+      base({
+        authorization: null,
+        policy: null,
+        providerDecision: null,
+        terms: terms({ resourceComparison: { sameHost: true, sameScheme: true, samePath: true } })
+      })
+    );
+
+    expect(result.reasons.map(({ code, message }) => ({ code, message }))).toEqual([
+      {
+        code: "provider_unapproved",
+        message: "This service has not been approved for payment yet."
+      },
+      {
+        code: "policy_cap_missing",
+        message: "No payment rules are active for this account."
+      },
+      {
+        code: "authorization_required",
+        message: "The buyer has not prepared the payment details needed for signing."
+      }
+    ]);
+  });
+
   it.each([
     ["to", { to: `00${"7".repeat(64)}` }],
     ["amount", { amount: "100000001" }],
@@ -85,12 +111,31 @@ describe("payment policy", () => {
     );
   });
 
+  it("reviews unavailable package evidence without claiming the package is absent", () => {
+    const result = evaluatePayment(
+      base({
+        evidence: evidence({
+          packageExists: null,
+          authorizationEntrypoint: null,
+          activeContractHash: null,
+          decimals: null,
+          missing: ["package", "activeContractHash", "authorizationEntrypoint", "decimals"],
+          sourceErrors: ["package: Casper RPC query_global_state timed out after 5000ms"]
+        })
+      })
+    );
+
+    expect(result.verdict).toBe("review");
+    expect(result.reasons.map((reason) => reason.code)).toContain("evidence_unavailable");
+    expect(result.reasons.map((reason) => reason.code)).not.toContain("asset_package_not_found");
+    expect(result.reasons.map((reason) => reason.code)).not.toContain("authorization_entrypoint_missing");
+  });
+
   it("keeps investment-style token signals as advisories by default", () => {
     const result = evaluatePayment(
       base({
         evidence: evidence({
-          mintAuthorityOpen: true,
-          supplyMutable: true,
+          mintBurnEnabled: true,
           holderConcentrationPct: 99,
           contractAgeBlocks: 10
         })
@@ -100,11 +145,21 @@ describe("payment policy", () => {
     expect(result.verdict).toBe("pay");
     expect(result.advisories.map((reason) => reason.code)).toEqual([
       "resource_scheme_mismatch",
-      "mint_authority_open",
-      "supply_mutable",
+      "cep18_mint_burn_enabled",
       "holder_concentration",
       "very_new_contract"
     ]);
+  });
+
+  it("reports a public mint entry point when the CEP-18 setting is unavailable", () => {
+    const result = evaluatePayment(
+      base({ evidence: evidence({ mintBurnEnabled: null, publicMintEntrypoint: true }) })
+    );
+
+    expect(result.verdict).toBe("pay");
+    expect(result.advisories).toContainEqual(
+      expect.objectContaining({ code: "public_mint_entrypoint" })
+    );
   });
 
   it("can elevate investment advisories to REVIEW through signed policy", () => {
@@ -112,13 +167,13 @@ describe("payment policy", () => {
     const result = evaluatePayment(
       base({
         policy: strictPolicy,
-        evidence: evidence({ mintAuthorityOpen: true })
+        evidence: evidence({ mintBurnEnabled: true })
       })
     );
 
     expect(result.verdict).toBe("review");
     expect(result.reasons).toEqual(
-      expect.arrayContaining([expect.objectContaining({ code: "mint_authority_open" })])
+      expect.arrayContaining([expect.objectContaining({ code: "cep18_mint_burn_enabled" })])
     );
   });
 
@@ -248,8 +303,8 @@ function evidence(overrides: Partial<PaymentAssetEvidence> = {}): PaymentAssetEv
     name: "Casper X402 Token",
     symbol: "X402",
     decimals: 9,
-    mintAuthorityOpen: false,
-    supplyMutable: false,
+    mintBurnEnabled: false,
+    publicMintEntrypoint: false,
     holderConcentrationPct: 20,
     contractAgeBlocks: 10000,
     apiVersion: "2.0.0",

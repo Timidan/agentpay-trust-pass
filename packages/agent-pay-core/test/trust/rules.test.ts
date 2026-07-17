@@ -2,21 +2,24 @@ import { describe, it, expect } from "vitest";
 import { scoreSubject } from "../../src/trust/rules.js";
 import type { SubjectSignals } from "../../src/trust/signals.js";
 
-const clean: SubjectSignals = { mintAuthorityOpen: false, supplyRenounced: true,
+const clean: SubjectSignals = { mintBurnEnabled: false, publicMintEntrypoint: false,
   holderCount: 40, topHolderPct: 12, contractAgeBlocks: 5000, lpHolderCount: 8, liquidityDepth: 100000 };
 
 describe("scoreSubject", () => {
-  it("DANGER when mint authority is open (hard-fail, LLM cannot override)", () => {
-    const r = scoreSubject({ ...clean, mintAuthorityOpen: true });
+  it("DANGER when CEP-18 mint and burn functions are enabled", () => {
+    const r = scoreSubject({ ...clean, mintBurnEnabled: true });
     expect(r.aspect).toBe("DANGER");
     expect(r.decision).toBe("rejected");
-    expect(r.flags.some(f => f.code === "mint_authority_open" && f.severity === "danger")).toBe(true);
+    expect(r.flags.some(f => f.code === "cep18_mint_burn_enabled" && f.severity === "danger")).toBe(true);
+  });
+  it("CAUTION when the active contract exposes a public mint entry point", () => {
+    const r = scoreSubject({ ...clean, mintBurnEnabled: null, publicMintEntrypoint: true });
+    expect(r.aspect).toBe("CAUTION");
+    expect(r.decision).toBe("needs_review");
+    expect(r.flags).toContainEqual(expect.objectContaining({ code: "public_mint_entrypoint", severity: "caution" }));
   });
   it("DANGER on single-LP", () => {
     expect(scoreSubject({ ...clean, lpHolderCount: 1 }).aspect).toBe("DANGER");
-  });
-  it("DANGER when supply not renounced", () => {
-    expect(scoreSubject({ ...clean, supplyRenounced: false }).aspect).toBe("DANGER");
   });
   it("CLEAR when every mandatory signal is present and clean", () => {
     const r = scoreSubject(clean);
@@ -25,10 +28,16 @@ describe("scoreSubject", () => {
     expect(r.flags).toHaveLength(0);
   });
   it("CAUTION + notChecked when a mandatory signal is missing", () => {
-    const r = scoreSubject({ ...clean, mintAuthorityOpen: null });
+    const r = scoreSubject({ ...clean, mintBurnEnabled: null, publicMintEntrypoint: null });
     expect(r.aspect).toBe("CAUTION");
     expect(r.decision).toBe("needs_review");
-    expect(r.notChecked).toContain("mintAuthorityOpen");
+    expect(r.notChecked).toContain("supplyControl");
+  });
+  it("accepts an exact entry-point scan when the CEP-18 setting is absent", () => {
+    const r = scoreSubject({ ...clean, mintBurnEnabled: null, publicMintEntrypoint: false });
+    expect(r.aspect).toBe("CLEAR");
+    expect(r.notChecked).not.toContain("supplyControl");
+    expect(r.passed).toContain("No public mint entry point was found in the active contract.");
   });
   it("CAUTION on a very new contract that is otherwise clean", () => {
     expect(scoreSubject({ ...clean, contractAgeBlocks: 10 }).aspect).toBe("CAUTION");
@@ -45,7 +54,16 @@ describe("scoreSubject", () => {
   it("CAUTION just under the young-contract boundary (999 blocks)", () => {
     expect(scoreSubject({ ...clean, contractAgeBlocks: 999 }).aspect).toBe("CAUTION");
   });
-  it("CLEAR when topHolderPct is null (it is a non-mandatory signal)", () => {
-    expect(scoreSubject({ ...clean, topHolderPct: null }).aspect).toBe("CLEAR");
+  it("CAUTION when top-holder concentration was not measured", () => {
+    const result = scoreSubject({ ...clean, topHolderPct: null });
+    expect(result.aspect).toBe("CAUTION");
+    expect(result.notChecked).toContain("topHolderPct");
+  });
+  it("uses exact, signal-backed pass labels", () => {
+    expect(scoreSubject(clean).passed).toEqual([
+      "The standard CEP-18 mint and burn setting is disabled.",
+      "Contract has existed for at least 1,000 blocks.",
+      "Top-holder concentration is below 95%."
+    ]);
   });
 });

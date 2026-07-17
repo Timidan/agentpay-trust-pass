@@ -13,8 +13,13 @@ import {
   type CasperSigner,
   type CheckPaymentInput
 } from "@agent-pay/client";
-import { verifyPurchaseReceipt } from "@agent-pay/core";
-import { OperatorApiError, OperatorClient, type ProviderDecisionInput } from "./operatorClient.js";
+import { parseCasperPublicKey, verifyPurchaseReceipt } from "@agent-pay/core";
+import {
+  OperatorApiError,
+  OperatorClient,
+  type AgentTokenScope,
+  type ProviderDecisionInput
+} from "./operatorClient.js";
 import {
   paymentVerdictExitCode,
   settlementVerdictExitCode,
@@ -25,8 +30,18 @@ import {
   type ExitCode
 } from "./output.js";
 
-const DEFAULT_API_URL = "http://127.0.0.1:4021";
+const DEFAULT_API_URL = "https://agentpay.timidan.xyz/api";
+const ALL_AGENT_TOKEN_SCOPES: AgentTokenScope[] = [
+  "checks:write",
+  "settlements:write",
+  "observations:write",
+  "receipts:read"
+];
 const HELP = `Usage:
+  agentpay session create --key <secret.pem>
+  agentpay agent-token list
+  agentpay agent-token issue --name <name> --key <secret.pem> [--scope <scope>] [--payer <public-key>]
+  agentpay agent-token revoke --id <token-id> --key <secret.pem>
   agentpay check --file <input.json>
   agentpay verify-settlement --check <id> --tx <hash>
   agentpay call --url <https://service> --key <secret.pem> [--method GET|POST]
@@ -34,11 +49,11 @@ const HELP = `Usage:
   agentpay policy set --file <policy.json> --key <secret.pem>
   agentpay provider list
   agentpay provider pin|deny --origin <origin> --payee <address> --asset <hash> --ceiling <amount> --key <secret.pem>
-  agentpay receipt show --id <receipt-id>
+  agentpay receipt show --id <receipt-id> --key <secret.pem>
   agentpay receipt verify --file <receipt.json>
 
 Options:
-  --api-url <origin>       AgentPay API origin
+  --api-url <origin>       AgentPay API origin (default: https://agentpay.timidan.xyz/api)
   --token <token>          Scoped agent token
   --session-token <token>  Operator session token
   --json                   Canonical JSON output
@@ -51,12 +66,15 @@ type CliOptions = {
   check?: string;
   tx?: string;
   id?: string;
+  name?: string;
   key?: string;
   url?: string;
   method?: string;
   body?: string;
   "body-file"?: string;
   header?: string[];
+  scope?: string[];
+  payer?: string[];
   "api-url"?: string;
   token?: string;
   "session-token"?: string;
@@ -109,12 +127,15 @@ function parseCliArgs(args: string[]): { positionals: string[]; options: CliOpti
         check: { type: "string" },
         tx: { type: "string" },
         id: { type: "string" },
+        name: { type: "string" },
         key: { type: "string" },
         url: { type: "string" },
         method: { type: "string" },
         body: { type: "string" },
         "body-file": { type: "string" },
         header: { type: "string", multiple: true },
+        scope: { type: "string", multiple: true },
+        payer: { type: "string", multiple: true },
         "api-url": { type: "string" },
         token: { type: "string" },
         "session-token": { type: "string" },
@@ -132,12 +153,20 @@ function parseCliArgs(args: string[]): { positionals: string[]; options: CliOpti
     });
     return { positionals: parsed.positionals, options: parsed.values as CliOptions };
   } catch {
-    throw new CliError("invalid_options", "Invalid command options");
+    throw new CliError("invalid_options", "Invalid command options. Run agentpay --help for usage.");
   }
 }
 
 async function dispatch(positionals: string[], options: CliOptions): Promise<CommandResult> {
   const [command, action, ...extra] = positionals;
+  if (command === "session" && action === "create" && extra.length === 0) return sessionCommand(options);
+  if (
+    command === "agent-token" &&
+    extra.length === 0 &&
+    (action === "list" || action === "issue" || action === "revoke")
+  ) {
+    return agentTokenCommand(action, options);
+  }
   if (command === "check" && action === undefined) return checkCommand(options);
   if (command === "verify-settlement" && action === undefined) return verifySettlementCommand(options);
   if (command === "call" && action === undefined) return callCommand(options);
@@ -150,7 +179,51 @@ async function dispatch(positionals: string[], options: CliOptions): Promise<Com
   if (command === "receipt" && extra.length === 0 && (action === "show" || action === "verify")) {
     return receiptCommand(action, options);
   }
-  throw new CliError("unknown_command", "Unknown or incomplete AgentPay command");
+  throw new CliError(
+    "unknown_command",
+    "Unknown or incomplete AgentPay command. Run agentpay --help for usage."
+  );
+}
+
+async function sessionCommand(options: CliOptions): Promise<CommandResult> {
+  const signer = await readSigner(options);
+  const token = await operatorClient(options).createSession(signer);
+  return {
+    value: { token },
+    exitCode: 0,
+    summary: token
+  };
+}
+
+async function agentTokenCommand(
+  action: "list" | "issue" | "revoke",
+  options: CliOptions
+): Promise<CommandResult> {
+  const client = operatorClient(options);
+  if (action === "list") {
+    const token = await operatorToken(client, options);
+    const records = await client.agentTokens(token);
+    return { value: { records }, exitCode: 0, summary: `${records.length} agent tokens` };
+  }
+
+  const { signer, token } = await operatorSigningSession(client, options);
+  if (action === "revoke") {
+    const id = required(options.id, "agent-token revoke requires --id");
+    await client.revokeAgentToken(id, signer, token);
+    return { value: { id, revoked: true }, exitCode: 0, summary: `Revoked ${id}` };
+  }
+
+  const result = await client.issueAgentToken({
+    agentName: required(options.name, "agent-token issue requires --name"),
+    scopes: agentTokenScopes(options.scope),
+    allowedPayerPublicKeys: agentTokenPayers(options.payer, signer.publicKeyHex),
+    expiresAt: expiry(options, "agent token")
+  }, signer, token);
+  return {
+    value: result,
+    exitCode: 0,
+    summary: `${result.token}\nToken ID: ${result.record.id}`
+  };
 }
 
 async function checkCommand(options: CliOptions): Promise<CommandResult> {
@@ -159,7 +232,8 @@ async function checkCommand(options: CliOptions): Promise<CommandResult> {
     throw new CliError("invalid_input", "Check input must contain request and paymentRequired objects");
   }
   const checkInput = input as unknown as CheckPaymentInput;
-  const result = await agentClient(options).check({
+  const client = await agentClient(options);
+  const result = await client.check({
     ...checkInput,
     idempotencyKey: nonEmpty(checkInput.idempotencyKey) ? checkInput.idempotencyKey : randomUUID()
   });
@@ -174,7 +248,8 @@ async function checkCommand(options: CliOptions): Promise<CommandResult> {
 async function verifySettlementCommand(options: CliOptions): Promise<CommandResult> {
   const checkId = required(options.check, "verify-settlement requires --check");
   const transactionHash = normalizeHash(required(options.tx, "verify-settlement requires --tx"), "transaction hash");
-  const result = await agentClient(options).verifySettlement(checkId, transactionHash);
+  const client = await agentClient(options);
+  const result = await client.verifySettlement(checkId, transactionHash);
   const verdict = result.proof.verdict;
   return {
     value: result,
@@ -267,7 +342,7 @@ async function providerCommand(
     asset: normalizeHash(required(options.asset, `provider ${action} requires --asset`), "asset"),
     resourcePathPrefix: pathPrefix(options["path-prefix"]),
     perCallCeiling: decimalAmount(required(options.ceiling, `provider ${action} requires --ceiling`)),
-    expiresAt: expiry(options),
+    expiresAt: expiry(options, "provider"),
     promptedByCheckId: options["prompted-by-check"]?.trim() || "cli-manual"
   };
   const { signer, token } = await operatorSigningSession(client, options);
@@ -278,7 +353,8 @@ async function providerCommand(
 async function receiptCommand(action: "show" | "verify", options: CliOptions): Promise<CommandResult> {
   if (action === "show") {
     const receiptId = required(options.id, "receipt show requires --id");
-    const record = await agentClient(options).getReceiptRecord(receiptId);
+    const client = await agentClient(options);
+    const record = await client.getReceiptRecord(receiptId);
     return { value: record, exitCode: 0, summary: `Receipt ${receiptId}` };
   }
   const input = await readJson(required(options.file, "receipt verify requires --file"));
@@ -291,9 +367,12 @@ async function receiptCommand(action: "show" | "verify", options: CliOptions): P
   };
 }
 
-function agentClient(options: CliOptions): AgentPayHttpClient {
-  const token = configuredApiToken(options);
-  if (!token) throw new CliError("configuration_required", "An AgentPay bearer token is required");
+async function agentClient(options: CliOptions): Promise<AgentPayHttpClient> {
+  const configuredToken = configuredApiToken(options);
+  if (configuredToken) return createAgentClient(options, configuredToken);
+
+  const signer = await readSigner(options);
+  const token = await operatorClient(options).createSession(signer);
   return createAgentClient(options, token);
 }
 
@@ -339,8 +418,8 @@ async function operatorSigningSession(
   options: CliOptions
 ): Promise<{ token: string; signer: CasperSigner }> {
   const signer = await readSigner(options);
-  const configuredToken = options["session-token"] ?? process.env.AGENT_PAY_OPERATOR_SESSION_TOKEN;
-  return { token: configuredToken ?? await client.createSession(signer), signer };
+  const configuredToken = (options["session-token"] ?? process.env.AGENT_PAY_OPERATOR_SESSION_TOKEN)?.trim();
+  return { token: configuredToken || await client.createSession(signer), signer };
 }
 
 async function readSigner(options: CliOptions): Promise<CasperSigner> {
@@ -434,19 +513,42 @@ function decimalAmount(value: string): string {
   return value;
 }
 
-function expiry(options: CliOptions): string {
+function expiry(options: CliOptions, label: string): string {
   if (options.expires && options["expires-in"]) {
-    throw new CliError("invalid_input", "provider accepts only one of --expires or --expires-in");
+    throw new CliError("invalid_input", `${label} accepts only one of --expires or --expires-in`);
   }
   if (options.expires) {
     const milliseconds = Date.parse(options.expires);
-    if (!Number.isFinite(milliseconds)) throw new CliError("invalid_input", "provider expiry must be an ISO timestamp");
+    if (!Number.isFinite(milliseconds)) throw new CliError("invalid_input", `${label} expiry must be an ISO timestamp`);
     return new Date(milliseconds).toISOString();
   }
   const seconds = options["expires-in"] === undefined
     ? 30 * 24 * 60 * 60
-    : positiveInteger(options["expires-in"], "provider expiry seconds");
+    : positiveInteger(options["expires-in"], `${label} expiry seconds`);
   return new Date(Date.now() + seconds * 1_000).toISOString();
+}
+
+function agentTokenScopes(values: string[] | undefined): AgentTokenScope[] {
+  if (!values || values.length === 0) return [...ALL_AGENT_TOKEN_SCOPES];
+  const scopes = [...new Set(values)];
+  for (const scope of scopes) {
+    if (!ALL_AGENT_TOKEN_SCOPES.includes(scope as AgentTokenScope)) {
+      throw new CliError(
+        "invalid_input",
+        `agent token scope must be one of ${ALL_AGENT_TOKEN_SCOPES.join(", ")}`
+      );
+    }
+  }
+  return scopes as AgentTokenScope[];
+}
+
+function agentTokenPayers(values: string[] | undefined, fallback: string): string[] {
+  const candidates = values && values.length > 0 ? values : [fallback];
+  try {
+    return [...new Set(candidates.map((value) => parseCasperPublicKey(value).publicKeyHex))];
+  } catch {
+    throw new CliError("invalid_input", "agent token payer must be a Casper public key");
+  }
 }
 
 function positiveInteger(value: string, label: string): number {

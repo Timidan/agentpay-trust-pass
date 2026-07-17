@@ -1,9 +1,9 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Verdict } from "../src/api";
-import { buildShareLink, voteUrl } from "../src/api";
+import { buildShareLink } from "../src/api";
 import { VerdictCard } from "../src/trust/VerdictCard";
-import { buildTrustPassReceipt, serializeTrustPassReceipt } from "../src/trust/trust-pass-receipt";
+import { buildCheckReceipt, serializeCheckReceipt } from "../src/trust/check-receipt";
 
 vi.mock("../src/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/api")>();
@@ -19,7 +19,7 @@ const dangerVerdict: Verdict = {
   decision: "rejected",
   flags: [
     {
-      code: "mint_authority_open",
+      code: "cep18_mint_burn_enabled",
       severity: "danger",
       message: "Mint authority is not renounced, so supply is unlimited"
     }
@@ -33,11 +33,29 @@ const dangerVerdict: Verdict = {
     packageHash: "a".repeat(64),
     raw: "b".repeat(64)
   },
+  evidenceNetwork: "casper-testnet",
+  payment: {
+    amount: "10000",
+    amountDisplay: "0.00001",
+    asset: "9".repeat(64),
+    assetSymbol: "X402",
+    assetDecimals: 9,
+    network: "casper:casper-test"
+  },
   paymentReceiptHash: "c".repeat(64),
   settlementTxHash: "d".repeat(64),
   decisionTxHash: "e".repeat(64),
   datasetRoot: "f".repeat(64),
   policyHash: "0".repeat(64),
+  publicationProof: {
+    hashKind: "deploy",
+    datasetId: "trust-casper-testnet-token-1",
+    datasetRoot: "f".repeat(64),
+    reportHash: "1".repeat(64),
+    paymentReceiptHash: "c".repeat(64),
+    verdictReport: { aspect: "DANGER", decision: "rejected" }
+  },
+  settlementExplorerUrl: `https://testnet.cspr.live/transaction/${"d".repeat(64)}`,
   explorerUrl: `https://testnet.cspr.live/transaction/${"d".repeat(64)}`
 };
 
@@ -51,6 +69,15 @@ describe("VerdictCard SHARE button", () => {
     render(<VerdictCard verdict={dangerVerdict} />);
     const shareBtn = screen.getByRole("button", { name: /share/i });
     expect(shareBtn).toBeTruthy();
+  });
+
+  it("focuses the result without scrolling it under the sticky navigation", () => {
+    const focus = vi.spyOn(HTMLElement.prototype, "focus");
+
+    render(<VerdictCard verdict={dangerVerdict} />);
+
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+    focus.mockRestore();
   });
 
   it("SHARE button is initially labelled SHARE (not sharing or shared)", () => {
@@ -75,10 +102,13 @@ describe("VerdictCard SHARE button", () => {
     await waitFor(() => {
       expect(vi.mocked(storeVerdictCard)).toHaveBeenCalledWith(
         expect.objectContaining({
-          aspect: "DANGER",
-          flags: expect.arrayContaining([
-            expect.objectContaining({ code: "mint_authority_open" })
-          ])
+          card: expect.objectContaining({
+            aspect: "DANGER",
+            flags: expect.arrayContaining([
+              expect.objectContaining({ code: "cep18_mint_burn_enabled" })
+            ])
+          }),
+          proof: dangerVerdict.publicationProof
         })
       );
     });
@@ -92,7 +122,7 @@ describe("VerdictCard SHARE button", () => {
     });
   });
 
-  it("renders and copies the Trust Pass receipt packet", async () => {
+  it("renders and copies the AgentPay check receipt", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", {
       value: { writeText },
@@ -102,45 +132,44 @@ describe("VerdictCard SHARE button", () => {
 
     render(<VerdictCard verdict={dangerVerdict} />);
 
-    expect(screen.getByRole("region", { name: "Trust Pass receipt" })).toBeTruthy();
-    expect(screen.getByText("Evidence root")).toBeTruthy();
-    expect(screen.getByText("x402 receipt")).toBeTruthy();
-    expect(screen.getByText("Settlement tx")).toBeTruthy();
-    expect(screen.getByText("Casper record")).toBeTruthy();
+    expect(screen.getByRole("region", { name: "AgentPay check proof" })).toBeTruthy();
+    expect(screen.getByText("Checked data ID")).toBeTruthy();
+    expect(screen.getByText("Payment proof ID")).toBeTruthy();
+    expect(screen.getByText("Testnet payment")).toBeTruthy();
+    expect(screen.getByText("Casper result record")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: /copy trust pass receipt/i }));
+    fireEvent.click(screen.getByRole("button", { name: /copy agentpay check receipt/i }));
 
     await waitFor(() => {
-      expect(writeText).toHaveBeenCalledWith(expect.stringContaining('"product": "AgentPay Trust Pass"'));
+      expect(writeText).toHaveBeenCalledWith(expect.stringContaining('"product": "AgentPay Check Receipt"'));
     });
     expect(writeText.mock.calls[0][0]).toContain(dangerVerdict.datasetRoot);
     expect(writeText.mock.calls[0][0]).toContain(dangerVerdict.paymentReceiptHash);
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /copy trust pass receipt/i }).textContent).toBe("Copied");
+      expect(screen.getByRole("button", { name: /copy agentpay check receipt/i }).textContent).toBe("Copied");
     });
   });
 });
 
 describe("buildShareLink deep-link helper", () => {
-  it("composes the vote URL with the card image URL", () => {
+  it("returns the public AgentPay card image URL", () => {
     const link = buildShareLink("card-abc123");
-    expect(link).toContain(voteUrl);
-    expect(link).toContain("card-abc123.png");
+    expect(link).toBe("http://localhost:3000/api/card/card-abc123.png");
   });
 
-  it("includes the card image as a query parameter", () => {
-    const link = buildShareLink("card-xyz");
-    const url = new URL(link, "http://test");
-    expect(url.searchParams.get("card")).toContain("card-xyz.png");
+  it("encodes an unexpected card id before placing it in the path", () => {
+    expect(buildShareLink("card/xyz")).toBe(
+      "http://localhost:3000/api/card/card%2Fxyz.png"
+    );
   });
 });
 
-describe("Trust Pass receipt builder", () => {
+describe("check receipt builder", () => {
   it("keeps the receipt schema in one pure module", () => {
-    const receipt = buildTrustPassReceipt(dangerVerdict);
+    const receipt = buildCheckReceipt(dangerVerdict);
 
     expect(receipt).toMatchObject({
-      product: "AgentPay Trust Pass",
+      product: "AgentPay Check Receipt",
       aspect: "DANGER",
       decision: "rejected",
       subject: {
@@ -162,6 +191,6 @@ describe("Trust Pass receipt builder", () => {
         explorerUrl: dangerVerdict.explorerUrl
       }
     });
-    expect(serializeTrustPassReceipt(receipt)).toContain('"product": "AgentPay Trust Pass"');
+    expect(serializeCheckReceipt(receipt)).toContain('"product": "AgentPay Check Receipt"');
   });
 });

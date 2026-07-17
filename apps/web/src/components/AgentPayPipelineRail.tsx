@@ -16,7 +16,7 @@ export type EvidenceStep = {
  */
 export function AgentPayPipelineRail({ steps }: { steps: EvidenceStep[] }) {
   return (
-    <ol className="agent-pay-pipeline-rail" aria-label="Settlement rail">
+    <ol className="agent-pay-pipeline-rail" aria-label="Payment check progress">
       {steps.map((step, index) => (
         <li key={step.kind} className={`rail-stop is-${step.state}`}>
           <span className="rail-num" aria-hidden="true">

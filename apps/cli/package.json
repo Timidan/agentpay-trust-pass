@@ -11,6 +11,7 @@
   "scripts": {
     "test": "vitest run",
     "build": "rm -rf dist && tsc -p tsconfig.json --noEmit && esbuild src/main.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist/main.js",
+    "publish:npm": "npm run build && cp dist/main.js .publish/main.js && cd .publish && npm publish --access public",
     "lint": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

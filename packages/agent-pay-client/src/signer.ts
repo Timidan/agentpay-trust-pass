@@ -152,6 +152,7 @@ export function enforceX402SpendPolicy(
   requirement: PaymentRequirement,
   policy: X402SpendPolicy = x402SpendPolicyFromEnv()
 ): void {
+  const actual = parseTransferAmount(requirement.amount);
   if (policy.expectedPayeeAddress && normalizeAddress(policy.expectedPayeeAddress) !== normalizeAddress(requirement.payTo)) {
     throw new Error(
       `x402 spend policy refused to sign: payee address mismatch (AGENT_PAY_EXPECTED_PAYEE_ADDRESS expected ${policy.expectedPayeeAddress}, actual ${requirement.payTo})`
@@ -169,13 +170,27 @@ export function enforceX402SpendPolicy(
   }
   if (policy.maxReportAmount) {
     const maximum = parsePolicyAmount("AGENT_PAY_MAX_REPORT_AMOUNT", policy.maxReportAmount);
-    const actual = parsePolicyAmount("payment requirement amount", requirement.amount);
     if (actual > maximum) {
       throw new Error(
         `x402 spend policy refused to sign: amount exceeds AGENT_PAY_MAX_REPORT_AMOUNT (expected <= ${policy.maxReportAmount}, actual ${requirement.amount})`
       );
     }
   }
+}
+
+function parseTransferAmount(value: string): bigint {
+  if (!/^[1-9][0-9]*$/.test(value)) {
+    throw new Error(
+      "x402 spend policy refused to sign: payment requirement amount must be a positive integer in base units"
+    );
+  }
+  const amount = BigInt(value);
+  if (amount > (1n << 256n) - 1n) {
+    throw new Error(
+      "x402 spend policy refused to sign: payment requirement amount exceeds the U256 transfer limit"
+    );
+  }
+  return amount;
 }
 
 export function buildX402PaymentSignature(input: {
@@ -272,7 +287,7 @@ function normalizeAsset(value: string): string {
 }
 
 function parsePolicyAmount(label: string, value: string): bigint {
-  if (!/^[0-9]+$/.test(value)) {
+  if (!/^(0|[1-9][0-9]*)$/.test(value)) {
     throw new Error(`x402 spend policy refused to sign: ${label} must be a non-negative integer amount in base units`);
   }
   return BigInt(value);

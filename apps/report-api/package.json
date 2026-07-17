@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx src/server.ts",
-    "start": "tsx src/server.ts",
+    "start": "node --conditions=production dist/server.js",
     "test": "vitest run",
     "build": "rm -rf dist && tsc -p tsconfig.json",
     "lint": "tsc -p tsconfig.json --noEmit"
@@ -12,12 +12,10 @@
   "dependencies": {
     "@agent-pay/core": "workspace:*",
     "@resvg/resvg-js": "^2.6.2",
-    "cors": "^2.8.5",
     "express": "^5.2.1"
   },
   "devDependencies": {
     "@agent-pay/client": "workspace:*",
-    "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/supertest": "^6.0.3",
     "supertest": "^7.1.4",

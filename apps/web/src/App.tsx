@@ -2,8 +2,6 @@ import {
   ArrowSquareOut,
   ArrowCounterClockwise,
   Moon,
-  Plugs,
-  PlugsConnected,
   Sun,
 } from "@phosphor-icons/react";
 import { useEffect, useMemo, useState } from "react";
@@ -14,8 +12,10 @@ import {
   callTool,
   type DecisionReceipt as DecisionReceiptData,
   type EvidenceFactValue,
+  type EvidenceNetwork,
   getBridgeActivity,
   getBridgeHealth,
+  reportApiOrigin,
   resolveToken,
   type PaidReport,
   type PaymentReadiness,
@@ -26,7 +26,11 @@ import {
 } from "./api";
 import { AgentPayDecisionReceipt } from "./components/AgentPayDecisionReceipt";
 import { AgentPayPipelineRail, type EvidenceStep } from "./components/AgentPayPipelineRail";
-import { AgentPayVerdictHero, type HeroMode } from "./components/AgentPayVerdictHero";
+import {
+  AgentPayEvidenceNetworkSelector,
+  AgentPayVerdictHero,
+  type HeroMode
+} from "./components/AgentPayVerdictHero";
 import { AgentPayCheckList } from "./components/AgentPayCheckList";
 import { AgentPayLogo } from "./components/AgentPayLogo";
 import { AgentPayProofPath } from "./components/AgentPayProofPath";
@@ -62,7 +66,9 @@ import {
   AgentPayTooltipProvider
 } from "./components/AgentPayUi";
 import IntegratePage from "./agents/IntegratePage";
-import LandingDesk from "./landing/LandingDesk";
+import AuditPage from "./audit/AuditPage";
+import { SiteFooter, SiteNavLinks } from "./components/SiteChrome";
+import Landing2 from "./landing2/Landing";
 import { friendlyReason } from "./lib/friendly-errors";
 import AskPage from "./trust/AskPage";
 import CounterpartyPage from "./trust/CounterpartyPage";
@@ -77,7 +83,7 @@ type RunState = "idle" | "running" | "payment_required" | "complete" | "error";
 
 // The exact buyer command from the repo README/scripts — shown at the 402 wall
 // so the gate is a doorway, not a dead end.
-const BUYER_CLI_COMMAND = `REPORT_API_URL=http://127.0.0.1:4021 \\
+const BUYER_CLI_COMMAND = `REPORT_API_URL=${reportApiOrigin} \\
 CASPER_SECRET_KEY_PATH=<your-agent-key.pem> \\
 npm run x402:buy`;
 type ThemeMode = "light" | "dark";
@@ -115,6 +121,7 @@ function AppShell() {
   const [verification, setVerification] = useState<Verification | null>(null);
   const [receipt, setReceipt] = useState<DecisionReceiptData | null>(null);
   const [registryStatus, setRegistryStatus] = useState<RegistryStatus | null>(null);
+  const [evidenceNetwork, setEvidenceNetwork] = useState<EvidenceNetwork>("casper-mainnet");
   const [paymentPayloadText, setPaymentPayloadText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [tamper, setTamper] = useState<TamperState | null>(null);
@@ -161,14 +168,14 @@ function AppShell() {
     return [
       {
         label: "Quote",
-        caption: "buys a live evidence set and commits a dataset root",
-        value: quote ? `${quote.amount} ${quote.asset}` : "waiting",
+        caption: "prices a live evidence check and commits its fingerprint",
+        value: quote ? `${quote.amountDisplay || quote.amount} ${quote.asset}` : "waiting",
         state: stepState(quoteDone, "quote"),
         kind: "quote"
       },
       {
         label: "Settle x402",
-        caption: "settles the quoted fee through the facilitator",
+        caption: "submits the buyer's signed payment through the facilitator",
         value: paidReport
           ? "settled"
           : state === "payment_required"
@@ -180,7 +187,7 @@ function AppShell() {
       },
       {
         label: "Verify proof",
-        caption: "rebuilds the Merkle root from the evidence",
+        caption: "checks the evidence against its quoted fingerprint",
         // A failed verification is a real, honest state, not "waiting".
         value: proofDone ? "root match" : verification && !verification.verified ? "proof failed" : "waiting",
         state: proofDone ? "done" : verification && !verification.verified ? "blocked" : stepState(false, "proof"),
@@ -196,7 +203,9 @@ function AppShell() {
     ];
   }, [paidReport, quote, receipt, state, verification]);
 
-  const SUBJECT_HASH = /^(hash-)?[0-9a-f]{64}$/i;
+  // Token package hashes (hash-…), Casper accounts (account-hash-…), and bare
+  // 64-hex all go straight to the quote; only free-text symbols get resolved.
+  const SUBJECT_HASH = /^((account-)?hash-)?[0-9a-f]{64}$/i;
 
   async function runAgentPay(rawSubject = "") {
     clearFlowState();
@@ -211,6 +220,7 @@ function AppShell() {
     setState("running");
 
     let subject: string;
+    let selectedNetwork = evidenceNetwork;
     if (SUBJECT_HASH.test(trimmed)) {
       subject = trimmed;
     } else {
@@ -224,6 +234,8 @@ function AppShell() {
           return;
         }
         subject = token.packageHash;
+        selectedNetwork = token.network;
+        setEvidenceNetwork(token.network);
       } catch (lookupError) {
         setState("error");
         setError(
@@ -236,7 +248,10 @@ function AppShell() {
     }
 
     try {
-      const quoted = await callTool<Quote>("quote_report", { subject });
+      const quoted = await callTool<Quote>("quote_report", {
+        subject,
+        evidenceNetwork: selectedNetwork
+      });
       setQuote(quoted);
       const registry = await callTool<RegistryStatus>("registry_status", {});
       setRegistryStatus(registry);
@@ -255,7 +270,7 @@ function AppShell() {
   async function continueSettlement() {
     if (!quote) {
       setState("error");
-      setError("Quote is required before payment settlement");
+      setError("Run a check before continuing to payment.");
       return;
     }
 
@@ -291,7 +306,7 @@ function AppShell() {
     setVerification(verified);
 
     if (!verified.verified) {
-      throw new Error("Report proof did not match the dataset root");
+      throw new Error("The returned evidence did not match the quoted evidence fingerprint");
     }
 
     const decision = decisionForPaidReport(paid);
@@ -376,6 +391,7 @@ function AppShell() {
               onOpenFeed={() => navigate("/feed")}
               onOpenAgents={() => navigate("/agents")}
               onOpenCounterparty={() => navigate("/counterparty")}
+              onOpenAudit={() => navigate("/audit")}
             />
           }
         />
@@ -383,7 +399,7 @@ function AppShell() {
           path="/check"
           element={
             <main className="agent-pay-app" data-theme={theme}>
-              <AskPage onBack={() => navigate("/")} onOpenFeed={() => navigate("/feed")} />
+              <AskPage navigate={navigate} />
             </main>
           }
         />
@@ -391,7 +407,7 @@ function AppShell() {
           path="/counterparty"
           element={
             <main className="agent-pay-app" data-theme={theme}>
-              <CounterpartyPage onBack={() => navigate("/")} onOpenCheck={() => navigate("/check")} />
+              <CounterpartyPage navigate={navigate} />
             </main>
           }
         />
@@ -399,29 +415,39 @@ function AppShell() {
           path="/feed"
           element={
             <main className="agent-pay-app" data-theme={theme}>
-              <FeedPage onBack={() => navigate("/")} onOpenAsk={() => navigate("/check")} />
+              <FeedPage navigate={navigate} />
             </main>
           }
         />
         <Route
           path="/agents"
-          element={<IntegratePage onBack={() => navigate("/")} onOpenAsk={() => navigate("/check")} />}
+          element={<IntegratePage onBack={() => navigate("/")} onOpenAsk={() => navigate("/check")} navigate={navigate} />}
+        />
+        <Route
+          path="/audit"
+          element={
+            <main className="agent-pay-app" data-theme={theme}>
+              <AuditPage theme={theme} navigate={navigate} />
+            </main>
+          }
         />
         <Route
           path="/app"
           element={
-            <main className={`agent-pay-app agent-pay-workspace-view page-fog state-${state}`} data-theme={theme}>
-              <div className="console-glass-frame glass-frame">
+            <main className={`agent-pay-app agent-pay-workspace-view console-v2 state-${state}`} data-theme={theme}>
+              <div className="console-shell">
                 <AgentPayAppHeader
                   state={state}
                   theme={theme}
-                  onBack={() => navigate("/")}
+                  onNav={navigate}
                   onReset={reset}
                   onToggleTheme={toggleTheme}
                 />
                 <AgentPayConsole
                   error={error}
+                  evidenceNetwork={evidenceNetwork}
                   onChangePaymentPayload={setPaymentPayloadText}
+                  onChangeEvidenceNetwork={setEvidenceNetwork}
                   onContinueSettlement={continueSettlement}
                   onRunAgentPay={runAgentPay}
                   paidReport={paidReport}
@@ -436,6 +462,7 @@ function AppShell() {
                   onTamper={tamperReport}
                   onRestore={restoreReport}
                 />
+                <SiteFooter current="app" navigate={navigate} />
               </div>
             </main>
           }
@@ -455,10 +482,11 @@ function LandingRoute(props: {
   onOpenFeed: () => void;
   onOpenAgents: () => void;
   onOpenCounterparty: () => void;
+  onOpenAudit: () => void;
 }) {
   return (
     <main className="agent-pay-app" data-theme={props.theme}>
-      <LandingDesk
+      <Landing2
         theme={props.theme}
         onToggleTheme={props.onToggleTheme}
         onOpenApp={props.onOpenApp}
@@ -466,6 +494,7 @@ function LandingRoute(props: {
         onOpenFeed={props.onOpenFeed}
         onOpenAgents={props.onOpenAgents}
         onOpenCounterparty={props.onOpenCounterparty}
+        onOpenAudit={props.onOpenAudit}
       />
     </main>
   );
@@ -474,13 +503,13 @@ function LandingRoute(props: {
 function AgentPayAppHeader({
   state,
   theme,
-  onBack,
+  onNav,
   onReset,
   onToggleTheme
 }: {
   state: RunState;
   theme: ThemeMode;
-  onBack: () => void;
+  onNav: (path: string) => void;
   onReset: () => void;
   onToggleTheme: () => void;
 }) {
@@ -493,13 +522,13 @@ function AgentPayAppHeader({
           <span className="brand-sub">Console</span>
         </div>
       </div>
+      <SiteNavLinks current="app" navigate={onNav} />
       <div className="hero-nav-actions">
-        <AgentPayButton variant="secondary" onClick={onBack}>
-          Overview
-        </AgentPayButton>
-        <AgentPayBadge state={state}>
-          {humanizeKey(state)}
-        </AgentPayBadge>
+        {state !== "idle" ? (
+          <AgentPayBadge state={state}>
+            {humanizeKey(state)}
+          </AgentPayBadge>
+        ) : null}
         <AgentPayIconAction
           label={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
           onClick={onToggleTheme}
@@ -530,22 +559,11 @@ function decisionForPaidReport(paidReport: PaidReport): WireDecision {
   return verdictForPaidReport(paidReport).decision;
 }
 
-// A worked-example verdict shown in the idle console so a first-time viewer
-// sees what a real result looks like. Deliberately CAUTION (a mixed result):
-// one caution flag, one check that could not run, two clean passes. Every line
-// is real rule-engine copy, tagged "Sample run" in the UI so it is never
-// mistaken for a live result.
-const EXAMPLE_VERDICT: RuleResult = {
-  aspect: "CAUTION",
-  decision: "needs_review",
-  flags: [{ code: "very_new_contract", severity: "caution", message: "Contract is very new." }],
-  notChecked: ["holderCount"],
-  passed: ["Mint authority is locked.", "Supply control is renounced."]
-};
-
 function AgentPayConsole({
   error,
+  evidenceNetwork,
   onChangePaymentPayload,
+  onChangeEvidenceNetwork,
   onContinueSettlement,
   onRunAgentPay,
   paidReport,
@@ -561,7 +579,9 @@ function AgentPayConsole({
   onRestore
 }: {
   error: string | null;
+  evidenceNetwork: EvidenceNetwork;
   onChangePaymentPayload: (value: string) => void;
+  onChangeEvidenceNetwork: (value: EvidenceNetwork) => void;
   onContinueSettlement: () => void;
   onRunAgentPay: (subjectInput: string) => void;
   paidReport: PaidReport | null;
@@ -589,16 +609,17 @@ function AgentPayConsole({
     setPaymentSheetDismissed(false);
   }, [quote?.quoteId]);
 
-  // A real verdict only once the proof actually verified against the quoted
-  // root. An unverified paid report must never surface as a real verdict.
-  // Otherwise the console teaches with the tagged sample, and at the common
-  // local x402 wall it shows an honest blocked state.
+  // A real verdict appears only after the proof verifies against the quoted
+  // root. An unverified paid report must never surface as a result.
   const verdict = useMemo(
     () => (paidReport && verification?.verified ? verdictForPaidReport(paidReport) : null),
     [paidReport, verification]
   );
-  const heroMode: HeroMode = verdict ? "verdict" : state === "payment_required" ? "blocked" : "example";
-  const heroVerdict = verdict ?? EXAMPLE_VERDICT;
+  const heroMode: HeroMode | null = verdict
+    ? "verdict"
+    : state === "payment_required"
+      ? "blocked"
+      : null;
 
   const activeStep = timeline.find((step) => step.state === "active");
   const primaryLabel =
@@ -606,8 +627,8 @@ function AgentPayConsole({
       ? "Quoting"
       : activeStep?.kind === "payment"
         ? "Settling x402 fee"
-        : activeStep?.kind === "proof"
-          ? "Verifying proof"
+      : activeStep?.kind === "proof"
+          ? "Checking evidence"
           : activeStep?.kind === "record"
             ? "Recording"
             : "Running";
@@ -620,13 +641,17 @@ function AgentPayConsole({
         : reportSubject
       : quote?.datasetId ?? "Live evidence set";
   const settlementHash = paidReport?.payment.transactionHash ?? null;
-  const network = quote?.network ?? null;
+  const network = paidReport?.evidenceNetwork ?? quote?.evidenceNetwork ?? null;
   const networkLabel =
     network === "casper-testnet" ? "Casper Testnet" : network === "casper-mainnet" ? "Casper Mainnet" : network ?? "Casper";
   const summary = verdict
     ? [
-        quote?.amount ? `Bought evidence for ${quote.amount} ${quote.asset ?? ""}`.trim() + "." : null,
-        verification ? (verification.verified ? "The proof matched the quoted root." : "The proof did not match the quoted root.") : null,
+        quote?.amount ? `Bought evidence for ${quote.amountDisplay || quote.amount} ${quote.asset ?? ""}`.trim() + "." : null,
+        verification
+          ? verification.verified
+            ? "The evidence matched the quoted fingerprint."
+            : "The evidence did not match the quoted fingerprint."
+          : null,
         `Verdict: ${verdict.aspect}.`
       ]
         .filter(Boolean)
@@ -635,44 +660,70 @@ function AgentPayConsole({
 
   const canPay = state === "payment_required" && Boolean(quote) && (quote?.paymentRequirements.length ?? 0) > 0;
   const blockedNote = canPay
-    ? "Settle the x402 fee to continue. Verify and record follow once payment lands."
-    : "No signing key is configured here, so settle, verify, and record stay waiting.";
+    ? "This browser does not hold a buyer key. Sign with the buyer CLI, then paste its payment payload to continue."
+    : "Payment is not configured, so verification and the receipt cannot continue.";
 
   return (
     <section id="agent-pay-app" className="agent-pay-console" aria-label="AgentPay app">
-      <h1 className="agentpay-sr-only">AgentPay evidence desk</h1>
+      <h1 className="agentpay-sr-only">AgentPay evidence console</h1>
       <header className="console-header">
         <div className="console-heading">
-          <h2>Evidence desk</h2>
+          <h2>Evidence console</h2>
           <p className="muted">
-            Name a token. The desk buys live evidence, verifies the Merkle proof, and records one
-            verdict on Casper: CLEAR, CAUTION, or DANGER.
+            Enter a token package hash or Casper account to quote a live evidence check. The buyer
+            signs and pays the Testnet fee before AgentPay verifies the evidence and records the result.
           </p>
         </div>
-        <ul className="console-stat-strip" aria-label="What the desk does">
-          <li className="stat-tile"><span className="stat-k">Rail</span><span className="stat-v">4 stops</span></li>
-          <li className="stat-tile"><span className="stat-k">Settlement</span><span className="stat-v">x402 on Casper</span></li>
-          <li className="stat-tile"><span className="stat-k">Verdicts</span><span className="stat-v">CLEAR / CAUTION / DANGER</span></li>
-        </ul>
       </header>
 
       {error ? <AgentPayAlert variant="error">{error}</AgentPayAlert> : null}
 
-      <AgentPayVerdictHero
-        mode={heroMode}
-        verdict={heroVerdict}
-        subjectLabel={subjectLabel}
-        summary={summary}
-        settlementHash={settlementHash}
-        networkLabel={networkLabel}
-        blockedNote={blockedNote}
-        running={state === "running"}
-        primaryLabel={primaryLabel}
-        subjectInput={subjectInput}
-        onChangeSubject={setSubjectInput}
-        onRun={onRunAgentPay}
-        onShowPayment={canPay ? () => setPaymentSheetDismissed(false) : undefined}
-      />
+      {heroMode === null ? (
+        /* Idle: just the run input. The verdict surface appears only when
+           there is a real verdict or a real blocked state to show. */
+        <AgentPaySurface className="console-run">
+          <div className="hero-run">
+            <AgentPayEvidenceNetworkSelector
+              disabled={state === "running"}
+              onChange={onChangeEvidenceNetwork}
+              value={evidenceNetwork}
+            />
+            <input
+              aria-label="Token package hash or Casper account to check"
+              className="hero-run-input"
+              placeholder="Token package hash or account (account-hash-…)"
+              spellCheck={false}
+              value={subjectInput}
+              onChange={(event) => setSubjectInput(event.target.value)}
+            />
+            <AgentPayButton
+              variant="primary"
+              disabled={state === "running" || subjectInput.trim().length === 0}
+              onClick={() => onRunAgentPay(subjectInput)}
+            >
+              {state === "running" ? primaryLabel : "Run live check"}
+            </AgentPayButton>
+          </div>
+        </AgentPaySurface>
+      ) : (
+        <AgentPayVerdictHero
+          mode={heroMode}
+          verdict={verdict ?? undefined}
+          subjectLabel={subjectLabel}
+          summary={summary}
+          settlementHash={settlementHash}
+          networkLabel={networkLabel}
+          blockedNote={blockedNote}
+          running={state === "running"}
+          primaryLabel={primaryLabel}
+          subjectInput={subjectInput}
+          evidenceNetwork={evidenceNetwork}
+          onChangeSubject={setSubjectInput}
+          onChangeEvidenceNetwork={onChangeEvidenceNetwork}
+          onRun={onRunAgentPay}
+          onShowPayment={canPay ? () => setPaymentSheetDismissed(false) : undefined}
+        />
+      )}
 
       {state === "payment_required" && quote && quote.paymentRequirements.length > 0 && !paymentSheetDismissed ? (
         <AgentPayPaymentSheet
@@ -684,22 +735,34 @@ function AgentPayConsole({
         />
       ) : null}
 
-      <AgentPayPipelineRail steps={timeline} />
+      {/* The rail and workspace exist only once a run does; the idle screen
+          is the input and nothing else. */}
+      {state !== "idle" ? <AgentPayPipelineRail steps={timeline} /> : null}
 
       <AgentPayBridgePanel />
 
+      {state !== "idle" || quote || receipt ? (
       <section className="agent-pay-workspace">
         <AgentPayCard className="timeline-panel operation-card">
-          <PanelHeader title="Evidence checks" sub="What the desk read, grouped by severity." />
+          <PanelHeader title="Evidence checks" sub="What AgentPay read, grouped by severity." />
           <AgentPaySeparator />
           {verdict ? (
-            <AgentPayCheckList flags={verdict.flags} notChecked={verdict.notChecked} passed={verdict.passed} />
+            <AgentPayCheckList
+              flags={verdict.flags}
+              notChecked={verdict.notChecked}
+              passed={verdict.passed}
+              notCheckedNote={
+                verdict.notChecked.length > 0
+                  ? "Some required facts were unavailable from the selected network and configured evidence sources."
+                  : undefined
+              }
+            />
           ) : (
             <AgentPayEmptyState
               title={heroMode === "blocked" ? "Checks appear after the fee settles" : "Checks appear after a run"}
               body={
                 heroMode === "blocked"
-                  ? "This run stopped at the x402 wall. The desk scores the evidence once the fee lands and the Merkle proof verifies."
+                  ? "Pay the x402 fee to continue. AgentPay will check the evidence and save the result after payment confirms."
                   : "Your evidence checks show here after a live run, grouped by severity: flagged, not checked, passed."
               }
             />
@@ -709,7 +772,7 @@ function AgentPayConsole({
         <AgentPayTabs value={workspaceTab} onValueChange={setWorkspaceTab} className="workspace-tabs">
           <AgentPayCard className="workspace-panel">
             <div className="workspace-panel-top">
-              <PanelHeader title="What we found" sub="Live sources, the proof they fold into, and the on-chain record." />
+              <PanelHeader title="What we found" sub="Live sources, how AgentPay verifies them, and the Casper record." />
               <AgentPayTabsList aria-label="AgentPay workspace sections">
                 <AgentPayTabsTrigger value="evidence">Evidence</AgentPayTabsTrigger>
                 <AgentPayTabsTrigger value="proof">Proof</AgentPayTabsTrigger>
@@ -733,7 +796,7 @@ function AgentPayConsole({
                 ) : (
                   <AgentPayEmptyState
                     title="Sources appear after a quote"
-                    body="Run it live above to buy an evidence set. Each source folds into one dataset root."
+                    body="Run a live check above to load the evidence sources. Each source contributes to one evidence fingerprint."
                   />
                 )}
               </div>
@@ -756,7 +819,7 @@ function AgentPayConsole({
                 ) : (
                   <AgentPayEmptyState
                     title="Proof appears after settlement"
-                    body="Once the fee settles, the desk rebuilds the Merkle root from the evidence and shows the path here."
+                    body="After the fee is paid, AgentPay verifies that every evidence item belongs to the quoted set and shows the verification path here."
                   />
                 )}
               </div>
@@ -771,6 +834,7 @@ function AgentPayConsole({
           </AgentPayCard>
         </AgentPayTabs>
       </section>
+      ) : null}
     </section>
   );
 }
@@ -790,7 +854,6 @@ function AgentPayEmptyState({ title, body }: { title: string; body: string }) {
   return (
     <div className="agent-pay-empty-state">
       <div className="empty-state-copy">
-        <span className="strip-label">Nothing yet</span>
         <strong>{title}</strong>
         <p className="muted">{body}</p>
       </div>
@@ -828,41 +891,20 @@ function AgentPayBridgePanel() {
     };
   }, []);
 
+  // One status line, not a panel: the integration story lives on /agents.
   return (
-    <AgentPaySurface asChild variant="connection">
-      <section aria-label="AgentPay agent bridge">
-        <div className="connection-copy">
-          <span className="connection-flag">
-            {bridgeLive ? <PlugsConnected size={12} aria-hidden="true" /> : <Plugs size={12} aria-hidden="true" />}
-            Agent bridge
-          </span>
-          <h2>Agents connect over MCP or HTTP</h2>
-          <p className="muted">
-            This console observes the same rail agents drive:{" "}
-            <AgentPayInlineCode>POST {bridgeUrl}/tools/&lt;name&gt;</AgentPayInlineCode>
-          </p>
-          <span className={`bridge-state ${bridgeLive ? "is-live" : "is-down"}`}>
-            {bridgeLive === null ? "checking bridge" : bridgeLive ? "bridge live" : "bridge unreachable"}
-          </span>
-        </div>
-        <div className="bridge-activity" aria-label="Recent agent calls">
-          {activity.length === 0 ? (
-            <p className="muted">No agent calls yet this session.</p>
-          ) : (
-            <ul>
-              {activity.slice(0, 5).map((entry, index) => (
-                <li key={`${entry.at}-${index}`} className={entry.status < 400 ? "is-ok" : "is-err"}>
-                  <code>{entry.tool}</code>
-                  <span>{entry.status}</span>
-                  <span>{entry.ms}ms</span>
-                  <time dateTime={entry.at}>{entry.at.slice(11, 19)}</time>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </section>
-    </AgentPaySurface>
+    <section className="bridge-strip" aria-label="AgentPay agent bridge">
+      <span className="connection-flag">Agent bridge</span>
+      <span className={`bridge-state ${bridgeLive ? "is-live" : "is-down"}`}>
+        {bridgeLive === null ? "checking bridge" : bridgeLive ? "bridge live" : "bridge unreachable"}
+      </span>
+      <AgentPayInlineCode>POST {bridgeUrl}/tools/&lt;name&gt;</AgentPayInlineCode>
+      {activity.slice(0, 2).map((entry, index) => (
+        <span className="bridge-last" key={`${entry.at}-${index}`}>
+          <code>{entry.tool}</code> <span>{entry.status}</span> · {entry.ms}ms
+        </span>
+      ))}
+    </section>
   );
 }
 
@@ -881,6 +923,7 @@ function AgentPayPaymentSheet({
 }) {
   const canAcceptPayment = quote.paymentRequirements.length > 0;
   const configReason = friendlyReason(quote.paymentReadiness.reason ?? quote.paymentConfigurationReason);
+  const requirement = quote.paymentRequirements[0];
 
   return (
     <AgentPaySheet open modal={false} onOpenChange={(open) => { if (!open) onDismiss(); }}>
@@ -894,11 +937,31 @@ function AgentPayPaymentSheet({
         <AgentPaySeparator />
         {canAcceptPayment ? (
           <div className="payment-sheet-form">
+            {requirement ? (
+              <dl className="payment-sheet-terms" aria-label="x402 payment terms">
+                <div>
+                  <dt>Price</dt>
+                  <dd>
+                    <strong>{quote.amountDisplay || quote.amount} {requirement.extra.symbol || quote.asset}</strong>
+                    <small>{quote.amount} base units</small>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Token contract</dt>
+                  <dd><code>{quote.assetPackageHash || requirement.asset}</code></dd>
+                </div>
+                <div>
+                  <dt>Recipient</dt>
+                  <dd><code>{requirement.payTo}</code></dd>
+                </div>
+                <div>
+                  <dt>Payment network</dt>
+                  <dd><code>{requirement.network}</code></dd>
+                </div>
+              </dl>
+            ) : null}
             <div className="payment-sheet-howto">
-              <p className="muted">
-                This is where an agent's signed x402 payload goes. Generate one with the buyer CLI
-                against this desk, then paste the payload it prints:
-              </p>
+              <p className="muted">Buyer CLI</p>
               <AgentPayCodeBlock>{BUYER_CLI_COMMAND}</AgentPayCodeBlock>
               <a className="payment-sheet-docs-link" href="/agents">
                 How agents connect (MCP + HTTP bridge)
@@ -915,7 +978,7 @@ function AgentPayPaymentSheet({
               />
             </AgentPayField>
             <AgentPayButton variant="primary" onClick={onContinue}>
-              Continue settlement
+              Continue with signed payment
             </AgentPayButton>
           </div>
         ) : (
@@ -957,12 +1020,12 @@ function AgentPayProofVerdict({
     <AgentPaySurface className={`proof-verdict ${verified ? "is-clear" : "is-danger"}`}>
       <div className="proof-verdict-head">
         <AgentPayBadge state={verified ? "complete" : "error"}>
-          {verified ? "root match · verify true" : "root mismatch · verify false"}
+          {verified ? "Evidence matches quote" : "Evidence changed"}
         </AgentPayBadge>
         <p className="proof-verdict-note">
           {tamper
-            ? "One fact changed, so the Merkle proof no longer reconstructs the quoted dataset root."
-            : "Re-derived against the dataset root committed at quote time, on the live Casper chain."}
+            ? "One fact changed, so the evidence no longer matches the quoted fingerprint."
+            : "Checked against the evidence fingerprint committed at quote time on the live Casper chain."}
         </p>
       </div>
 
@@ -1122,7 +1185,11 @@ function AgentPayPaymentReadiness({ readiness }: { readiness: PaymentReadiness }
         <span className="strip-label">AgentPay settlement</span>
         <strong>{humanizeKey(readiness.status)}</strong>
         <p className="muted">
-          {readiness.reason ? friendlyReason(readiness.reason).headline : readiness.supportedKind ? readiness.supportedKind.network : readiness.facilitatorUrl}
+          {readiness.reason
+            ? friendlyReason(readiness.reason).headline
+            : readiness.supportedKind
+              ? readiness.supportedKind.network
+              : "Payment service status checked."}
         </p>
       </div>
       <AgentPayTable>
@@ -1150,7 +1217,7 @@ function AgentPayPaymentReadiness({ readiness }: { readiness: PaymentReadiness }
 
 function AgentPayRegistryReadiness({ status }: { status: RegistryStatus | null }) {
   if (!status) {
-    return <p className="muted">AgentPay registry readiness appears after a quote is requested.</p>;
+    return <p className="muted">The Casper registry status appears after a quote is requested.</p>;
   }
 
   return (
@@ -1158,7 +1225,9 @@ function AgentPayRegistryReadiness({ status }: { status: RegistryStatus | null }
       <div>
         <span className="strip-label">AgentPay registry</span>
         <strong>{humanizeKey(status.status)}</strong>
-        <p className="muted">{status.reason ? friendlyReason(status.reason).headline : status.rpc?.chainspecName ?? status.recordScript}</p>
+        <p className="muted">
+          {status.reason ? friendlyReason(status.reason).headline : status.rpc?.chainspecName ?? "Casper registry checked"}
+        </p>
       </div>
       <AgentPayTable>
         <AgentPayTableHeader>

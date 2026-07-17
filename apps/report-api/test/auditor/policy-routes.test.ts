@@ -34,6 +34,18 @@ afterEach(() => {
 });
 
 describe("signed operator routes", () => {
+  it("returns an empty current-policy state without using an error response", async () => {
+    const context = createContext();
+    const session = await createSession(context.app);
+
+    const response = await request(context.app)
+      .get("/v1/policies/current")
+      .set("Authorization", session.authorization)
+      .expect(200);
+
+    expect(response.body).toEqual({ policy: null });
+  });
+
   it("rejects policy writes without an operator session using the stable error shape", async () => {
     const context = createContext();
 
@@ -188,6 +200,14 @@ describe("signed operator routes", () => {
     expect(stored?.tokenHash).not.toBe(issued.token);
     expect(JSON.stringify(stored)).not.toContain(issued.token);
 
+    const listed = await request(context.app)
+      .get("/v1/agent-tokens")
+      .set("Authorization", session.authorization)
+      .expect(200);
+    expect(listed.body).toMatchObject({ records: [issued.record], nextRevision: 2 });
+    expect(JSON.stringify(listed.body)).not.toContain("tokenHash");
+    expect(JSON.stringify(listed.body)).not.toContain(issued.token);
+
     const revision = 2;
     const actionHash = agentTokenRevokeHash({
       operatorPublicKey: OPERATOR,
@@ -211,6 +231,12 @@ describe("signed operator routes", () => {
         signature: signMessage(challenge.message)
       })
       .expect(204);
+
+    const afterRevoke = await request(context.app)
+      .get("/v1/agent-tokens")
+      .set("Authorization", session.authorization)
+      .expect(200);
+    expect(afterRevoke.body.nextRevision).toBe(3);
 
     expect(context.repository.getAgentToken(issued.record.id)?.revokedAt).toBe(NOW);
     expect(() => context.auth.authorizeAgent(issued.token, "checks:write", PAYER)).toThrowError(

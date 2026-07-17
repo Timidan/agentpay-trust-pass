@@ -5,7 +5,7 @@ import type { Verdict } from "../api";
 import { buildShareLink, shareVerdict, storeVerdictCard } from "../api";
 import { friendlyError } from "../lib/friendly-errors";
 import { AgentPayCheckList } from "../components/AgentPayCheckList";
-import { buildTrustPassReceipt, casperTransactionUrl, serializeTrustPassReceipt } from "./trust-pass-receipt";
+import { buildCheckReceipt, casperTransactionUrl, serializeCheckReceipt } from "./check-receipt";
 
 type VerdictCardProps = {
   verdict: Verdict;
@@ -34,7 +34,7 @@ export function VerdictCard({ verdict, subjectLabel = "Token", subjectHint }: Ve
 
   const cardRef = useRef<HTMLElement>(null);
   useEffect(() => {
-    cardRef.current?.focus();
+    cardRef.current?.focus({ preventScroll: true });
   }, []);
 
   async function handleShare() {
@@ -49,13 +49,16 @@ export function VerdictCard({ verdict, subjectLabel = "Token", subjectHint }: Ve
         decisionTxHash: verdict.decisionTxHash,
         policyHash: verdict.policyHash
       };
-      const { id } = await storeVerdictCard(cardData);
+      const { id } = await storeVerdictCard({
+        card: cardData,
+        proof: verdict.publicationProof
+      });
       const shareLink = buildShareLink(id);
       await shareVerdict(id, true);
 
       if (typeof navigator.share === "function") {
         try {
-          await navigator.share({ url: shareLink, title: `AgentPay Trust Signal: ${verdict.aspect}` });
+          await navigator.share({ url: shareLink, title: `AgentPay check: ${verdict.aspect}` });
         } catch {
           await navigator.clipboard.writeText(shareLink);
         }
@@ -72,7 +75,7 @@ export function VerdictCard({ verdict, subjectLabel = "Token", subjectHint }: Ve
   async function handleCopyReceipt() {
     setCopyState("idle");
     try {
-      await navigator.clipboard.writeText(serializeTrustPassReceipt(buildTrustPassReceipt(verdict)));
+      await navigator.clipboard.writeText(serializeCheckReceipt(buildCheckReceipt(verdict)));
       setCopyState("copied");
       window.setTimeout(() => setCopyState("idle"), 1800);
     } catch {
@@ -107,7 +110,12 @@ export function VerdictCard({ verdict, subjectLabel = "Token", subjectHint }: Ve
 
       <p className="verdict-rationale">{verdict.rationale}</p>
 
-      <AgentPayCheckList flags={verdict.flags} notChecked={verdict.notChecked} passed={verdict.passed} />
+      <AgentPayCheckList
+        flags={verdict.flags}
+        notChecked={verdict.notChecked}
+        passed={verdict.passed}
+        notCheckedNote={verdict.notCheckedNote}
+      />
 
       <Separator style={{ background: "var(--box-line)", margin: "4px 0" }} />
 
@@ -119,30 +127,30 @@ export function VerdictCard({ verdict, subjectLabel = "Token", subjectHint }: Ve
             href={verdict.explorerUrl}
             rel="noreferrer"
             target="_blank"
-            aria-label="Proven on Casper"
+            aria-label="Receipt on Casper"
           >
-            Proven on Casper
+            Receipt on Casper
             <ArrowSquareOut size={13} weight="bold" aria-hidden="true" />
           </a>
           <span className="data-mono verdict-tx-mono">{shortTx}...</span>
         </div>
         <div className="verdict-policy-row">
-          <span className="mono-label" style={{ fontSize: "0.6rem" }}>Policy</span>
+          <span className="mono-label" style={{ fontSize: "0.6rem" }}>Rules ID</span>
           <span className="data-mono verdict-policy-hash">{verdict.policyHash}</span>
         </div>
       </div>
 
-      <section className="verdict-receipt" aria-label="Trust Pass receipt">
+      <section className="verdict-receipt" aria-label="AgentPay check proof">
         <div className="verdict-receipt-head">
           <div>
-            <span className="mono-label verdict-receipt-kicker">Trust Pass</span>
-            <h3>Copyable proof receipt</h3>
+            <span className="mono-label verdict-receipt-kicker">Check proof</span>
+            <h3>Proof you can verify</h3>
           </div>
           <button
             className="verdict-receipt-copy"
             type="button"
             onClick={handleCopyReceipt}
-            aria-label="Copy Trust Pass receipt"
+            aria-label="Copy AgentPay check receipt"
           >
             {copyState === "copied" ? (
               <CheckCircle size={15} weight="bold" aria-hidden="true" />
@@ -153,14 +161,14 @@ export function VerdictCard({ verdict, subjectLabel = "Token", subjectHint }: Ve
           </button>
         </div>
         <dl className="verdict-receipt-rows">
-          <ReceiptRow label="Evidence root" value={verdict.datasetRoot} />
-          <ReceiptRow label="x402 receipt" value={verdict.paymentReceiptHash} />
+          <ReceiptRow label="Checked data ID" value={verdict.datasetRoot} />
+          <ReceiptRow label="Payment proof ID" value={verdict.paymentReceiptHash} />
           <ReceiptRow
             href={casperTransactionUrl(verdict.settlementTxHash)}
-            label="Settlement tx"
+            label="Testnet payment"
             value={verdict.settlementTxHash}
           />
-          <ReceiptRow href={verdict.explorerUrl} label="Casper record" value={verdict.decisionTxHash} />
+          <ReceiptRow href={verdict.explorerUrl} label="Casper result record" value={verdict.decisionTxHash} />
         </dl>
         {copyState === "error" ? (
           <p className="verdict-receipt-error" role="alert">Clipboard access is unavailable in this browser.</p>
@@ -187,7 +195,7 @@ export function VerdictCard({ verdict, subjectLabel = "Token", subjectHint }: Ve
       </div>
 
       <footer className="verdict-footer">
-        automated evidence flags, not financial advice
+        Based on automated checks of Casper data. This is not financial advice.
       </footer>
     </article>
   );

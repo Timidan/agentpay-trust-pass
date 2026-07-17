@@ -1,7 +1,16 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { CircleNotch, MagnifyingGlass, Warning, ShieldCheck, WarningOctagon } from "@phosphor-icons/react";
-import { assessSubject, resolveToken, type ResolvedToken, type Verdict } from "../api";
+import {
+  assessSubject,
+  getReportHealth,
+  resolveToken,
+  type EvidenceNetwork,
+  type ResolvedToken,
+  type TokenEvidenceStatus,
+  type Verdict
+} from "../api";
 import { friendlyError } from "../lib/friendly-errors";
+import { SiteFooter, SiteNav } from "../components/SiteChrome";
 import { VerdictCard } from "./VerdictCard";
 import "./ask-page.css";
 
@@ -11,45 +20,48 @@ type AskState =
   | { status: "idle" }
   | { status: "loading"; stage: AskStage }
   | { status: "done"; verdict: Verdict }
-  | { status: "error"; message: string; detail?: string };
+  | { status: "error"; message: string };
 
 const HASH_INPUT = /^(hash-)?[0-9a-f]{64}$/i;
 const SYMBOL_INPUT = /^[a-z][a-z0-9._-]{1,15}$/i;
 
-const RAIL_STOPS = ["Quote", "Settle x402", "Verify proof", "Record"] as const;
+const RAIL_STOPS = ["Price", "Pay on Testnet", "Read Casper data", "Record result"] as const;
 
 const MEANINGS = [
   {
     aspect: "clear",
     label: "Clear",
-    body: "The basics check out. Proceed on your own judgment.",
+    body: "Every check required by this policy ran and passed. Review the receipt before you proceed.",
     Icon: ShieldCheck,
     color: "var(--aspect-clear-ink)"
   },
   {
     aspect: "caution",
     label: "Caution",
-    body: "Not proven either way. Look closer before you commit.",
+    body: "A risk was found or an important fact could not be checked. Review the details before you proceed.",
     Icon: Warning,
     color: "var(--aspect-caution-ink)"
   },
   {
     aspect: "danger",
     label: "Danger",
-    body: "Something here can cost you. The lamp stays red.",
+    body: "AgentPay found a serious risk. Do not proceed unless you can resolve it.",
     Icon: WarningOctagon,
     color: "var(--aspect-danger-ink)"
   }
 ] as const;
 
-export default function AskPage({ onBack, onOpenFeed }: { onBack?: () => void; onOpenFeed?: () => void }) {
+export default function AskPage({ navigate }: { navigate?: (path: string) => void }) {
   const [subject, setSubject] = useState("");
   const [state, setState] = useState<AskState>({ status: "idle" });
   const [validationHint, setValidationHint] = useState<string | null>(null);
   const [resolved, setResolved] = useState<ResolvedToken | null>(null);
+  const [network, setNetwork] = useState<EvidenceNetwork>("casper-mainnet");
+  const [tokenEvidence, setTokenEvidence] = useState<TokenEvidenceStatus | null>(null);
   const [elapsed, setElapsed] = useState(0);
 
   const isLoading = state.status === "loading";
+  const inputIsSymbol = SYMBOL_INPUT.test(subject.trim()) && !HASH_INPUT.test(subject.trim());
 
   useEffect(() => {
     if (!isLoading) {
@@ -61,6 +73,16 @@ export default function AskPage({ onBack, onOpenFeed }: { onBack?: () => void; o
     return () => window.clearInterval(id);
   }, [isLoading]);
 
+  useEffect(() => {
+    let active = true;
+    void getReportHealth().then((health) => {
+      if (active) setTokenEvidence(health?.tokenEvidence ?? null);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   async function runCheck(rawInput: string) {
     const trimmed = rawInput.trim();
     if (!trimmed) {
@@ -71,6 +93,7 @@ export default function AskPage({ onBack, onOpenFeed }: { onBack?: () => void; o
     setResolved(null);
 
     let assessTarget = trimmed;
+    let evidenceNetwork = network;
     if (!HASH_INPUT.test(trimmed)) {
       if (!SYMBOL_INPUT.test(trimmed)) {
         setValidationHint("Enter a token symbol (like WCSPR) or a 64-character package hash.");
@@ -88,23 +111,24 @@ export default function AskPage({ onBack, onOpenFeed }: { onBack?: () => void; o
         }
         setResolved(token);
         assessTarget = token.packageHash;
+        evidenceNetwork = token.network;
+        setNetwork(token.network);
       } catch (err) {
         const friendly = friendlyError(err);
-        setState({ status: "error", message: friendly.headline, detail: friendly.detail });
+        setState({ status: "error", message: friendly.headline });
         return;
       }
     }
 
     setState({ status: "loading", stage: "checking" });
     try {
-      const verdict = await assessSubject(assessTarget);
+      const verdict = await assessSubject(assessTarget, evidenceNetwork);
       setState({ status: "done", verdict });
     } catch (err) {
       const friendly = friendlyError(err);
       setState({
         status: "error",
-        message: friendly.headline,
-        detail: friendly.detail
+        message: friendly.headline
       });
     }
   }
@@ -116,16 +140,7 @@ export default function AskPage({ onBack, onOpenFeed }: { onBack?: () => void; o
 
   return (
     <div className="ask2">
-      <nav className="ask2-nav" aria-label="AgentPay Trust Signal">
-        <div className="ask2-brand">
-          <span className="ask2-brand-name">AgentPay</span>
-          <span className="ask2-brand-sub">Trust Signal</span>
-        </div>
-        <div className="ask2-navlinks">
-          <a href="/" onClick={navClick(onBack)}>Overview</a>
-          <a href="/feed" onClick={navClick(onOpenFeed)}>Recent checks</a>
-        </div>
-      </nav>
+      <SiteNav current="check" sub="Token check" navigate={navigate} />
 
       <div className="ask2-main">
         {state.status === "done" ? (
@@ -146,10 +161,11 @@ export default function AskPage({ onBack, onOpenFeed }: { onBack?: () => void; o
           <div className="ask2-grid">
             <section className="ask2-copy">
               <p className="ask2-kicker">Token check</p>
-              <h1 className="ask2-title">Buy a Trust Pass before you buy the token.</h1>
+              <h1 className="ask2-title">Check a token before you buy it.</h1>
               <p className="ask2-lede">
-                Type a token symbol or paste its address. The agent buys the evidence over x402,
-                verifies the proof against the quoted root, and returns a copyable Casper receipt.
+                Enter a token symbol or package hash. AgentPay checks live Casper data, covers a small
+                Testnet service fee, and gives you a receipt that shows what passed, what failed, and
+                what was unavailable.
               </p>
               <ul className="ask2-meanings">
                 {MEANINGS.map((m) => (
@@ -167,6 +183,27 @@ export default function AskPage({ onBack, onOpenFeed }: { onBack?: () => void; o
             <section className="ask2-panel">
               <div className="ask2-card">
                 <form onSubmit={handleSubmit} noValidate>
+                  <fieldset className="ask2-network">
+                    <legend>Token network</legend>
+                    <div className="ask2-network-options">
+                      {(["casper-mainnet", "casper-testnet"] as const).map((option) => (
+                        <button
+                          aria-pressed={network === option}
+                          className={network === option ? "is-active" : undefined}
+                          disabled={option === "casper-testnet" && inputIsSymbol}
+                          key={option}
+                          onClick={() => {
+                            setNetwork(option);
+                            setValidationHint(null);
+                            if (state.status === "error") setState({ status: "idle" });
+                          }}
+                          type="button"
+                        >
+                          {option === "casper-mainnet" ? "Mainnet" : "Testnet"}
+                        </button>
+                      ))}
+                    </div>
+                  </fieldset>
                   <label className="ask2-field-label" htmlFor="ask-subject">
                     Token symbol or package hash
                   </label>
@@ -180,7 +217,11 @@ export default function AskPage({ onBack, onOpenFeed }: { onBack?: () => void; o
                     type="text"
                     value={subject}
                     onChange={(e) => {
-                      setSubject(e.target.value);
+                      const nextSubject = e.target.value;
+                      setSubject(nextSubject);
+                      if (SYMBOL_INPUT.test(nextSubject.trim()) && !HASH_INPUT.test(nextSubject.trim())) {
+                        setNetwork("casper-mainnet");
+                      }
                       if (validationHint) setValidationHint(null);
                       if (state.status === "error") setState({ status: "idle" });
                     }}
@@ -229,8 +270,8 @@ export default function AskPage({ onBack, onOpenFeed }: { onBack?: () => void; o
                         </ol>
                         <span className="ask2-wait-sweep" aria-hidden="true" />
                         <p className="ask2-wait-copy">
-                          Running the paid rail on Casper: quote, x402 settlement, Merkle proof, on-chain
-                          record. On-chain confirmation time varies.
+                          AgentPay is covering the Testnet fee, reading Casper data, and recording the
+                          result on Casper. Confirmation time varies.
                           {elapsed > 2 ? <span className="ask2-wait-elapsed"> {elapsed}s</span> : null}
                         </p>
                       </>
@@ -243,16 +284,23 @@ export default function AskPage({ onBack, onOpenFeed }: { onBack?: () => void; o
                     <WarningOctagon size={16} weight="bold" style={{ color: "var(--aspect-danger-ink)", flexShrink: 0 }} aria-hidden="true" />
                     <span>
                       {state.message}
-                      {state.detail ? <code className="ask2-error-detail">{state.detail}</code> : null}
                     </span>
                   </div>
                 ) : null}
               </div>
-              <p className="ask2-foot">No wallet, no signup. Every Trust Pass is re-checkable on Casper.</p>
+              <p className="ask2-foot">
+                Token symbols resolve on Mainnet. Package hashes can be checked on either network.
+                The hosted service fee uses Testnet funds, so you do not need a wallet.
+                {tokenEvidence?.status === "limited"
+                  ? " Current coverage is limited: supply controls work, but contract age and holder data are not connected yet."
+                  : ""}
+              </p>
             </section>
           </div>
         )}
       </div>
+
+      <SiteFooter current="check" navigate={navigate} />
     </div>
   );
 }
@@ -260,14 +308,4 @@ export default function AskPage({ onBack, onOpenFeed }: { onBack?: () => void; o
 function shortHash(hash: string): string {
   const bare = hash.replace(/^hash-/, "");
   return `hash-${bare.slice(0, 6)}…${bare.slice(-6)}`;
-}
-
-function navClick(handler?: () => void) {
-  return (event: React.MouseEvent<HTMLAnchorElement>) => {
-    if (!handler || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
-      return;
-    }
-    event.preventDefault();
-    handler();
-  };
 }

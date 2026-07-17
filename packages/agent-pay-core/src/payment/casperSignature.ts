@@ -2,6 +2,7 @@ import { ed25519 } from "@noble/curves/ed25519";
 import { secp256k1 } from "@noble/curves/secp256k1";
 import { blake2b } from "@noble/hashes/blake2b";
 import { sha256 } from "@noble/hashes/sha256";
+import { bytesToHex, hexToBytes } from "@noble/hashes/utils";
 import { canonicalJson } from "./canonical.js";
 
 export type CasperAlgorithm = "ed25519" | "secp256k1";
@@ -82,9 +83,9 @@ function normalizeHex(value: string, label: string): string {
 }
 
 function fromHex(value: string): Uint8Array {
-  return new Uint8Array(Buffer.from(value, "hex"));
+  return hexToBytes(value);
 }
 
 function toHex(value: Uint8Array): string {
-  return Buffer.from(value).toString("hex");
+  return bytesToHex(value);
 }

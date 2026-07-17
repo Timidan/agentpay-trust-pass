@@ -291,11 +291,11 @@ function extractTransactionHash(headers: Headers, body: Uint8Array): string | nu
 function transactionHashFromValue(value: unknown): string | null {
   const root = asRecord(value);
   if (!root) return null;
-  const direct = [root.transactionHash, root.transaction_hash, root.txHash].find(isHash);
+  const direct = [root.transactionHash, root.transaction_hash, root.txHash, root.transaction].find(isHash);
   if (typeof direct === "string") return direct.toLowerCase();
   for (const key of ["payment", "settlement", "result"]) {
     const nested = asRecord(root[key]);
-    const candidate = nested?.transactionHash ?? nested?.transaction_hash ?? nested?.txHash;
+    const candidate = nested?.transactionHash ?? nested?.transaction_hash ?? nested?.txHash ?? nested?.transaction;
     if (isHash(candidate)) return candidate.toLowerCase();
   }
   return null;

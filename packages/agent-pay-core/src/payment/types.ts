@@ -29,8 +29,8 @@ export type ReasonCode =
   | "settlement_shape_unsupported"
   | "settlement_field_mismatch"
   | "settlement_execution_failed"
-  | "mint_authority_open"
-  | "supply_mutable"
+  | "cep18_mint_burn_enabled"
+  | "public_mint_entrypoint"
   | "holder_concentration"
   | "very_new_contract";
 
@@ -128,14 +128,14 @@ export type AuthorizationIntent = {
 export type PaymentAssetEvidence = {
   network: "casper:casper-test";
   packageHash: string;
-  packageExists: boolean;
+  packageExists: boolean | null;
   activeContractHash: string | null;
-  authorizationEntrypoint: boolean;
+  authorizationEntrypoint: boolean | null;
   name: string | null;
   symbol: string | null;
   decimals: number | null;
-  mintAuthorityOpen: boolean | null;
-  supplyMutable: boolean | null;
+  mintBurnEnabled: boolean | null;
+  publicMintEntrypoint: boolean | null;
   holderConcentrationPct: number | null;
   contractAgeBlocks: number | null;
   apiVersion: string | null;

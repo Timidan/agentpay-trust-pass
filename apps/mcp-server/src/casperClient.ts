@@ -4,6 +4,11 @@ import { access, realpath } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import {
+  verifyDecisionRecordRpcResult,
+  type DecisionRecordProof,
+  type DecisionRecordVerification
+} from "@agent-pay/core";
 import { ToolConfigError, ToolInputError } from "./errors.js";
 
 const execFileAsync = promisify(execFile);
@@ -222,7 +227,11 @@ export async function recordAgentPayDecision(input: RecordDecisionInput): Promis
   }
 
   const submittedHash = await submitRecordDecisionDeploy(input);
-  const confirmation = await confirmAgentPaySubmission(submittedHash);
+  const confirmation = await confirmAgentPaySubmission(
+    submittedHash,
+    input,
+    registryPackageHash
+  );
   return {
     mode: "submitted",
     txHash: submittedHash.value,
@@ -509,7 +518,11 @@ function parseSubmittedHash(stdout: string): SubmittedHash | null {
   return null;
 }
 
-async function confirmAgentPaySubmission(submittedHash: SubmittedHash): Promise<AgentPayRegistryConfirmation> {
+async function confirmAgentPaySubmission(
+  submittedHash: SubmittedHash,
+  input: RecordDecisionInput,
+  registryPackageHash: string
+): Promise<AgentPayRegistryConfirmation> {
   const rpcUrl = process.env.CASPER_RPC_URL;
   if (!rpcUrl) {
     throw new ToolConfigError("CASPER_RPC_URL is required to confirm a Casper decision submission");
@@ -521,14 +534,25 @@ async function confirmAgentPaySubmission(submittedHash: SubmittedHash): Promise<
   const methods =
     submittedHash.kind === "transaction"
       ? (["info_get_transaction", "info_get_deploy"] as const)
-      : (["info_get_deploy", "info_get_transaction"] as const);
+      : (["info_get_transaction", "info_get_deploy"] as const);
   const variant = submittedHash.kind === "transaction" ? "Version1" : "Deploy";
 
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     for (const method of methods) {
-      const confirmation = await queryCasperSubmission(rpcUrl, method, submittedHash.value, attempt, variant);
+      const confirmation = await queryCasperSubmission(
+        rpcUrl,
+        method,
+        submittedHash,
+        input,
+        registryPackageHash,
+        attempt,
+        variant
+      );
       if ("confirmation" in confirmation) {
         return confirmation.confirmation;
+      }
+      if (confirmation.terminal) {
+        throw new Error(confirmation.reason);
       }
       lastError = confirmation.reason;
     }
@@ -545,12 +569,14 @@ async function confirmAgentPaySubmission(submittedHash: SubmittedHash): Promise<
 
 type QueryConfirmationResult =
   | { confirmation: AgentPayRegistryConfirmation }
-  | { reason: string };
+  | { reason: string; terminal?: boolean };
 
 async function queryCasperSubmission(
   rpcUrl: string,
   method: AgentPayRegistryConfirmation["method"],
-  hash: string,
+  submittedHash: SubmittedHash,
+  input: RecordDecisionInput,
+  registryPackageHash: string,
   attempt: number,
   variant: "Version1" | "Deploy"
 ): Promise<QueryConfirmationResult> {
@@ -562,13 +588,13 @@ async function queryCasperSubmission(
           id: "agent-pay-confirm-transaction",
           jsonrpc: "2.0",
           method,
-          params: { transaction_hash: { [variant]: hash } }
+          params: { transaction_hash: { [variant]: submittedHash.value } }
         }
       : {
           id: "agent-pay-confirm-deploy",
           jsonrpc: "2.0",
           method,
-          params: { deploy_hash: hash, finalized_approvals: false }
+          params: { deploy_hash: submittedHash.value, finalized_approvals: false }
         };
 
   const response = await fetch(rpcUrl, {
@@ -597,6 +623,29 @@ async function queryCasperSubmission(
     return { reason: `${method} transaction not executed` };
   }
 
+  const proof: DecisionRecordProof = {
+    hashKind: submittedHash.kind,
+    transactionHash: submittedHash.value,
+    datasetId: input.datasetId,
+    datasetRoot: input.datasetRoot,
+    reportHash: input.reportHash,
+    paymentReceiptHash: input.paymentReceiptHash,
+    decision: input.decision
+  };
+  const verification = verifyDecisionRecordRpcResult(
+    proof,
+    registryPackageHash,
+    method === "info_get_transaction"
+      ? value
+      : { transaction: { Deploy: value?.deploy }, execution_info: value?.execution_info }
+  );
+  if (!verification.verified) {
+    return {
+      reason: decisionRecordFailureMessage(verification),
+      terminal: verification.reason !== "record_not_found"
+    };
+  }
+
   return {
     confirmation: {
       rpcUrl: describeRpcUrl(rpcUrl),
@@ -608,6 +657,31 @@ async function queryCasperSubmission(
       observedAt: new Date().toISOString()
     }
   };
+}
+
+function decisionRecordFailureMessage(
+  verification: Exclude<DecisionRecordVerification, { verified: true }>
+): string {
+  switch (verification.reason) {
+    case "record_arguments_mismatch":
+      return "Executed Casper registry arguments do not match the AgentPay decision";
+    case "record_contract_mismatch":
+      return "Executed Casper transaction did not call the configured AgentPay registry";
+    case "record_chain_mismatch":
+      return "Executed Casper registry transaction used the wrong chain";
+    case "record_execution_failed":
+      return "Casper registry transaction execution failed";
+    case "record_pending":
+      return "Casper registry transaction is still pending";
+    case "invalid_record_proof":
+      return "AgentPay decision proof is invalid";
+    case "unsupported_hash_kind":
+      return "Casper registry transaction kind is unsupported";
+    case "record_verification_unavailable":
+      return "Casper registry transaction verification is unavailable";
+    case "record_not_found":
+      return "Casper registry transaction was not found";
+  }
 }
 
 type CasperRpcEnvelope = {

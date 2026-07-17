@@ -1,22 +1,26 @@
 import type { AccountSignals } from "./accountSignals.js";
 import type { Aspect, Flag, RuleResult, WireDecision } from "./rules.js";
 
-// One CSPR = 1e9 motes. A counterparty holding less than this reads as
-// dormant/throwaway for the purpose of "should I transact with it".
+// One CSPR = 1e9 motes.
 const DUST_MOTES = 1_000_000_000n;
 const YOUNG_ACCOUNT_BLOCKS = 5_000;
 
 // Facts a public node always returns for a live account. Their absence means
 // the lookup itself failed — surfaced as "not checked", never silently CLEAR.
-const MANDATORY: (keyof AccountSignals)[] = ["exists", "balanceMotes", "associatedKeyCount"];
+const MANDATORY: (keyof AccountSignals)[] = [
+  "exists",
+  "balanceMotes",
+  "associatedKeyCount",
+  "deploymentThreshold",
+  "keyManagementThreshold"
+];
 
 /**
- * Score a counterparty account. Danger = you're about to deal with something
- * that isn't there or can't be trusted to hold state; caution = thin or
- * loosely-controlled; clear = a funded, sanely-configured account.
+ * Score only the account facts AgentPay can prove from Casper RPC.
  */
 export function scoreAccount(s: AccountSignals): RuleResult {
   const flags: Flag[] = [];
+  const balanceMotes = parseBalanceMotes(s.balanceMotes);
 
   if (s.exists === false) {
     flags.push({
@@ -40,18 +44,12 @@ export function scoreAccount(s: AccountSignals): RuleResult {
     });
   }
 
-  if (s.balanceMotes !== null) {
-    let motes = 0n;
-    try {
-      motes = BigInt(s.balanceMotes);
-    } catch {
-      motes = 0n;
-    }
-    if (motes < DUST_MOTES) {
+  if (balanceMotes !== null) {
+    if (balanceMotes < DUST_MOTES) {
       flags.push({
         code: "dust_balance",
         severity: "caution",
-        message: "Account holds almost no CSPR, likely dormant or a throwaway.",
+        message: "The account balance is below 1 CSPR.",
       });
     }
   }
@@ -64,20 +62,26 @@ export function scoreAccount(s: AccountSignals): RuleResult {
     });
   }
 
-  const notChecked = MANDATORY.filter((k) => s[k] == null).map(String);
+  const notChecked = MANDATORY
+    .filter((key) => key === "balanceMotes" ? balanceMotes === null : s[key] == null)
+    .map(String);
 
   // Mandatory checks that ran and came back clean, as readable labels.
   const passed: string[] = [];
   const flaggedCodes = new Set(flags.map((f) => f.code));
   if (s.exists === true) passed.push("Account exists on-chain.");
-  if (s.balanceMotes !== null && !flaggedCodes.has("dust_balance")) passed.push("Account is funded.");
-  // A real pass only for a single key, or a multisig whose threshold is
-  // actually known to require more than one key. Unknown threshold != sane.
-  if (
-    s.associatedKeyCount === 1 ||
-    (s.associatedKeyCount !== null && s.associatedKeyCount > 1 && s.keyManagementThreshold !== null && s.keyManagementThreshold > 1)
+  if (balanceMotes !== null && !flaggedCodes.has("dust_balance")) {
+    passed.push("CSPR balance is at least 1 CSPR.");
+  }
+  if (s.associatedKeyCount === 1) {
+    passed.push("Account has one associated key.");
+  } else if (
+    s.associatedKeyCount !== null &&
+    s.associatedKeyCount > 1 &&
+    s.keyManagementThreshold !== null &&
+    s.keyManagementThreshold > 1
   ) {
-    passed.push("Key control looks sane.");
+    passed.push("Key-management threshold requires more than one key.");
   }
 
   const aspect: Aspect = flags.some((f) => f.severity === "danger")
@@ -88,4 +92,13 @@ export function scoreAccount(s: AccountSignals): RuleResult {
   const decision: WireDecision =
     aspect === "DANGER" ? "rejected" : aspect === "CAUTION" ? "needs_review" : "approved";
   return { aspect, decision, flags, notChecked, passed };
+}
+
+function parseBalanceMotes(value: string | null): bigint | null {
+  if (value === null || !/^\d{1,155}$/.test(value)) return null;
+  try {
+    return BigInt(value);
+  } catch {
+    return null;
+  }
 }

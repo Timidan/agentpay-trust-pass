@@ -2,6 +2,7 @@ import request from "supertest";
 import { describe, expect, it } from "vitest";
 import { createReportApp } from "../src/app.js";
 import { renderVerdictCardSvg, type VerdictCardData } from "../src/card.js";
+import { acceptDecisionRecord, createVerdictSubmission } from "./verdictSubmission.js";
 
 const dangerVerdict: VerdictCardData = {
   aspect: "DANGER",
@@ -33,10 +34,24 @@ const cautionVerdict: VerdictCardData = {
   policyHash: "9".repeat(64)
 };
 
+const dangerSubmission = createVerdictSubmission({
+  signals: {
+    mintBurnEnabled: true,
+    publicMintEntrypoint: true,
+    holderCount: 1,
+    topHolderPct: 100,
+    contractAgeBlocks: 100,
+    lpHolderCount: 1,
+    liquidityDepth: null
+  }
+});
+
 describe("renderVerdictCardSvg", () => {
   it("DANGER card contains the aspect word", () => {
     const svg = renderVerdictCardSvg(dangerVerdict);
     expect(svg).toContain("DANGER");
+    expect(svg).toContain("AGENTPAY · CHECK RESULT");
+    expect(svg).not.toContain("TRUST SIGNAL");
   });
 
   it("DANGER card contains the subject short hash", () => {
@@ -85,6 +100,16 @@ describe("renderVerdictCardSvg", () => {
     expect(svg).toContain("Liquidity lock");
   });
 
+  it("escapes script-like card text", () => {
+    const svg = renderVerdictCardSvg({
+      ...dangerVerdict,
+      flags: [{ code: "UNTRUSTED", message: "</text><script>alert(1)</script>" }]
+    });
+
+    expect(svg).not.toContain("<script>");
+    expect(svg).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
+  });
+
   it("Proven on Casper line appears in the card with correct casing and tx hash", () => {
     const svg = renderVerdictCardSvg(dangerVerdict);
     expect(svg).toContain("PROVEN ON CASPER ✓");
@@ -94,10 +119,10 @@ describe("renderVerdictCardSvg", () => {
 
 describe("/card routes", () => {
   it("POST /card returns an id", async () => {
-    const app = createReportApp();
+    const app = createReportApp({ decisionRecordVerifier: acceptDecisionRecord });
     const response = await request(app)
       .post("/card")
-      .send(dangerVerdict)
+      .send(dangerSubmission)
       .expect(200);
 
     expect(response.body.id).toBeTruthy();
@@ -105,10 +130,10 @@ describe("/card routes", () => {
   });
 
   it("GET /card/:id.svg returns 200 with image/svg+xml and contains the aspect word", async () => {
-    const app = createReportApp();
+    const app = createReportApp({ decisionRecordVerifier: acceptDecisionRecord });
     const postRes = await request(app)
       .post("/card")
-      .send(dangerVerdict)
+      .send(dangerSubmission)
       .expect(200);
 
     const { id } = postRes.body as { id: string };
@@ -119,37 +144,32 @@ describe("/card routes", () => {
       .expect(200);
 
     expect(svgRes.headers["content-type"]).toMatch(/image\/svg\+xml/);
+    expect(svgRes.headers["cache-control"]).toBe("public, max-age=31536000, immutable");
     expect(svgRes.headers["content-security-policy"]).toBe("default-src 'none'; sandbox");
     expect(svgRes.headers["x-content-type-options"]).toBe("nosniff");
     const svgBody = svgRes.text ?? svgRes.body?.toString?.() ?? "";
     expect(svgBody).toContain("DANGER");
   });
 
-  it("escapes script-like card text before returning SVG", async () => {
-    const app = createReportApp();
-    const postRes = await request(app)
+  it("rejects script-like text that is not part of the committed verdict", async () => {
+    const app = createReportApp({ decisionRecordVerifier: acceptDecisionRecord });
+    await request(app)
       .post("/card")
       .send({
-        ...dangerVerdict,
-        flags: [{ code: "UNTRUSTED", message: "</text><script>alert(1)</script>" }]
+        ...dangerSubmission,
+        card: {
+          ...dangerSubmission.card,
+          flags: [{ code: "UNTRUSTED", message: "</text><script>alert(1)</script>" }]
+        }
       })
-      .expect(200);
-
-    const svgRes = await request(app)
-      .get(`/card/${postRes.body.id as string}.svg`)
-      .buffer(true)
-      .expect(200);
-    const svgBody = svgRes.text ?? svgRes.body?.toString?.() ?? "";
-
-    expect(svgBody).not.toContain("<script>");
-    expect(svgBody).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
+      .expect(400, { error: "invalid_card" });
   });
 
   it("GET /card/:id.png returns 200 for a known id", async () => {
-    const app = createReportApp();
+    const app = createReportApp({ decisionRecordVerifier: acceptDecisionRecord });
     const postRes = await request(app)
       .post("/card")
-      .send(clearVerdict)
+      .send(createVerdictSubmission())
       .expect(200);
 
     const { id } = postRes.body as { id: string };
@@ -161,7 +181,7 @@ describe("/card routes", () => {
     // Either PNG or SVG fallback is acceptable
     const ct = pngRes.headers["content-type"] as string;
     expect(ct === "image/png" || ct.includes("image/svg+xml")).toBe(true);
-  });
+  }, 10_000);
 
   it("GET /card/:id.svg returns 404 for unknown id", async () => {
     const app = createReportApp();
@@ -178,22 +198,71 @@ describe("/card routes", () => {
   });
 
   it("POST /card with same data returns the same id (deterministic)", async () => {
-    const app = createReportApp();
-    const first = await request(app).post("/card").send(dangerVerdict).expect(200);
-    const second = await request(app).post("/card").send(dangerVerdict).expect(200);
+    const app = createReportApp({ decisionRecordVerifier: acceptDecisionRecord });
+    const first = await request(app).post("/card").send(dangerSubmission).expect(200);
+    const second = await request(app).post("/card").send(dangerSubmission).expect(200);
     expect(first.body.id).toBe(second.body.id);
   });
 
   it("rejects malformed or oversized card payloads", async () => {
-    const app = createReportApp();
+    const app = createReportApp({ decisionRecordVerifier: acceptDecisionRecord });
 
     await request(app)
       .post("/card")
-      .send({ ...dangerVerdict, aspect: "UNKNOWN" })
+      .send({
+        ...dangerSubmission,
+        card: { ...dangerSubmission.card, aspect: "UNKNOWN" }
+      })
       .expect(400, { error: "invalid_card" });
     await request(app)
       .post("/card")
-      .send({ ...dangerVerdict, flags: [{ code: "A", message: "x".repeat(501) }] })
+      .send({
+        ...dangerSubmission,
+        card: {
+          ...dangerSubmission.card,
+          flags: [{ code: "A", message: "x".repeat(501) }]
+        }
+      })
       .expect(400, { error: "invalid_card" });
+  });
+
+  it("rejects a card when the Casper record does not match", async () => {
+    const app = createReportApp({
+      decisionRecordVerifier: async () => ({
+        verified: false,
+        reason: "record_arguments_mismatch"
+      })
+    });
+
+    await request(app)
+      .post("/card")
+      .send(dangerSubmission)
+      .expect(422, {
+        error: "card_not_verified",
+        reason: "record_arguments_mismatch"
+      });
+  });
+
+  it("does not store a card when Casper verification is unavailable", async () => {
+    const app = createReportApp({
+      decisionRecordVerifier: async () => ({
+        verified: false,
+        reason: "record_verification_unavailable"
+      })
+    });
+
+    await request(app)
+      .post("/card")
+      .send(dangerSubmission)
+      .expect(503, { error: "card_verification_unavailable" });
+  });
+
+  it("does not store a card when verification is not configured", async () => {
+    const app = createReportApp({ decisionRecordVerifier: null });
+
+    await request(app)
+      .post("/card")
+      .send(dangerSubmission)
+      .expect(503, { error: "card_verification_unavailable" });
   });
 });

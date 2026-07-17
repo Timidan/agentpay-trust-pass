@@ -1,4 +1,13 @@
-import { hashJson } from "@agent-pay/core";
+import {
+  authorizationDigest,
+  compareSettlement,
+  hashJson,
+  verifyAuthorizationSignature,
+  type AuthorizationIntent,
+  type PaymentAssetEvidence
+} from "@agent-pay/core";
+import { NodeRpcClient } from "./auditor/casperRpc.js";
+import { fetchBoundedJson } from "./httpJson.js";
 
 export const X402_VERSION = 2;
 export const PAYMENT_REQUIRED_HEADER = "PAYMENT-REQUIRED";
@@ -8,6 +17,8 @@ export const PAYMENT_RESPONSE_HEADER = "PAYMENT-RESPONSE";
 const DEFAULT_CASPER_FACILITATOR_URL = "https://x402-facilitator.cspr.cloud";
 const DEFAULT_CASPER_RPC_URL = "https://node.testnet.casper.network/rpc";
 const DEFAULT_PAYMENT_TIMEOUT_SECONDS = 300;
+const FACILITATOR_REQUEST_TIMEOUT_MS = 5_000;
+const FACILITATOR_SETTLEMENT_TIMEOUT_MS = 65_000;
 
 export type PaymentRequirement = {
   scheme: "exact";
@@ -141,7 +152,25 @@ export function decodeX402PaymentHeader(value: string): unknown {
 }
 
 export function configuredFacilitatorUrl(): string {
-  return process.env.X402_FACILITATOR_URL ?? DEFAULT_CASPER_FACILITATOR_URL;
+  const configured = (process.env.X402_FACILITATOR_URL ?? DEFAULT_CASPER_FACILITATOR_URL).trim();
+  let url: URL;
+  try {
+    url = new URL(configured);
+  } catch {
+    throw new PaymentConfigurationError("X402_FACILITATOR_URL must be an absolute HTTP(S) URL");
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    throw new PaymentConfigurationError("X402_FACILITATOR_URL must use HTTP or HTTPS");
+  }
+  if (url.protocol === "http:" && !isLoopbackHostname(url.hostname)) {
+    throw new PaymentConfigurationError("X402_FACILITATOR_URL must use HTTPS outside localhost");
+  }
+  if (url.username || url.password || url.search || url.hash) {
+    throw new PaymentConfigurationError(
+      "X402_FACILITATOR_URL must not include credentials, query parameters, or a fragment"
+    );
+  }
+  return url.toString().replace(/\/+$/, "");
 }
 
 export function configuredFacilitatorAuthorization(): string | undefined {
@@ -151,6 +180,8 @@ export function configuredFacilitatorAuthorization(): string | undefined {
 export async function checkPaymentReadiness(input: {
   requirement: PaymentRequirement | null;
   configurationReason: string | null;
+  assetEvidence: PaymentAssetEvidence | null;
+  assetEvidenceError: string | null;
 }): Promise<PaymentReadiness> {
   const facilitatorUrl = configuredFacilitatorUrl();
   const authorization = configuredFacilitatorAuthorization();
@@ -168,10 +199,25 @@ export async function checkPaymentReadiness(input: {
   checks.push({
     name: "payment_requirement",
     status: "pass",
-    message: `${input.requirement.amount} ${input.requirement.extra.symbol ?? input.requirement.extra.name} on ${input.requirement.network}`
+    message: `${formatTokenAmount(input.requirement.amount, input.requirement.extra.decimals)} ${input.requirement.extra.symbol ?? input.requirement.extra.name} on ${input.requirement.network} (${input.requirement.amount} base units)`
   });
 
-  if (facilitatorUrl.includes("cspr.cloud") && !authorization) {
+  const assetFailure = paymentAssetFailure(input.requirement, input.assetEvidence, input.assetEvidenceError);
+  if (assetFailure) {
+    checks.push({
+      name: "payment_asset",
+      status: "fail",
+      message: assetFailure.message
+    });
+    return readiness("configuration_required", assetFailure.reason, facilitatorUrl, checks);
+  }
+  checks.push({
+    name: "payment_asset",
+    status: "pass",
+    message: "fee token metadata and transfer_with_authorization match Casper state"
+  });
+
+  if (isCsprCloudFacilitator(facilitatorUrl) && !authorization) {
     checks.push({
       name: "facilitator_authorization",
       status: "missing",
@@ -189,11 +235,11 @@ export async function checkPaymentReadiness(input: {
   let supportedPayload: unknown;
   try {
     supportedPayload = await getFacilitatorSupported(facilitatorUrl, authorization);
-  } catch (error) {
+  } catch {
     checks.push({
       name: "facilitator_supported",
       status: "fail",
-      message: error instanceof Error ? error.message : "facilitator supported endpoint failed"
+      message: "configured payment service could not be reached"
     });
     return readiness("facilitator_unavailable", "x402_facilitator_supported_check_failed", facilitatorUrl, checks);
   }
@@ -217,6 +263,17 @@ export async function checkPaymentReadiness(input: {
   return readiness("ready", null, facilitatorUrl, checks, supportedKind);
 }
 
+export function formatTokenAmount(amount: string, decimals: string | undefined): string {
+  if (!/^(0|[1-9][0-9]*)$/.test(amount)) return amount;
+  if (decimals === undefined || !/^(0|[1-9][0-9]{0,2})$/.test(decimals)) return amount;
+  const places = Number(decimals);
+  if (places === 0) return amount;
+  const padded = amount.padStart(places + 1, "0");
+  const whole = padded.slice(0, -places);
+  const fraction = padded.slice(-places).replace(/0+$/, "");
+  return fraction ? `${whole}.${fraction}` : whole;
+}
+
 export async function settleX402Payment(input: {
   paymentPayload: unknown;
   requirement: PaymentRequirement;
@@ -224,13 +281,17 @@ export async function settleX402Payment(input: {
 }): Promise<SettledPayment> {
   const facilitatorUrl = configuredFacilitatorUrl();
   const authorization = configuredFacilitatorAuthorization();
-  if (facilitatorUrl.includes("cspr.cloud") && !authorization) {
+  if (isCsprCloudFacilitator(facilitatorUrl) && !authorization) {
     throw new PaymentConfigurationError(
       "CSPR_CLOUD_ACCESS_TOKEN or X402_FACILITATOR_AUTH_TOKEN is required for CSPR.cloud x402 settlement"
     );
   }
 
-  validatePaymentPayloadBinding(input.paymentPayload, input.requirement, input.resource);
+  const signedAuthorization = validatePaymentPayloadBinding(
+    input.paymentPayload,
+    input.requirement,
+    input.resource
+  );
 
   const verify = await postFacilitator(facilitatorUrl, "verify", authorization, {
     paymentPayload: input.paymentPayload,
@@ -238,7 +299,7 @@ export async function settleX402Payment(input: {
   });
 
   const verifyRecord = asRecord(verify);
-  if (verifyRecord?.valid === false || verifyRecord?.isValid === false) {
+  if (verifyRecord?.valid !== true && verifyRecord?.isValid !== true) {
     throw new PaymentRejectedError("x402 payment verification rejected the payload", verify);
   }
 
@@ -272,13 +333,20 @@ export async function settleX402Payment(input: {
       settle
     });
   }
-  const confirmation = await confirmPaymentSettlement(transactionHash);
+  const confirmation = await confirmPaymentSettlement(transactionHash, signedAuthorization.intent);
   const facilitatorHash = hashJson({ verify, settle });
 
   return {
     scheme: "x402",
     status: "settled",
-    receiptHash: hashJson({ scheme: "x402", transactionHash, facilitatorHash }),
+    receiptHash: hashJson({
+      scheme: "x402",
+      transactionHash,
+      facilitatorHash,
+      authorization: signedAuthorization.intent,
+      requirement: input.requirement,
+      resource: input.resource
+    }),
     transactionHash,
     confirmation,
     facilitatorHash
@@ -304,7 +372,7 @@ function validatePaymentPayloadBinding(
   paymentPayload: unknown,
   requirement: PaymentRequirement,
   resource: PaymentResource
-) {
+): { intent: AuthorizationIntent; signature: string } {
   const payload = asRecord(paymentPayload);
   if (!payload) {
     throw new PaymentRejectedError("x402 payment payload must be a JSON object", {
@@ -345,6 +413,87 @@ function validatePaymentPayloadBinding(
       receivedHash: resourceHash
     });
   }
+
+  return parseSignedAuthorization(payload, requirement);
+}
+
+function parseSignedAuthorization(
+  paymentPayload: Record<string, unknown>,
+  requirement: PaymentRequirement
+): { intent: AuthorizationIntent; signature: string } {
+  const signed = asRecord(paymentPayload.payload);
+  const authorization = asRecord(signed?.authorization);
+  const publicKey = asString(signed?.publicKey)?.toLowerCase();
+  const signature = asString(signed?.signature)?.toLowerCase();
+  const from = asString(authorization?.from)?.toLowerCase();
+  const to = asString(authorization?.to)?.toLowerCase();
+  const amount = asString(authorization?.value);
+  const validAfter = asString(authorization?.validAfter);
+  const validBefore = asString(authorization?.validBefore);
+  const nonce = asString(authorization?.nonce)?.toLowerCase().replace(/^0x/, "");
+
+  if (
+    requirement.network !== "casper:casper-test" ||
+    !publicKey ||
+    !signature ||
+    !from ||
+    !to ||
+    !amount ||
+    !validAfter ||
+    !validBefore ||
+    !nonce
+  ) {
+    throw invalidAuthorization("x402 payment payload must contain a complete Casper authorization");
+  }
+  if (
+    to !== requirement.payTo.toLowerCase() ||
+    amount !== requirement.amount ||
+    !/^(0|[1-9][0-9]*)$/.test(validAfter) ||
+    !/^(0|[1-9][0-9]*)$/.test(validBefore) ||
+    !/^[0-9a-f]{64}$/.test(nonce)
+  ) {
+    throw invalidAuthorization("x402 signed authorization does not match the quoted payment terms");
+  }
+
+  const after = BigInt(validAfter);
+  const before = BigInt(validBefore);
+  const now = BigInt(Math.floor(Date.now() / 1_000));
+  const maximumWindow = BigInt(requirement.maxTimeoutSeconds);
+  if (before <= after || before <= now || after > now + 5n || before - after > maximumWindow) {
+    throw invalidAuthorization("x402 signed authorization validity window is not currently usable");
+  }
+
+  const withoutDigest = {
+    payerPublicKey: publicKey,
+    from,
+    to,
+    amount,
+    validAfter,
+    validBefore,
+    nonce,
+    network: requirement.network,
+    asset: requirement.asset.toLowerCase().replace(/^hash-/, ""),
+    tokenName: requirement.extra.name,
+    tokenVersion: requirement.extra.version
+  } satisfies Omit<AuthorizationIntent, "digest">;
+  let intent: AuthorizationIntent;
+  try {
+    intent = { ...withoutDigest, digest: authorizationDigest(withoutDigest) };
+  } catch {
+    throw invalidAuthorization("x402 signed authorization contains malformed Casper fields");
+  }
+  if (!verifyAuthorizationSignature(intent, signature)) {
+    throw invalidAuthorization("x402 payment authorization signature is invalid");
+  }
+  return { intent, signature };
+}
+
+function invalidAuthorization(message: string): PaymentRejectedError {
+  return new PaymentRejectedError(message, {
+    isValid: false,
+    invalidReason: "invalid_payment_authorization",
+    invalidMessage: message
+  });
 }
 
 async function postFacilitator(
@@ -361,12 +510,20 @@ async function postFacilitator(
     headers.authorization = authorization;
   }
 
-  const response = await fetch(`${baseUrl.replace(/\/+$/, "")}/${action}`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body)
-  });
-  const payload = (await response.json()) as unknown;
+  const { response, body: payload } = await fetchBoundedJson(
+    `${baseUrl.replace(/\/+$/, "")}/${action}`,
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body)
+    },
+    {
+      timeoutMs:
+        action === "settle"
+          ? FACILITATOR_SETTLEMENT_TIMEOUT_MS
+          : FACILITATOR_REQUEST_TIMEOUT_MS
+    }
+  );
   if (!response.ok) {
     throw new PaymentRejectedError(`${action} failed with ${response.status}: ${JSON.stringify(payload)}`, payload);
   }
@@ -381,11 +538,16 @@ async function getFacilitatorSupported(baseUrl: string, authorization: string | 
     headers.authorization = authorization;
   }
 
-  const response = await fetch(`${baseUrl.replace(/\/+$/, "")}/supported`, {
-    method: "GET",
-    headers
-  });
-  const payload = (await response.json()) as unknown;
+  const { response, body: payload } = await fetchBoundedJson(
+    `${baseUrl.replace(/\/+$/, "")}/supported`,
+    {
+      method: "GET",
+      headers
+    },
+    {
+      timeoutMs: FACILITATOR_REQUEST_TIMEOUT_MS
+    }
+  );
   if (!response.ok) {
     throw new Error(`supported failed with ${response.status}: ${JSON.stringify(payload)}`);
   }
@@ -414,6 +576,82 @@ function findSupportedKind(payload: unknown, requirement: PaymentRequirement): P
   return null;
 }
 
+function paymentAssetFailure(
+  requirement: PaymentRequirement,
+  evidence: PaymentAssetEvidence | null,
+  evidenceError: string | null
+): { reason: string; message: string } | null {
+  if (!evidence || evidenceError) {
+    return {
+      reason: "x402_asset_evidence_unavailable",
+      message: "AgentPay could not read the configured fee token from Casper RPC"
+    };
+  }
+  const criticalMissing = new Set([
+    "package",
+    "activeContractHash",
+    "authorizationEntrypoint",
+    "name",
+    "symbol",
+    "decimals"
+  ]);
+  const criticalSourceFailure = evidence.sourceErrors.length > 0 &&
+    evidence.missing.some((field) => criticalMissing.has(field));
+  if (criticalSourceFailure) {
+    const missingPackage = evidence.packageExists === false && evidence.sourceErrors.some(
+      (message) => /^package:.*(?:not found|value.*missing)/i.test(message)
+    );
+    return missingPackage
+      ? {
+          reason: "x402_asset_package_not_found",
+          message: "the configured fee token package was not found on Casper Testnet"
+        }
+      : {
+          reason: "x402_asset_evidence_unavailable",
+          message: "AgentPay could not read the configured fee token from Casper RPC"
+        };
+  }
+  if (evidence.packageExists === null || evidence.authorizationEntrypoint === null) {
+    return {
+      reason: "x402_asset_evidence_unavailable",
+      message: "AgentPay could not read the configured fee token from Casper RPC"
+    };
+  }
+  if (
+    evidence.packageExists === false ||
+    evidence.packageHash.toLowerCase() !== requirement.asset.toLowerCase()
+  ) {
+    return {
+      reason: "x402_asset_package_not_found",
+      message: "the configured fee token package was not found on Casper Testnet"
+    };
+  }
+  if (evidence.authorizationEntrypoint === false) {
+    return {
+      reason: "x402_asset_authorization_entrypoint_missing",
+      message: "the configured fee token does not expose transfer_with_authorization"
+    };
+  }
+  if (evidence.name === null || evidence.symbol === null || evidence.decimals === null) {
+    return {
+      reason: "x402_asset_metadata_unavailable",
+      message: "AgentPay could not read the fee token name, symbol, and decimals from Casper"
+    };
+  }
+  const expectedDecimals = requirement.extra.decimals;
+  if (
+    evidence.name !== requirement.extra.name ||
+    (requirement.extra.symbol !== undefined && evidence.symbol !== requirement.extra.symbol) ||
+    (expectedDecimals !== undefined && evidence.decimals !== Number(expectedDecimals))
+  ) {
+    return {
+      reason: "x402_asset_metadata_mismatch",
+      message: "the configured fee token name, symbol, or decimals differ from Casper state"
+    };
+  }
+  return null;
+}
+
 function readiness(
   status: PaymentReadiness["status"],
   reason: string | null,
@@ -431,18 +669,64 @@ function readiness(
   };
 }
 
-async function confirmPaymentSettlement(transactionHash: string): Promise<AgentPaySettlementConfirmation> {
+async function confirmPaymentSettlement(
+  transactionHash: string,
+  approved: AuthorizationIntent
+): Promise<AgentPaySettlementConfirmation> {
   const rpcUrl = process.env.CASPER_RPC_URL ?? DEFAULT_CASPER_RPC_URL;
   const attempts = readPositiveInteger("CASPER_CONFIRMATION_ATTEMPTS", 5);
   const delayMs = readNonNegativeInteger("CASPER_CONFIRMATION_DELAY_MS", 1500);
+  const rpc = new NodeRpcClient({ rpcUrl });
   let lastError: string | null = null;
 
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    const result = await queryPaymentTransaction(rpcUrl, transactionHash, attempt);
-    if ("confirmation" in result) {
-      return result.confirmation;
+    let result: unknown;
+    try {
+      result = await rpc.getTransaction(transactionHash);
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : "settlement transaction lookup failed";
+      if (attempt < attempts) await sleep(delayMs);
+      continue;
     }
-    lastError = result.reason;
+    const observedAt = new Date().toISOString();
+    const proof = compareSettlement({
+      checkId: "legacy-paid-report",
+      transactionHash,
+      approved,
+      rpcEnvelope: result,
+      rpcEndpoint: rpcUrl,
+      observedAt
+    });
+    if (proof.verdict === "match") {
+      return {
+        rpcUrl,
+        method: "info_get_transaction",
+        apiVersion: rpcApiVersion(result),
+        executionState: "executed",
+        blockHash: proof.blockHash,
+        attempts: attempt,
+        observedAt
+      };
+    }
+    if (proof.verdict === "mismatch") {
+      throw new PaymentRejectedError("Casper settlement does not match the signed x402 authorization", {
+        isValid: false,
+        invalidReason: "settlement_transaction_mismatch",
+        invalidMessage: "The finalized transaction differs from the signed payment authorization.",
+        transactionHash,
+        reasons: proof.reasons
+      });
+    }
+    if (proof.verdict === "unverifiable") {
+      throw new PaymentRejectedError("Casper settlement transaction shape could not be verified", {
+        isValid: false,
+        invalidReason: "settlement_transaction_unverifiable",
+        invalidMessage: "The finalized transaction was not a supported Casper x402 transfer.",
+        transactionHash,
+        reasons: proof.reasons
+      });
+    }
+    lastError = "settlement_transaction_not_executed";
 
     if (attempt < attempts) {
       await sleep(delayMs);
@@ -460,70 +744,6 @@ async function confirmPaymentSettlement(transactionHash: string): Promise<AgentP
   });
 }
 
-type QueryPaymentTransactionResult =
-  | { confirmation: AgentPaySettlementConfirmation }
-  | { reason: string };
-
-async function queryPaymentTransaction(
-  rpcUrl: string,
-  transactionHash: string,
-  attempt: number
-): Promise<QueryPaymentTransactionResult> {
-  // Casper 2.0 JSON-RPC: info_get_transaction takes the transaction hash value directly
-  // (not a {name,value} wrapper). A facilitator settlement may be a native TransactionV1 or a
-  // legacy Deploy, so try Version1 first and only fall back to Deploy when it is not found.
-  let lastReason = "settlement_transaction_not_confirmed";
-  for (const variant of ["Version1", "Deploy"] as const) {
-    const response = await fetch(rpcUrl, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        id: "agent-pay-confirm-x402-payment",
-        jsonrpc: "2.0",
-        method: "info_get_transaction",
-        params: { transaction_hash: { [variant]: transactionHash } }
-      })
-    });
-    const body = (await response.json()) as CasperRpcEnvelope;
-    if (!response.ok) {
-      lastReason = `info_get_transaction HTTP ${response.status}`;
-      continue;
-    }
-    if (body.error) {
-      // A wrong-variant lookup returns "no such transaction"; keep trying the other variant.
-      lastReason = `info_get_transaction RPC ${body.error.code}: ${body.error.message}`;
-      continue;
-    }
-
-    const value = body.result?.value ?? body.result;
-    if (!value?.transaction) {
-      lastReason = "info_get_transaction response did not include a transaction";
-      continue;
-    }
-
-    // The transaction exists under this variant; do not also query the other one.
-    const executionInfo = value.execution_info;
-    const executionState = readExecutionState(executionInfo);
-    if (executionState !== "executed") {
-      return { reason: "settlement_transaction_not_executed" };
-    }
-
-    return {
-      confirmation: {
-        rpcUrl,
-        method: "info_get_transaction",
-        apiVersion: typeof value.api_version === "string" ? value.api_version : null,
-        executionState,
-        blockHash: findNamedString(executionInfo, new Set(["block_hash", "blockHash"])) ?? null,
-        attempts: attempt,
-        observedAt: new Date().toISOString()
-      }
-    };
-  }
-
-  return { reason: lastReason };
-}
-
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
 }
@@ -532,66 +752,19 @@ function asString(value: unknown): string | null {
   return typeof value === "string" ? value : null;
 }
 
-type CasperRpcEnvelope = {
-  result?: {
-    value?: Record<string, unknown>;
-    [key: string]: unknown;
-  };
-  error?: {
-    code: number;
-    message: string;
-  };
-};
-
-function readExecutionState(executionInfo: unknown): AgentPaySettlementConfirmation["executionState"] {
-  // Casper 1.x style: execution_info as an array (empty = not yet executed).
-  if (Array.isArray(executionInfo)) {
-    return executionInfo.length > 0 ? "executed" : "pending";
-  }
-  // Casper 2.0 style: execution_info is an object that gains execution_result once finalized.
-  if (executionInfo && typeof executionInfo === "object") {
-    const executionResult = (executionInfo as Record<string, unknown>).execution_result;
-    if (!executionResult) {
-      return "pending";
-    }
-    // A reverted settlement carries a non-null error_message; never release the report on it.
-    const errorMessage = findNamedString(executionResult, new Set(["error_message"]));
-    return errorMessage ? "unknown" : "executed";
-  }
-  if (executionInfo === null || executionInfo === undefined) {
-    return "pending";
-  }
-  return "unknown";
+function isCsprCloudFacilitator(value: string): boolean {
+  const hostname = new URL(value).hostname.toLowerCase();
+  return hostname === "cspr.cloud" || hostname.endsWith(".cspr.cloud");
 }
 
-function findNamedString(value: unknown, keys: Set<string>): string | null {
-  if (!value || typeof value !== "object") {
-    return null;
-  }
+function isLoopbackHostname(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
+}
 
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const result = findNamedString(item, keys);
-      if (result) {
-        return result;
-      }
-    }
-    return null;
-  }
-
-  for (const [key, entry] of Object.entries(value)) {
-    if (keys.has(key) && typeof entry === "string") {
-      return entry;
-    }
-    if (entry && typeof entry === "object") {
-      const nested = findNamedString(entry, keys);
-      if (nested) {
-        return nested;
-      }
-    }
-  }
-
-  return null;
+function rpcApiVersion(value: unknown): string | null {
+  const root = asRecord(value);
+  const unwrapped = asRecord(root?.value) ?? root;
+  return asString(unwrapped?.api_version);
 }
 
 function readPositiveInteger(name: string, fallback: number): number {

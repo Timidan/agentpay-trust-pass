@@ -1,17 +1,17 @@
 import {
-  buildDataset,
   hashJson,
   type Dataset,
-  type EvidenceFactValue,
-  type EvidenceRecord
+  type EvidenceFactValue
 } from "@agent-pay/core";
 import { randomUUID } from "node:crypto";
+import { fetchBoundedText } from "./httpJson.js";
 
 type SourceSummary = {
   product: string;
   network: string;
   subject: string;
   observedAt: string;
+  sourceUrl: string;
   recordHash: string;
   facts: Record<string, EvidenceFactValue>;
 };
@@ -20,226 +20,10 @@ export type LiveEvidenceDataset = Dataset & {
   sourceSummary: SourceSummary[];
 };
 
-const DEFAULT_CASPER_RPC_URL = "https://node.testnet.casper.network/rpc";
 const DEFAULT_CSPR_TRADE_MCP_URL = "https://mcp.cspr.trade/mcp";
 
-export async function buildLiveEvidenceDataset(): Promise<LiveEvidenceDataset> {
-  const casperRpcUrl = process.env.CASPER_RPC_URL ?? DEFAULT_CASPER_RPC_URL;
-  const csprTradeMcpUrl = process.env.CSPR_TRADE_MCP_URL ?? DEFAULT_CSPR_TRADE_MCP_URL;
-  const observedAt = new Date().toISOString();
-
-  const [status, block, csprTrade] = await Promise.all([
-    getCasperStatus(casperRpcUrl),
-    getLatestCasperBlock(casperRpcUrl),
-    getCsprTradePairs(csprTradeMcpUrl).catch((error: unknown) =>
-      unavailableRecord({
-        product: "CSPR.trade MCP",
-        network: "casper-mainnet",
-        subject: "dex_pair_surface",
-        sourceUrl: csprTradeMcpUrl,
-        observedAt,
-        error
-      })
-    )
-  ]);
-
-  const records = [status.record, block.record, csprTrade.record];
-  const datasetId = `agent-pay-live-${block.height}-${block.hash.slice(0, 16)}`;
-  const dataset = buildDataset(datasetId, records);
-
-  return {
-    ...dataset,
-    sourceSummary: dataset.reports.map((report) => ({
-      product: report.record.product,
-      network: report.record.network,
-      subject: report.record.subject,
-      observedAt: report.record.observedAt,
-      recordHash: report.reportHash,
-      facts: report.record.facts
-    }))
-  };
-}
-
-type CasperStatusResult = {
-  record: EvidenceRecord;
-};
-
-async function getCasperStatus(rpcUrl: string): Promise<CasperStatusResult> {
-  const result = await casperRpc<Record<string, unknown>>(rpcUrl, "info_get_status", []);
-  const peers = Array.isArray(result.peers) ? result.peers : [];
-  const lastBlock = asRecord(result.last_added_block_info);
-  const observedAt = asString(lastBlock?.timestamp) ?? new Date().toISOString();
-  const facts = {
-    apiVersion: asString(result.api_version),
-    protocolVersion: asString(result.protocol_version),
-    peerCount: peers.length,
-    lastBlockHash: asString(lastBlock?.hash),
-    lastBlockHeight: asNumber(lastBlock?.height)
-  };
-
-  return {
-    record: evidenceRecord({
-      id: `casper-rpc-status-${facts.lastBlockHeight ?? Date.now()}`,
-      product: "Casper Node RPC",
-      network: "casper-testnet",
-      subject: "network_status",
-      observedAt,
-      sourceUrl: rpcUrl,
-      facts,
-      raw: result
-    })
-  };
-}
-
-type CasperBlockResult = {
-  record: EvidenceRecord;
-  height: number;
-  hash: string;
-};
-
-async function getLatestCasperBlock(rpcUrl: string): Promise<CasperBlockResult> {
-  const result = await casperRpc<Record<string, unknown>>(rpcUrl, "chain_get_block", []);
-  const blockWithSignatures = asRecord(result.block_with_signatures);
-  const block = asVersionedRecord(asRecord(blockWithSignatures?.block));
-  const header = asRecord(block?.header);
-  const body = asRecord(block?.body);
-  const hash = asString(block?.hash) ?? asString(header?.hash) ?? hashJson(result);
-  const height = asNumber(header?.height) ?? 0;
-  const observedAt = asString(header?.timestamp) ?? new Date().toISOString();
-  const transactions = countTransactions(body?.transactions);
-  const facts = {
-    blockHash: hash,
-    height,
-    eraId: asNumber(header?.era_id),
-    protocolVersion: asString(header?.protocol_version),
-    stateRootHash: asString(header?.state_root_hash),
-    transactionCount: transactions,
-    proposer: asString(header?.proposer)
-  };
-
-  return {
-    height,
-    hash,
-    record: evidenceRecord({
-      id: `casper-rpc-block-${height}`,
-      product: "Casper Node RPC",
-      network: "casper-testnet",
-      subject: "latest_finalized_block",
-      observedAt,
-      sourceUrl: rpcUrl,
-      facts,
-      raw: result
-    })
-  };
-}
-
-async function getCsprTradePairs(mcpUrl: string): Promise<{ record: EvidenceRecord }> {
-  const observedAt = new Date().toISOString();
-  const mcp = await createMcpSession(mcpUrl);
-  await mcpNotify(mcpUrl, mcp.sessionId, "notifications/initialized", {});
-  const pairResponse = await mcpCallTool(mcpUrl, mcp.sessionId, "get_pairs", {
-    page: 1,
-    page_size: 5,
-    currency: "USD"
-  });
-  const data = asRecord(pairResponse) ?? {};
-  const pairs = Array.isArray(data.data)
-    ? data.data.map((item) => asRecord(item)).filter((item): item is Record<string, unknown> => item !== null)
-    : [];
-  const firstPair = pairs[0];
-  const facts = {
-    pairCount: asNumber(data.itemCount) ?? pairs.length,
-    pageCount: asNumber(data.pageCount),
-    firstPairHash: asString(firstPair?.contractPackageHash),
-    firstPairTokens: firstPair ? tokenPairLabel(firstPair) : null,
-    firstPairReserve0: asString(firstPair?.reserve0),
-    firstPairReserve1: asString(firstPair?.reserve1)
-  };
-
-  return {
-    record: evidenceRecord({
-      id: `cspr-trade-pairs-${hashJson(facts).slice(0, 16)}`,
-      product: "CSPR.trade MCP",
-      network: "casper-mainnet",
-      subject: "dex_pair_surface",
-      observedAt,
-      sourceUrl: mcpUrl,
-      facts,
-      raw: pairResponse
-    })
-  };
-}
-
-function unavailableRecord(input: {
-  product: string;
-  network: string;
-  subject: string;
-  sourceUrl: string;
-  observedAt: string;
-  error: unknown;
-}): { record: EvidenceRecord } {
-  const message = input.error instanceof Error ? input.error.message : String(input.error);
-  const raw = { status: "unavailable", message };
-  return {
-    record: evidenceRecord({
-      id: `${input.product.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-")}-unavailable`,
-      product: input.product,
-      network: input.network,
-      subject: input.subject,
-      observedAt: input.observedAt,
-      sourceUrl: input.sourceUrl,
-      facts: {
-        status: "unavailable",
-        messageHash: hashJson(message)
-      },
-      raw
-    })
-  };
-}
-
-function evidenceRecord(input: {
-  id: string;
-  product: string;
-  network: string;
-  subject: string;
-  observedAt: string;
-  sourceUrl: string;
-  facts: Record<string, EvidenceFactValue | undefined>;
-  raw: unknown;
-}): EvidenceRecord {
-  return {
-    id: input.id,
-    product: input.product,
-    network: input.network,
-    subject: input.subject,
-    observedAt: input.observedAt,
-    sourceUrl: input.sourceUrl,
-    facts: compactFacts(input.facts),
-    rawHash: hashJson(input.raw)
-  };
-}
-
-function compactFacts(facts: Record<string, EvidenceFactValue | undefined>) {
-  return Object.fromEntries(
-    Object.entries(facts).filter((entry): entry is [string, EvidenceFactValue] => entry[1] !== undefined)
-  );
-}
-
-async function casperRpc<T>(rpcUrl: string, method: string, params: unknown[]): Promise<T> {
-  const response = await fetch(rpcUrl, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", id: randomUUID(), method, params })
-  });
-  const body = (await response.json()) as { result?: T; error?: { message?: string } };
-  if (!response.ok || body.error || !body.result) {
-    throw new Error(body.error?.message ?? `Casper RPC ${method} failed with ${response.status}`);
-  }
-  return body.result;
-}
-
 async function createMcpSession(mcpUrl: string) {
-  const response = await fetch(mcpUrl, {
+  const { response, body } = await fetchBoundedText(mcpUrl, {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -260,12 +44,12 @@ async function createMcpSession(mcpUrl: string) {
   if (!response.ok || !sessionId) {
     throw new Error(`CSPR.trade MCP initialize failed with ${response.status}`);
   }
-  parseMcpEvent(await response.text());
+  parseMcpEvent(body);
   return { sessionId };
 }
 
 async function mcpNotify(mcpUrl: string, sessionId: string, method: string, params: unknown) {
-  await fetch(mcpUrl, {
+  const { response } = await fetchBoundedText(mcpUrl, {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -274,6 +58,7 @@ async function mcpNotify(mcpUrl: string, sessionId: string, method: string, para
     },
     body: JSON.stringify({ jsonrpc: "2.0", method, params })
   });
+  if (!response.ok) throw new Error(`CSPR.trade MCP notification failed with ${response.status}`);
 }
 
 async function mcpCallTool(
@@ -282,7 +67,7 @@ async function mcpCallTool(
   name: string,
   toolArguments: Record<string, unknown>
 ) {
-  const response = await fetch(mcpUrl, {
+  const { response, body: payload } = await fetchBoundedText(mcpUrl, {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -296,7 +81,7 @@ async function mcpCallTool(
       params: { name, arguments: toolArguments }
     })
   });
-  const body = parseMcpEvent(await response.text());
+  const body = parseMcpEvent(payload);
   if (!response.ok || body.error) {
     throw new Error(body.error?.message ?? `CSPR.trade MCP tool ${name} failed with ${response.status}`);
   }
@@ -323,35 +108,12 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
 }
 
-function asVersionedRecord(value: Record<string, unknown> | null) {
-  return asRecord(value?.Version2) ?? asRecord(value?.Version1) ?? value;
-}
-
 function asString(value: unknown): string | null {
   return typeof value === "string" ? value : null;
 }
 
 function asNumber(value: unknown): number | null {
   return typeof value === "number" ? value : null;
-}
-
-function countTransactions(value: unknown): number {
-  const transactions = asRecord(value);
-  if (!transactions) {
-    return 0;
-  }
-  return Object.values(transactions).reduce<number>(
-    (total, item) => (Array.isArray(item) ? total + item.length : total),
-    0
-  );
-}
-
-function tokenPairLabel(pair: Record<string, unknown>): string | null {
-  const token0 = asRecord(pair.token0);
-  const token1 = asRecord(pair.token1);
-  const symbol0 = asString(token0?.symbol);
-  const symbol1 = asString(token1?.symbol);
-  return symbol0 && symbol1 ? `${symbol0}/${symbol1}` : null;
 }
 
 /* ----- Symbol resolution over the CSPR.trade pair set ----------------- */
@@ -375,9 +137,12 @@ const SYMBOL_CACHE_TTL_MS = 10 * 60 * 1000;
 const SYMBOL_PAGE_SIZE = 50;
 const SYMBOL_MAX_PAGES = 10;
 const SYMBOL_FETCH_DEADLINE_MS = 12_000;
+const SYMBOL_FETCH_ATTEMPTS = 2;
 
 let symbolCache: { at: number; map: Map<string, SymbolMapEntry> } | null = null;
 let symbolCacheFill: Promise<Map<string, SymbolMapEntry>> | null = null;
+let pairCache: { at: number; pairs: Array<Record<string, unknown>> } | null = null;
+let pairCacheFill: Promise<Array<Record<string, unknown>>> | null = null;
 
 /**
  * Builds a symbol -> token map from cspr.trade pair objects. Scoping the
@@ -425,11 +190,123 @@ async function fetchAllTradePairs(mcpUrl: string): Promise<Array<Record<string, 
       : [];
     all.push(...pairs);
     const pageCount = asNumber(data.pageCount) ?? 1;
+    if (!Number.isSafeInteger(pageCount) || pageCount < 1) {
+      throw new Error("cspr.trade returned an invalid pair page count");
+    }
+    if (page === SYMBOL_MAX_PAGES && page < pageCount) {
+      throw new Error(
+        `cspr.trade pair scan exceeded the supported ${SYMBOL_MAX_PAGES}-page limit`
+      );
+    }
     if (page >= pageCount || pairs.length === 0) {
       break;
     }
   }
   return all;
+}
+
+async function fetchTradePairsWithRetry(mcpUrl: string): Promise<Array<Record<string, unknown>>> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < SYMBOL_FETCH_ATTEMPTS; attempt += 1) {
+    try {
+      return await fetchAllTradePairs(mcpUrl);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
+
+async function currentTradePairs(): Promise<Array<Record<string, unknown>>> {
+  const now = Date.now();
+  if (pairCache && now - pairCache.at <= SYMBOL_CACHE_TTL_MS) {
+    return pairCache.pairs;
+  }
+  if (!pairCacheFill) {
+    const mcpUrl = process.env.CSPR_TRADE_MCP_URL ?? DEFAULT_CSPR_TRADE_MCP_URL;
+    pairCacheFill = withDeadline(fetchTradePairsWithRetry(mcpUrl), SYMBOL_FETCH_DEADLINE_MS)
+      .then((pairs) => {
+        if (pairs.length === 0) {
+          throw new Error("cspr.trade pair set came back empty");
+        }
+        pairCache = { at: Date.now(), pairs };
+        return pairs;
+      })
+      .finally(() => {
+        pairCacheFill = null;
+      });
+  }
+  return pairCacheFill;
+}
+
+export type CsprTradeMarketState = {
+  listedOnCsprTrade: boolean;
+  pairCount: number;
+  pricedPairCount: number;
+  pricedLiquidityUsd: number;
+  sourceUrl: string;
+  rawHash: string;
+};
+
+/**
+ * Returns exact package-scoped pool observations from CSPR.trade. Pricing is
+ * descriptive evidence only; AgentPay's policy never delegates a verdict to it.
+ */
+export async function fetchCsprTradeMarketState(
+  packageHash: string
+): Promise<CsprTradeMarketState> {
+  const normalized = packageHash.replace(/^hash-/, "").toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(normalized)) {
+    throw new TypeError("CSPR.trade market lookup requires a 64-character package hash");
+  }
+  const matches = (await currentTradePairs()).filter((pair) =>
+    ["token0", "token1"].some((side) =>
+      asString(asRecord(pair[side])?.packageHash)?.toLowerCase() === normalized
+    )
+  );
+  let pricedPairCount = 0;
+  let pricedLiquidityUsd = 0;
+  for (const pair of matches) {
+    const side0 = pricedReserveUsd(pair, "token0", "reserve0", "fiatPrice0");
+    const side1 = pricedReserveUsd(pair, "token1", "reserve1", "fiatPrice1");
+    if (side0 === null || side1 === null) continue;
+    pricedPairCount += 1;
+    pricedLiquidityUsd += side0 + side1;
+  }
+  return {
+    listedOnCsprTrade: matches.length > 0,
+    pairCount: matches.length,
+    pricedPairCount,
+    pricedLiquidityUsd: roundUsd(pricedLiquidityUsd),
+    sourceUrl: process.env.CSPR_TRADE_MCP_URL ?? DEFAULT_CSPR_TRADE_MCP_URL,
+    rawHash: hashJson(matches)
+  };
+}
+
+function pricedReserveUsd(
+  pair: Record<string, unknown>,
+  tokenSide: "token0" | "token1",
+  reserveKey: "reserve0" | "reserve1",
+  priceKey: "fiatPrice0" | "fiatPrice1"
+): number | null {
+  const token = asRecord(pair[tokenSide]);
+  const decimals = asNumber(token?.decimals);
+  const reserve = asString(pair[reserveKey]);
+  const price = asNumber(pair[priceKey]);
+  if (
+    decimals === null || !Number.isInteger(decimals) || decimals < 0 || decimals > 30 ||
+    reserve === null || !/^[0-9]{1,100}$/.test(reserve) ||
+    price === null || !Number.isFinite(price) || price < 0
+  ) {
+    return null;
+  }
+  const units = Number(reserve) / 10 ** decimals;
+  const value = units * price;
+  return Number.isFinite(value) ? value : null;
+}
+
+function roundUsd(value: number): number {
+  return Math.round(value * 1_000_000) / 1_000_000;
 }
 
 /** Resolves a token symbol to its package hash within cspr.trade's pair set. */
@@ -442,20 +319,14 @@ export async function resolveTokenBySymbol(symbol: string): Promise<ResolvedToke
   if (!symbolCache || now - symbolCache.at > SYMBOL_CACHE_TTL_MS) {
     // Single-flight: concurrent cold-cache resolves share one pair scan.
     if (!symbolCacheFill) {
-      const mcpUrl = process.env.CSPR_TRADE_MCP_URL ?? DEFAULT_CSPR_TRADE_MCP_URL;
-      symbolCacheFill = withDeadline(fetchAllTradePairs(mcpUrl), SYMBOL_FETCH_DEADLINE_MS)
+      symbolCacheFill = currentTradePairs()
         .then((pairs) => buildSymbolMap(pairs))
         .finally(() => {
           symbolCacheFill = null;
         });
     }
     const map = await symbolCacheFill;
-    if (map.size === 0) {
-      // An empty pair set means the upstream shape drifted or the DEX is
-      // unreachable — that is an outage, not "every symbol is unlisted",
-      // so it must not be cached as authoritative.
-      throw new Error("cspr.trade pair set came back empty");
-    }
+    if (map.size === 0) throw new Error("cspr.trade pair set contained no valid token identifiers");
     symbolCache = { at: now, map };
   }
   const entry = symbolCache.map.get(key);

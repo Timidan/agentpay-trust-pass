@@ -1,105 +1,53 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { narrateVerdict } from "../../src/trust/narrator.js";
 
 describe("narrateVerdict", () => {
-  it("Test 1 — fallback: DANGER input with flag", async () => {
+  it("explains concrete flags without changing the decision", async () => {
     const result = await narrateVerdict({
       aspect: "DANGER",
-      flags: [
-        {
-          code: "mint_authority_open",
-          severity: "high",
-          message: "Mint authority is not renounced",
-        },
-      ],
-      notChecked: ["holder_count", "liquidity"],
-      signals: {},
+      flags: [{
+        code: "cep18_mint_burn_enabled",
+        severity: "danger",
+        message: "The CEP-18 mint and burn functions are enabled."
+      }],
+      notChecked: [],
+      signals: {}
     });
 
-    // rationale mentions the flag message
-    expect(result.rationale).toContain("Mint authority is not renounced");
-
-    // notCheckedNote includes both unchecked items
-    expect(result.notCheckedNote).toContain("holder_count");
-    expect(result.notCheckedNote).toContain("liquidity");
-
-    // returned object has ONLY rationale and notCheckedNote keys
-    const keys = Object.keys(result);
-    expect(keys).toHaveLength(2);
-    expect(keys).toContain("rationale");
-    expect(keys).toContain("notCheckedNote");
-    expect(keys).not.toContain("aspect");
-
-    // rationale does NOT contain "CLEAR" (no contradiction with DANGER verdict)
-    expect(result.rationale).not.toContain("CLEAR");
+    expect(result.rationale).toBe(
+      "AgentPay found an issue: The CEP-18 mint and burn functions are enabled."
+    );
+    expect(result.notCheckedNote).toBe(
+      "AgentPay completed every check required by this policy."
+    );
   });
 
-  it("Test 2 — injected complete returning good prose", async () => {
-    const goodOutput = "This token is dangerous due to open mint authority.";
+  it("uses plain labels for missing evidence", async () => {
+    const result = await narrateVerdict({
+      aspect: "CAUTION",
+      flags: [],
+      notChecked: ["mintBurnEnabled", "topHolderPct"],
+      signals: {}
+    });
 
-    const result = await narrateVerdict(
-      {
-        aspect: "DANGER",
-        flags: [
-          {
-            code: "mint_authority_open",
-            severity: "high",
-            message: "Mint authority is not renounced",
-          },
-        ],
-        notChecked: [],
-        signals: {},
-      },
-      {
-        complete: async (_prompt: string) => goodOutput,
-      }
+    expect(result.rationale).toBe(
+      "AgentPay could not finish every check required by this policy. Review what is missing before you proceed."
     );
-
-    expect(result.rationale).toContain(goodOutput);
+    expect(result.notCheckedNote).toBe(
+      "AgentPay could not check: the token's mint and burn setting, the share held by its largest holder."
+    );
   });
 
-  it("Test 3 — injected complete returns contradicting text", async () => {
-    const contradictingOutput =
-      "Actually this is CLEAR — no issues found.";
+  it("explains CLEAR without overstating what was checked", async () => {
+    const result = await narrateVerdict({
+      aspect: "CLEAR",
+      flags: [],
+      notChecked: [],
+      signals: {}
+    });
 
-    const result = await narrateVerdict(
-      {
-        aspect: "DANGER",
-        flags: [
-          {
-            code: "mint_authority_open",
-            severity: "high",
-            message: "Mint authority is not renounced",
-          },
-        ],
-        notChecked: [],
-        signals: {},
-      },
-      {
-        complete: async (_prompt: string) => contradictingOutput,
-      }
+    expect(result.rationale).toBe(
+      "Every check required by this policy ran and passed. Review the receipt before you proceed."
     );
-
-    // Model output discarded — should not appear
-    expect(result.rationale).not.toContain("Actually this is CLEAR");
-
-    // Fallback template used — flag message must appear
-    expect(result.rationale).toContain("Mint authority is not renounced");
-  });
-
-  it("Test 4 — injected complete throws → deterministic fallback", async () => {
-    const result = await narrateVerdict(
-      { aspect: "DANGER", flags: [{ code: "x", severity: "high", message: "Flag A" }], notChecked: [], signals: {} },
-      { complete: async () => { throw new Error("timeout"); } }
-    );
-    expect(result.rationale).toContain("Flag A");
-  });
-
-  it("Test 5 — injected complete returns empty string → deterministic fallback", async () => {
-    const result = await narrateVerdict(
-      { aspect: "CLEAR", flags: [], notChecked: [], signals: {} },
-      { complete: async () => "   " }
-    );
-    expect(result.rationale).toBe("All checked signals are clear. No issues detected.");
   });
 });

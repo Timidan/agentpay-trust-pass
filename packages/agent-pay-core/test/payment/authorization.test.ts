@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   authorizationDigest,
   buildAuthorizationIntent,
+  transferWithAuthorizationTypedData,
   transferWithAuthorizationDigest,
   verifyAuthorizationSignature,
   type PaymentTerms
@@ -41,6 +42,58 @@ describe("x402 authorization binding", () => {
         nonce: "aabbccddeeff0011223344556677889900aabbccddeeff001122334455667788"
       })
     ).toBe("f49af32a160ef6078d23bd28c15e0e8d6d29e58f4cb88ed8582e958dfa07533b");
+  });
+
+  it("builds the exact Casper Wallet typed data represented by the digest", () => {
+    const input = {
+      tokenName: "TestToken",
+      tokenVersion: "1",
+      network: "casper-test",
+      assetPackageHash: "aabbccddeeff0011223344556677889900aabbccddeeff001122334455667788",
+      from: "01aabbccddeeff0011223344556677889900aabbccddeeff001122334455667788",
+      to: "00aabbccddeeff0011223344556677889900aabbccddeeff001122334455667788",
+      value: "1000000",
+      validAfter: "1700000000",
+      validBefore: "1700001000",
+      nonce: "aabbccddeeff0011223344556677889900aabbccddeeff001122334455667788"
+    };
+
+    expect(transferWithAuthorizationTypedData(input)).toEqual({
+      domain: {
+        name: "TestToken",
+        version: "1",
+        chain_name: "casper-test",
+        contract_package_hash: `0x${input.assetPackageHash}`
+      },
+      types: {
+        TransferWithAuthorization: [
+          { name: "from", type: "address" },
+          { name: "to", type: "address" },
+          { name: "value", type: "uint256" },
+          { name: "validAfter", type: "uint256" },
+          { name: "validBefore", type: "uint256" },
+          { name: "nonce", type: "bytes32" }
+        ]
+      },
+      primaryType: "TransferWithAuthorization",
+      message: {
+        from: `0x${input.from}`,
+        to: `0x${input.to}`,
+        value: `0x${BigInt(input.value).toString(16).padStart(64, "0")}`,
+        validAfter: `0x${BigInt(input.validAfter).toString(16).padStart(64, "0")}`,
+        validBefore: `0x${BigInt(input.validBefore).toString(16).padStart(64, "0")}`,
+        nonce: `0x${input.nonce}`
+      },
+      domainTypes: [
+        { name: "name", type: "string" },
+        { name: "version", type: "string" },
+        { name: "chain_name", type: "string" },
+        { name: "contract_package_hash", type: "bytes32" }
+      ]
+    });
+    expect(transferWithAuthorizationDigest(input)).toBe(
+      "f49af32a160ef6078d23bd28c15e0e8d6d29e58f4cb88ed8582e958dfa07533b"
+    );
   });
 
   it("builds a complete unsigned intent from normalized terms", () => {

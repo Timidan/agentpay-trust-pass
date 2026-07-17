@@ -1,4 +1,5 @@
 export { artifactHash, canonicalJson } from "./canonical.js";
+export { operatorPolicyHash, providerDecisionHash } from "./artifacts.js";
 export {
   operatorActionMessage,
   parseCasperPublicKey,
@@ -11,12 +12,11 @@ export {
   buildAuthorizationIntent,
   buildAuthorizationWindow,
   transferWithAuthorizationDigest,
+  transferWithAuthorizationTypedData,
   verifyAuthorizationSignature
 } from "./authorization.js";
 export {
-  evaluatePayment,
-  operatorPolicyHash,
-  providerDecisionHash
+  evaluatePayment
 } from "./policy.js";
 export {
   compareSettlement,
@@ -33,7 +33,10 @@ export {
 } from "./normalize.js";
 export type * from "./types.js";
 export type { CasperAlgorithm, ParsedCasperPublicKey } from "./casperSignature.js";
-export type { TransferAuthorizationDigestInput } from "./authorization.js";
+export type {
+  TransferAuthorizationDigestInput,
+  TransferAuthorizationTypedData
+} from "./authorization.js";
 export type { PaymentEvaluationInput } from "./policy.js";
 export type {
   DecodedCasperX402Transaction,

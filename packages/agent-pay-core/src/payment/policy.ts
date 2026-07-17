@@ -1,4 +1,5 @@
 import { artifactHash } from "./canonical.js";
+import { operatorPolicyHash } from "./artifacts.js";
 import { authorizationDigest } from "./authorization.js";
 import { publicKeyToAccountAddress } from "./casperSignature.js";
 import type {
@@ -28,25 +29,7 @@ export type PaymentEvaluationInput = {
   now: string;
 };
 
-export function operatorPolicyHash(policy: OperatorPolicy): string {
-  const {
-    signature: _signature,
-    signatureMessage: _signatureMessage,
-    policyHash: _policyHash,
-    ...content
-  } = policy;
-  return artifactHash(content);
-}
-
-export function providerDecisionHash(decision: ProviderDecision): string {
-  const {
-    signature: _signature,
-    signatureMessage: _signatureMessage,
-    decisionHash: _decisionHash,
-    ...content
-  } = decision;
-  return artifactHash(content);
-}
+export { operatorPolicyHash, providerDecisionHash } from "./artifacts.js";
 
 export function evaluatePayment(input: PaymentEvaluationInput): PaymentDecision {
   const nowMs = Date.parse(input.now);
@@ -139,7 +122,8 @@ function evaluateResource(input: PaymentEvaluationInput, reasons: Reason[], advi
 
 function evaluateEvidence(input: PaymentEvaluationInput, nowMs: number, reasons: Reason[]): void {
   const evidence = input.evidence;
-  if (!evidence.packageExists || evidence.packageHash.toLowerCase() !== input.terms.asset.toLowerCase()) {
+  const packageHashMismatch = evidence.packageHash.toLowerCase() !== input.terms.asset.toLowerCase();
+  if (evidence.packageExists === false || packageHashMismatch) {
     reasons.push(
       reason(
         "asset_package_not_found",
@@ -147,11 +131,11 @@ function evaluateEvidence(input: PaymentEvaluationInput, nowMs: number, reasons:
         "The selected payment package could not be resolved exactly",
         "asset",
         input.terms.asset,
-        evidence.packageExists ? evidence.packageHash : null
+        evidence.packageExists === false ? null : evidence.packageHash
       )
     );
   }
-  if (!evidence.authorizationEntrypoint) {
+  if (evidence.authorizationEntrypoint === false) {
     reasons.push(
       reason(
         "authorization_entrypoint_missing",
@@ -189,7 +173,9 @@ function evaluateEvidence(input: PaymentEvaluationInput, nowMs: number, reasons:
   }
 
   const mandatoryMissing = [
+    evidence.packageExists === null ? "package" : null,
     evidence.activeContractHash === null ? "activeContractHash" : null,
+    evidence.authorizationEntrypoint === null ? "authorizationEntrypoint" : null,
     evidence.decimals === null ? "decimals" : null,
     ...evidence.missing
   ].filter((item): item is string => item !== null);
@@ -227,7 +213,7 @@ function evaluateEvidence(input: PaymentEvaluationInput, nowMs: number, reasons:
 function evaluateProvider(input: PaymentEvaluationInput, nowMs: number, reasons: Reason[]): boolean {
   const decision = input.providerDecision;
   if (!decision) {
-    reasons.push(reason("provider_unapproved", "review", "Provider has not been approved by the operator", "provider", "active pin", null));
+    reasons.push(reason("provider_unapproved", "review", "This service has not been approved for payment yet.", "provider", "active pin", null));
     return false;
   }
 
@@ -292,7 +278,7 @@ function evaluateProvider(input: PaymentEvaluationInput, nowMs: number, reasons:
 function evaluatePolicy(input: PaymentEvaluationInput, reasons: Reason[]): void {
   const policy = input.policy;
   if (!policy) {
-    reasons.push(reason("policy_cap_missing", "review", "No signed operator policy is active", "policy", "active signed policy", null));
+    reasons.push(reason("policy_cap_missing", "review", "No payment rules are active for this account.", "policy", "active signed policy", null));
     return;
   }
 
@@ -344,7 +330,7 @@ function evaluatePolicy(input: PaymentEvaluationInput, reasons: Reason[]): void 
 function evaluateAuthorization(input: PaymentEvaluationInput, nowSeconds: number, reasons: Reason[]): void {
   const authorization = input.authorization;
   if (!authorization) {
-    reasons.push(reason("authorization_required", "review", "A complete unsigned authorization intent is required", "authorization", "complete intent", null));
+    reasons.push(reason("authorization_required", "review", "The buyer has not prepared the payment details needed for signing.", "authorization", "complete intent", null));
     return;
   }
 
@@ -394,11 +380,24 @@ function evaluateInvestmentAdvisories(input: PaymentEvaluationInput, reasons: Re
   const result = input.policy?.reviewOnInvestmentAdvisories ? "review" : "advisory";
   const evidence = input.evidence;
 
-  if (evidence.mintAuthorityOpen === true) {
-    target.push(reason("mint_authority_open", result, "Payment token mint authority is open", "evidence.mintAuthorityOpen", false, true));
-  }
-  if (evidence.supplyMutable === true) {
-    target.push(reason("supply_mutable", result, "Payment token supply can change", "evidence.supplyMutable", false, true));
+  if (evidence.mintBurnEnabled === true) {
+    target.push(reason(
+      "cep18_mint_burn_enabled",
+      result,
+      "The payment token's CEP-18 mint and burn functions are enabled",
+      "evidence.mintBurnEnabled",
+      false,
+      true
+    ));
+  } else if (evidence.publicMintEntrypoint === true) {
+    target.push(reason(
+      "public_mint_entrypoint",
+      result,
+      "The payment token contract exposes a public mint entry point",
+      "evidence.publicMintEntrypoint",
+      false,
+      true
+    ));
   }
   if (evidence.holderConcentrationPct !== null && evidence.holderConcentrationPct >= 95) {
     target.push(reason("holder_concentration", result, "Payment token holdings are highly concentrated", "evidence.holderConcentrationPct", "< 95", evidence.holderConcentrationPct));
