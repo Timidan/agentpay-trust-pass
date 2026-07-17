@@ -391,7 +391,7 @@ try {
     });
     receiptRecorded = true;
     const casperRecord = page.locator(
-      'section[aria-label="Casper receipt record"][data-anchor="anchored"]'
+      '[aria-label="Casper receipt record"][data-anchor="anchored"]'
     );
     await casperRecord.waitFor({ timeout: 180_000 });
     const anchorHref = await casperRecord.getByRole("link", { name: "cspr.live (Testnet)" })
