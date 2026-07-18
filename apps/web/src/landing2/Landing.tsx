@@ -34,6 +34,7 @@ import {
   shortHash,
 } from "./data";
 import { WorkflowTimeline } from "./Timeline";
+import { IconNonCustodial, IconTokenData } from "./icons";
 import "./landing2.css";
 
 // ------------------------------------------------------------------ //
@@ -528,6 +529,7 @@ export default function Landing2({
 
             <Stagger className="lp2-statgrid">
               <StatCard
+                icon={<img className="lp2-statcard-logo" src={mcpLogo} alt="" />}
                 value={bridgeStatusLabel(liveStatus.bridge)}
                 line={
                   liveStatus.bridge === "ready"
@@ -538,24 +540,29 @@ export default function Landing2({
                 }
               />
               <StatCard
+                icon={<img className="lp2-statcard-logo" src={x402Logo} alt="" />}
                 value={paymentStatusLabel(liveStatus.payment)}
                 line={paymentStatusLine(liveStatus.payment)}
               />
               <StatCard
+                icon={<img className="lp2-statcard-logo" src={casperLogo} alt="" />}
                 value={registryStatusLabel(liveStatus.registry)}
                 line={registryStatusLine(liveStatus.registry)}
                 hash={liveStatus.registry?.registryPackageHash ?? undefined}
                 hashLabel="current registry package hash"
               />
               <StatCard
+                icon={<IconNonCustodial size={30} />}
                 value="Non-custodial"
                 line="The backend never receives a buyer private key."
               />
               <StatCard
+                icon={<IconTokenData size={30} />}
                 value={tokenEvidenceStatusLabel(liveStatus.tokenEvidence)}
                 line={tokenEvidenceStatusLine(liveStatus.tokenEvidence)}
               />
               <StatCard
+                icon={<img className="lp2-statcard-logo" src={casperLogo} alt="" />}
                 value="Casper Testnet"
                 line="Public paid checks and Casper receipt records use Testnet funds while evidence may come from Mainnet or Testnet."
               />
@@ -681,16 +688,19 @@ function StatCard({
   href,
   hash,
   hashLabel,
+  icon,
 }: {
   value: string;
   line: string;
   href?: string;
   hash?: string;
   hashLabel?: string;
+  icon?: ReactNode;
 }) {
   const settled = useSettled();
   return (
     <motion.article className="lp2-statcard" variants={settled ? undefined : ITEM_VARIANTS}>
+      {icon ? <span className="lp2-statcard-icon" aria-hidden="true">{icon}</span> : null}
       <span className="lp2-statcard-value">{value}</span>
       <p className="lp2-statcard-line">{line}</p>
       {hash && hashLabel ? (

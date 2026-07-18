@@ -112,6 +112,32 @@ export function IconReceiptAnchored({ size = 40, ...rest }: { size?: number } & 
   );
 }
 
+export function IconNonCustodial({ size = 40, ...rest }: { size?: number } & React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...rest} aria-hidden="true" width={size} height={size} viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+      <path pathLength={100} className="tl-stroke" d="M24 4 39 10v11c0 10-6 18-15 23C15 39 9 31 9 21V10Z" />
+      <circle pathLength={100} className="tl-stroke" cx="18" cy="22" r="4" />
+      <line pathLength={100} className="tl-stroke" x1="22" y1="22" x2="34" y2="22" />
+      <polyline pathLength={100} className="tl-stroke" points="29 22 29 26 33 26 33 22" />
+    </svg>
+  );
+}
+
+export function IconTokenData({ size = 40, ...rest }: { size?: number } & React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...rest} aria-hidden="true" width={size} height={size} viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+      <rect pathLength={100} className="tl-stroke" x="5" y="6" width="37" height="36" rx="2" />
+      <line pathLength={100} className="tl-stroke" x1="9" y1="34" x2="29" y2="34" />
+      <rect pathLength={100} className="tl-stroke" x="10" y="26" width="3" height="8" />
+      <rect pathLength={100} className="tl-stroke" x="15" y="21" width="3" height="13" />
+      <rect pathLength={100} className="tl-stroke" x="20" y="16" width="3" height="18" />
+      <rect pathLength={100} className="tl-stroke" x="25" y="10" width="3" height="24" />
+      <circle pathLength={100} className="tl-stroke" cx="36" cy="35" r="7" />
+      <polyline pathLength={100} className="tl-stroke" points="32.5 35 35 37.5 39.5 32.5" />
+    </svg>
+  );
+}
+
 export const TIMELINE_ICONS = [
   { key: "probe", Icon: IconProbe },
   { key: "check", Icon: IconCheck },
