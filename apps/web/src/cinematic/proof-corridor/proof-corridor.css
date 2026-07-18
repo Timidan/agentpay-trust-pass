@@ -317,7 +317,7 @@
   font-weight: 780;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  cursor: pointer;
+  cursor: default;
 }
 
 .proof-corridor .pc-scroll-cue span {
@@ -593,11 +593,9 @@
   pointer-events: auto;
 }
 
-@media (hover: hover) {
-  .proof-corridor .pc-scroll-cue:hover {
-    border-color: hsl(250 78% 62% / 62%);
-    background: hsl(276 40% 99% / 90%);
-  }
+.proof-corridor .pc-final[inert],
+.proof-corridor .pc-final[inert] .cinematic-rail {
+  pointer-events: none;
 }
 
 @media (pointer: coarse) {
@@ -716,7 +714,7 @@
   }
 
   .proof-corridor .pc-request-card__terms div:last-child {
-    display: none;
+    grid-column: 1 / -1;
   }
 
   .proof-corridor .pc-request-card__terms dt,

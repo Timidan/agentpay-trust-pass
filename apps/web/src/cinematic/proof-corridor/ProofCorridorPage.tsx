@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+import type { RefObject } from "react";
 import { CinematicChrome } from "../CinematicChrome";
 import { CinematicRail } from "../CinematicRail";
 import type { CinematicRailItem } from "../types";
@@ -14,7 +16,7 @@ const workflowStations = [
   { id: "check", label: "Check terms", Icon: IconCheck },
   { id: "sign", label: "Sign locally", Icon: IconSignLocally },
   { id: "verify", label: "Verify settlement", Icon: IconVerify },
-  { id: "receipt", label: "Anchor receipt", Icon: IconReceiptAnchored },
+  { id: "receipt", label: "Finalize receipt", Icon: IconReceiptAnchored },
 ] as const;
 
 const finalLinks = [
@@ -50,13 +52,63 @@ const finalLinks = [
     id: "console",
     eyebrow: "05 · Operate",
     title: "Console",
-    body: "Run checked calls and inspect durable receipts.",
+    body: "Follow a quote through x402 settlement, Merkle verification, and the registry workflow.",
     href: "/app",
   },
 ] as const satisfies readonly CinematicRailItem[];
 
+const FINAL_RAIL_INTERACTIVE_PROGRESS = 0.9;
+const PROGRESS_EPSILON = 0.0005;
+
+function useFinalRailInteractivity(stageRef: RefObject<HTMLElement | null>, reducedMotion: boolean) {
+  const [interactive, setInteractive] = useState(reducedMotion);
+
+  useEffect(() => {
+    if (reducedMotion) {
+      setInteractive(true);
+      return;
+    }
+
+    let frame: number | null = null;
+    let lastProgress = -1;
+    let stableFrames = 0;
+
+    const readProgress = () => {
+      frame = null;
+      const rawProgress = stageRef.current?.style.getPropertyValue("--cinematic-p") ?? "0";
+      const parsedProgress = Number.parseFloat(rawProgress);
+      const progress = Number.isFinite(parsedProgress) ? parsedProgress : 0;
+      const nextInteractive = progress >= FINAL_RAIL_INTERACTIVE_PROGRESS;
+
+      setInteractive((current) => current === nextInteractive ? current : nextInteractive);
+      stableFrames = Math.abs(progress - lastProgress) <= PROGRESS_EPSILON ? stableFrames + 1 : 0;
+      lastProgress = progress;
+
+      if (stableFrames < 2) frame = window.requestAnimationFrame(readProgress);
+    };
+
+    const scheduleRead = () => {
+      stableFrames = 0;
+      if (frame === null) frame = window.requestAnimationFrame(readProgress);
+    };
+
+    scheduleRead();
+    window.addEventListener("resize", scheduleRead, { passive: true });
+    window.addEventListener("scroll", scheduleRead, { passive: true });
+
+    return () => {
+      window.removeEventListener("resize", scheduleRead);
+      window.removeEventListener("scroll", scheduleRead);
+      if (frame !== null) window.cancelAnimationFrame(frame);
+    };
+  }, [reducedMotion, stageRef]);
+
+  return interactive;
+}
+
 export default function ProofCorridorPage() {
-  const { jumpToProgress, reducedMotion, sectionRef, stageRef } = useCinematicTimeline({ smoothing: 0.1 });
+  const { reducedMotion, sectionRef, stageRef } = useCinematicTimeline({ smoothing: 0.1 });
+  const finalRailInteractive = useFinalRailInteractivity(stageRef, reducedMotion);
 
   return (
     <main className="cinematic-page proof-corridor">
@@ -105,9 +157,9 @@ export default function ProofCorridorPage() {
               to a receipt you can verify.
             </p>
             {!reducedMotion && (
-              <button className="pc-scroll-cue" type="button" onClick={() => jumpToProgress(0.18)}>
+              <p className="pc-scroll-cue">
                 Enter the corridor <span aria-hidden="true">↓</span>
-              </button>
+              </p>
             )}
           </section>
 
@@ -179,7 +231,11 @@ export default function ProofCorridorPage() {
             </div>
           </section>
 
-          <div className="cinematic-interaction-layer pc-final" data-cinematic-content>
+          <div
+            className="cinematic-interaction-layer pc-final"
+            data-cinematic-content
+            inert={finalRailInteractive ? undefined : true}
+          >
             <div className="pc-final__heading">
               <p className="pc-kicker">The proof is yours</p>
               <h2>Choose where to inspect next.</h2>
