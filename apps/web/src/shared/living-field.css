@@ -76,10 +76,6 @@
   opacity: 0.4;
 }
 
-.route-cinematic .living-field {
-  display: none;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .living-field .lf-media {
     transition: none;
