@@ -1,0 +1,462 @@
+.cinematic-page {
+  --cinematic-p: 0;
+  --cinematic-x: 0;
+  --cinematic-y: 0;
+  --cinematic-paper: #f8f6ff;
+  --cinematic-lavender: #d9ccff;
+  --cinematic-violet: #876edb;
+  --cinematic-plum: #281a3b;
+  --cinematic-ink: #17101f;
+  --cinematic-muted: #766b82;
+  --cinematic-line: rgb(40 26 59 / 16%);
+  --cinematic-glass: rgb(248 246 255 / 72%);
+  --cinematic-positive: #287a60;
+  --cinematic-warning: #a65e24;
+  --cinematic-negative: #a44353;
+  --cinematic-z-world: 0;
+  --cinematic-z-world-front: 9;
+  --cinematic-z-narrative: 10;
+  --cinematic-z-narrative-front: 19;
+  --cinematic-z-rail: 20;
+  --cinematic-z-rail-front: 29;
+  --cinematic-z-chrome: 30;
+  --cinematic-z-chrome-front: 39;
+  position: relative;
+  isolation: isolate;
+  min-height: 100svh;
+  overflow: clip;
+  background: var(--cinematic-paper);
+  color: var(--cinematic-ink);
+  font-family: "Archivo", "Helvetica Neue", "Segoe UI", system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.cinematic-page *,
+.cinematic-page *::before,
+.cinematic-page *::after {
+  box-sizing: border-box;
+}
+
+.cinematic-page a {
+  color: inherit;
+}
+
+.cinematic-page button,
+.cinematic-page a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.cinematic-page button {
+  font: inherit;
+}
+
+.cinematic-page .cinematic-scroll {
+  position: relative;
+  height: 4600px;
+}
+
+.cinematic-page .cinematic-stage {
+  position: sticky;
+  top: 0;
+  width: 100%;
+  height: 100svh;
+  min-height: 640px;
+  overflow: hidden;
+  contain: layout paint;
+}
+
+.cinematic-page .cinematic-layer,
+.cinematic-page [data-cinematic-layer] {
+  position: absolute;
+  inset: 0;
+}
+
+/* Layer bands: world 0–9, narrative 10–19, rail 20–29, chrome 30–39. */
+.cinematic-page .cinematic-world-layer {
+  z-index: var(--cinematic-z-world);
+  pointer-events: none;
+}
+
+.cinematic-page .cinematic-narrative-layer {
+  z-index: var(--cinematic-z-narrative);
+}
+
+.cinematic-page .cinematic-interaction-layer,
+.cinematic-page .cinematic-rail {
+  z-index: var(--cinematic-z-rail);
+}
+
+.cinematic-page :where(a, button, [tabindex]):focus-visible {
+  outline: 3px solid var(--cinematic-violet);
+  outline-offset: 4px;
+}
+
+.cinematic-page :where(a, button, [tabindex]):focus:not(:focus-visible) {
+  outline: none;
+}
+
+.cinematic-page .cinematic-chrome {
+  position: absolute;
+  z-index: var(--cinematic-z-chrome);
+  top: 0;
+  left: 0;
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) auto minmax(150px, 1fr);
+  align-items: center;
+  width: 100%;
+  padding: clamp(18px, 2.5vw, 36px) clamp(20px, 4vw, 64px);
+  color: var(--cinematic-plum);
+  pointer-events: none;
+}
+
+.cinematic-page .cinematic-chrome > * {
+  pointer-events: auto;
+}
+
+.cinematic-page .cinematic-chrome__brand {
+  justify-self: start;
+  text-decoration: none;
+}
+
+.cinematic-page .cinematic-chrome__logo,
+.cinematic-page .cinematic-chrome__logo img {
+  display: inline-flex;
+  align-items: center;
+}
+
+.cinematic-page .cinematic-chrome__logo {
+  gap: 9px;
+  font-size: 0.82rem;
+  font-weight: 760;
+  letter-spacing: -0.02em;
+}
+
+.cinematic-page .cinematic-chrome__logo img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.cinematic-page .cinematic-chrome__concepts {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--cinematic-line);
+  border-radius: 999px;
+  background: rgb(248 246 255 / 64%);
+  box-shadow: 0 10px 35px rgb(40 26 59 / 8%);
+  backdrop-filter: blur(18px);
+}
+
+.cinematic-page .cinematic-chrome__concept {
+  padding: 8px 13px;
+  border-radius: 999px;
+  color: var(--cinematic-muted);
+  font-size: 0.68rem;
+  font-weight: 720;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-decoration: none;
+  text-transform: uppercase;
+  transition: color 160ms ease, background-color 160ms ease;
+}
+
+.cinematic-page .cinematic-chrome__concept[aria-current="page"] {
+  background: var(--cinematic-plum);
+  color: var(--cinematic-paper);
+}
+
+.cinematic-page .cinematic-chrome__progress {
+  display: flex;
+  justify-self: end;
+  align-items: center;
+  gap: 10px;
+  color: var(--cinematic-muted);
+  font-size: 0.62rem;
+  font-weight: 720;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.cinematic-page .cinematic-chrome__progress-line {
+  position: relative;
+  display: block;
+  width: 46px;
+  height: 1px;
+  overflow: hidden;
+  background: var(--cinematic-line);
+}
+
+.cinematic-page .cinematic-chrome__progress-line::after {
+  position: absolute;
+  inset: 0;
+  background: var(--cinematic-plum);
+  content: "";
+  transform: scaleX(var(--cinematic-p));
+  transform-origin: left;
+}
+
+.cinematic-page .cinematic-rail {
+  position: absolute;
+  right: clamp(18px, 4vw, 64px);
+  bottom: clamp(20px, 4vh, 48px);
+  left: clamp(18px, 4vw, 64px);
+  display: grid;
+  gap: 12px;
+  touch-action: pan-y;
+}
+
+.cinematic-page .cinematic-rail__controls {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+
+.cinematic-page .cinematic-rail__control {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--cinematic-line);
+  border-radius: 50%;
+  background: var(--cinematic-glass);
+  color: var(--cinematic-plum);
+  cursor: pointer;
+  backdrop-filter: blur(16px);
+}
+
+.cinematic-page .cinematic-rail__control:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+.cinematic-page .cinematic-rail__status {
+  min-width: 48px;
+  color: var(--cinematic-muted);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.68rem;
+  font-weight: 740;
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+
+.cinematic-page .cinematic-rail__track {
+  display: flex;
+  gap: 12px;
+  max-width: 100%;
+  margin: 0;
+  padding: 0 0 8px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  list-style: none;
+  scrollbar-width: none;
+  scroll-padding-inline: 1px;
+  scroll-snap-type: x mandatory;
+}
+
+.cinematic-page .cinematic-rail__track::-webkit-scrollbar {
+  display: none;
+}
+
+.cinematic-page .cinematic-rail__item {
+  flex: 0 0 clamp(240px, 27vw, 370px);
+  scroll-snap-align: center;
+}
+
+.cinematic-page .cinematic-rail__card {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  min-height: 156px;
+  padding: 20px 48px 20px 20px;
+  overflow: hidden;
+  border: 1px solid var(--cinematic-line);
+  border-radius: 18px;
+  background: var(--cinematic-glass);
+  box-shadow: 0 18px 55px rgb(40 26 59 / 9%);
+  text-decoration: none;
+  backdrop-filter: blur(18px);
+  transition: border-color 180ms ease, transform 180ms ease, background-color 180ms ease;
+}
+
+.cinematic-page .cinematic-rail__item[data-active="true"] .cinematic-rail__card {
+  border-color: rgb(135 110 219 / 55%);
+  background: rgb(248 246 255 / 88%);
+  transform: translateY(-3px);
+}
+
+.cinematic-page .cinematic-rail__eyebrow {
+  margin-bottom: 16px;
+  color: var(--cinematic-violet);
+  font-size: 0.62rem;
+  font-weight: 780;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.cinematic-page .cinematic-rail__title {
+  color: var(--cinematic-plum);
+  font-size: 1.05rem;
+  letter-spacing: -0.025em;
+}
+
+.cinematic-page .cinematic-rail__body {
+  align-self: end;
+  margin-top: 12px;
+  color: var(--cinematic-muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.cinematic-page .cinematic-rail__arrow {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  color: var(--cinematic-plum);
+  font-size: 1rem;
+}
+
+@media (hover: hover) {
+  .cinematic-page .cinematic-chrome__concept:hover:not([aria-current="page"]) {
+    background: rgb(40 26 59 / 7%);
+    color: var(--cinematic-plum);
+  }
+
+  .cinematic-page .cinematic-rail__control:not(:disabled):hover {
+    border-color: rgb(135 110 219 / 48%);
+    background: rgb(248 246 255 / 94%);
+  }
+
+  .cinematic-page .cinematic-rail__card:hover {
+    border-color: rgb(135 110 219 / 48%);
+    transform: translateY(-3px);
+  }
+}
+
+@media (max-width: 900px) {
+  .cinematic-page .cinematic-scroll {
+    height: 3600px;
+  }
+
+  .cinematic-page .cinematic-stage {
+    min-height: 560px;
+  }
+
+  .cinematic-page .cinematic-chrome {
+    grid-template-columns: 1fr auto;
+  }
+
+  .cinematic-page .cinematic-chrome__concepts {
+    position: absolute;
+    top: calc(100% + 2px);
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  .cinematic-page .cinematic-chrome__progress {
+    grid-column: 2;
+  }
+}
+
+@media (max-width: 640px) {
+  .cinematic-page .cinematic-scroll {
+    height: 3000px;
+  }
+
+  .cinematic-page .cinematic-stage {
+    min-height: 100svh;
+  }
+
+  .cinematic-page .cinematic-chrome {
+    padding: 16px;
+  }
+
+  .cinematic-page .cinematic-chrome__logo .agent-pay-logo-word,
+  .cinematic-page .cinematic-chrome__progress > span:first-child,
+  .cinematic-page .cinematic-chrome__progress-line {
+    display: none;
+  }
+
+  .cinematic-page .cinematic-chrome__concepts {
+    width: calc(100vw - 32px);
+  }
+
+  .cinematic-page .cinematic-chrome__concept {
+    flex: 1;
+    padding-inline: 8px;
+    font-size: 0.56rem;
+    text-align: center;
+  }
+
+  .cinematic-page .cinematic-rail {
+    right: 14px;
+    bottom: 14px;
+    left: 14px;
+  }
+
+  .cinematic-page .cinematic-rail__item {
+    flex-basis: min(82vw, 310px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cinematic-page {
+    overflow: visible;
+    scroll-behavior: auto;
+  }
+
+  .cinematic-page *,
+  .cinematic-page *::before,
+  .cinematic-page *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+
+  .cinematic-page .cinematic-scroll {
+    height: auto;
+  }
+
+  .cinematic-page .cinematic-stage {
+    position: static;
+    display: grid;
+    min-height: 100svh;
+    height: auto;
+    overflow: visible;
+    contain: none;
+  }
+
+  .cinematic-page .cinematic-narrative-layer,
+  .cinematic-page .cinematic-interaction-layer,
+  .cinematic-page [data-cinematic-content],
+  .cinematic-page .cinematic-rail {
+    position: static;
+    inset: auto;
+    opacity: 1 !important;
+    filter: none !important;
+    transform: none !important;
+  }
+
+  .cinematic-page .cinematic-chrome {
+    position: relative;
+  }
+
+  .cinematic-page .cinematic-rail {
+    width: auto;
+    margin: clamp(40px, 8vw, 96px) clamp(14px, 4vw, 64px) 24px;
+  }
+
+  .cinematic-page .cinematic-rail__track {
+    flex-wrap: wrap;
+    overflow: visible;
+    scroll-snap-type: none;
+  }
+
+  .cinematic-page .cinematic-rail__item {
+    flex: 1 1 260px;
+  }
+}
