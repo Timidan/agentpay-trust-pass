@@ -309,7 +309,10 @@ export async function settleX402Payment(input: {
     paymentRequirements: input.requirement
   });
   const settleRecord = asRecord(settle);
-  if (settleRecord?.success === false) {
+  // Fail closed, mirroring the verify check above: only an explicit success
+  // proceeds. An ambiguous settle body is still gated by the tx-hash check and
+  // the on-chain byte-match, but it must not read as a settlement here.
+  if (settleRecord?.success !== true) {
     throw new PaymentRejectedError("x402 payment settlement rejected the payload", settle);
   }
 

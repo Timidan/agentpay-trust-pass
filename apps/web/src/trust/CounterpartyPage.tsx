@@ -1,16 +1,10 @@
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useState } from "react";
 import { CircleNotch, MagnifyingGlass, Warning, ShieldCheck, WarningOctagon } from "@phosphor-icons/react";
-import { assessAccount, type EvidenceNetwork, type Verdict } from "../api";
-import { friendlyError } from "../lib/friendly-errors";
+import { assessAccount, type EvidenceNetwork } from "../api";
 import { SiteFooter, SiteNav } from "../components/SiteChrome";
+import { useTrustCheck } from "./useTrustCheck";
 import { VerdictCard } from "./VerdictCard";
 import "./ask-page.css";
-
-type CheckState =
-  | { status: "idle" }
-  | { status: "loading" }
-  | { status: "done"; verdict: Verdict }
-  | { status: "error"; message: string };
 
 // account-hash-<64hex>, or an ed25519 (01…) / secp256k1 (02…) public key.
 const ACCOUNT_INPUT = /^(account-hash-[0-9a-f]{64}|01[0-9a-f]{64}|02[0-9a-f]{66})$/i;
@@ -53,21 +47,9 @@ export default function CounterpartyPage({
 }) {
   const [account, setAccount] = useState("");
   const [network, setNetwork] = useState<EvidenceNetwork>("casper-mainnet");
-  const [state, setState] = useState<CheckState>({ status: "idle" });
   const [hint, setHint] = useState<string | null>(null);
-  const [elapsed, setElapsed] = useState(0);
-
-  const isLoading = state.status === "loading";
-
-  useEffect(() => {
-    if (!isLoading) {
-      setElapsed(0);
-      return;
-    }
-    const startedAt = Date.now();
-    const id = window.setInterval(() => setElapsed(Math.floor((Date.now() - startedAt) / 1000)), 1000);
-    return () => window.clearInterval(id);
-  }, [isLoading]);
+  const check = useTrustCheck();
+  const { state, isLoading, elapsed } = check;
 
   async function runCheck(raw: string) {
     const trimmed = raw.trim();
@@ -80,13 +62,11 @@ export default function CounterpartyPage({
       return;
     }
     setHint(null);
-    setState({ status: "loading" });
+    check.begin();
     try {
-      const verdict = await assessAccount(trimmed, network);
-      setState({ status: "done", verdict });
+      check.succeed(await assessAccount(trimmed, network));
     } catch (err) {
-      const friendly = friendlyError(err);
-      setState({ status: "error", message: friendly.headline });
+      check.failFrom(err);
     }
   }
 
@@ -103,7 +83,7 @@ export default function CounterpartyPage({
         {state.status === "done" ? (
           <div className="ask2-result ask2-reveal">
             <h1 className="agentpay-sr-only">Wallet check result</h1>
-            <button type="button" className="ask2-again" onClick={() => setState({ status: "idle" })}>
+            <button type="button" className="ask2-again" onClick={() => check.reset()}>
               ← Check another account
             </button>
             {state.verdict.resolvedAccount ? (
@@ -154,7 +134,7 @@ export default function CounterpartyPage({
                           onClick={() => {
                             setNetwork(option);
                             setHint(null);
-                            if (state.status === "error") setState({ status: "idle" });
+                            if (state.status === "error") check.reset();
                           }}
                           type="button"
                         >
@@ -180,7 +160,7 @@ export default function CounterpartyPage({
                       setAccount(nextAccount);
                       if (CSPR_NAME_INPUT.test(nextAccount.trim())) setNetwork("casper-mainnet");
                       if (hint) setHint(null);
-                      if (state.status === "error") setState({ status: "idle" });
+                      if (state.status === "error") check.reset();
                     }}
                   />
 

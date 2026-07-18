@@ -6,21 +6,14 @@ import {
   resolveToken,
   type EvidenceNetwork,
   type ResolvedToken,
-  type TokenEvidenceStatus,
-  type Verdict
+  type TokenEvidenceStatus
 } from "../api";
-import { friendlyError } from "../lib/friendly-errors";
 import { SiteFooter, SiteNav } from "../components/SiteChrome";
+import { useTrustCheck } from "./useTrustCheck";
 import { VerdictCard } from "./VerdictCard";
 import "./ask-page.css";
 
 type AskStage = "resolving" | "checking";
-
-type AskState =
-  | { status: "idle" }
-  | { status: "loading"; stage: AskStage }
-  | { status: "done"; verdict: Verdict }
-  | { status: "error"; message: string };
 
 const HASH_INPUT = /^(hash-)?[0-9a-f]{64}$/i;
 const SYMBOL_INPUT = /^[a-z][a-z0-9._-]{1,15}$/i;
@@ -61,25 +54,16 @@ export default function AskPage({
   onToggleTheme?: () => void;
 }) {
   const [subject, setSubject] = useState("");
-  const [state, setState] = useState<AskState>({ status: "idle" });
   const [validationHint, setValidationHint] = useState<string | null>(null);
   const [resolved, setResolved] = useState<ResolvedToken | null>(null);
   const [network, setNetwork] = useState<EvidenceNetwork>("casper-mainnet");
   const [tokenEvidence, setTokenEvidence] = useState<TokenEvidenceStatus | null>(null);
-  const [elapsed, setElapsed] = useState(0);
-
+  const check = useTrustCheck<AskStage>();
+  const { state, elapsed } = check;
+  // Local discriminant alias so TypeScript narrows state.stage in the loading branch.
   const isLoading = state.status === "loading";
-  const inputIsSymbol = SYMBOL_INPUT.test(subject.trim()) && !HASH_INPUT.test(subject.trim());
 
-  useEffect(() => {
-    if (!isLoading) {
-      setElapsed(0);
-      return;
-    }
-    const startedAt = Date.now();
-    const id = window.setInterval(() => setElapsed(Math.floor((Date.now() - startedAt) / 1000)), 1000);
-    return () => window.clearInterval(id);
-  }, [isLoading]);
+  const inputIsSymbol = SYMBOL_INPUT.test(subject.trim()) && !HASH_INPUT.test(subject.trim());
 
   useEffect(() => {
     let active = true;
@@ -107,14 +91,13 @@ export default function AskPage({
         setValidationHint("Enter a token symbol (like WCSPR) or a 64-character package hash.");
         return;
       }
-      setState({ status: "loading", stage: "resolving" });
+      check.begin("resolving");
       try {
         const token = await resolveToken(trimmed);
         if (!token) {
-          setState({
-            status: "error",
-            message: `"${trimmed.toUpperCase()}" isn't listed on CSPR.trade yet. Paste the token's package hash to check it directly.`
-          });
+          check.fail(
+            `"${trimmed.toUpperCase()}" isn't listed on CSPR.trade yet. Paste the token's package hash to check it directly.`
+          );
           return;
         }
         setResolved(token);
@@ -122,22 +105,16 @@ export default function AskPage({
         evidenceNetwork = token.network;
         setNetwork(token.network);
       } catch (err) {
-        const friendly = friendlyError(err);
-        setState({ status: "error", message: friendly.headline });
+        check.failFrom(err);
         return;
       }
     }
 
-    setState({ status: "loading", stage: "checking" });
+    check.setStage("checking");
     try {
-      const verdict = await assessSubject(assessTarget, evidenceNetwork);
-      setState({ status: "done", verdict });
+      check.succeed(await assessSubject(assessTarget, evidenceNetwork));
     } catch (err) {
-      const friendly = friendlyError(err);
-      setState({
-        status: "error",
-        message: friendly.headline
-      });
+      check.failFrom(err);
     }
   }
 
@@ -154,7 +131,7 @@ export default function AskPage({
         {state.status === "done" ? (
           <div className="ask2-result ask2-reveal">
             <h1 className="agentpay-sr-only">Token check result</h1>
-            <button type="button" className="ask2-again" onClick={() => setState({ status: "idle" })}>
+            <button type="button" className="ask2-again" onClick={() => check.reset()}>
               ← Check another token
             </button>
             {resolved ? (
@@ -203,7 +180,7 @@ export default function AskPage({
                           onClick={() => {
                             setNetwork(option);
                             setValidationHint(null);
-                            if (state.status === "error") setState({ status: "idle" });
+                            if (state.status === "error") check.reset();
                           }}
                           type="button"
                         >
@@ -231,7 +208,7 @@ export default function AskPage({
                         setNetwork("casper-mainnet");
                       }
                       if (validationHint) setValidationHint(null);
-                      if (state.status === "error") setState({ status: "idle" });
+                      if (state.status === "error") check.reset();
                     }}
                   />
 

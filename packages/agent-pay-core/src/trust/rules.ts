@@ -8,12 +8,15 @@ export type Flag = { code: string; severity: "danger" | "caution"; message: stri
 // real green rows next to the flags.
 export type RuleResult = { aspect: Aspect; decision: WireDecision; flags: Flag[]; notChecked: string[]; passed: string[] };
 
-const MANDATORY: (keyof SubjectSignals)[] = [
+// The mandatory-for-CLEAR signal keys and the young-contract threshold are
+// exported so the on-chain policy hash is derived from these exact constants
+// (see policy.ts) rather than a hand-copied duplicate that can silently drift.
+export const SUBJECT_MANDATORY_SIGNALS: readonly (keyof SubjectSignals)[] = Object.freeze([
   "contractAgeBlocks",
   "holderCount",
   "topHolderPct"
-];
-const YOUNG_BLOCKS = 1000;
+]);
+export const YOUNG_BLOCKS = 1000;
 
 export function scoreSubject(s: SubjectSignals): RuleResult {
   const flags: Flag[] = [];
@@ -35,7 +38,7 @@ export function scoreSubject(s: SubjectSignals): RuleResult {
     message: "The contract has existed for fewer than 1,000 blocks."
   });
 
-  const notChecked = MANDATORY.filter((k) => s[k] == null).map(String);
+  const notChecked = SUBJECT_MANDATORY_SIGNALS.filter((k) => s[k] == null).map(String);
   if (s.mintBurnEnabled === null && s.publicMintEntrypoint === null) {
     notChecked.unshift("supplyControl");
   }

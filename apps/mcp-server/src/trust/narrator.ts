@@ -1,16 +1,23 @@
 type Flag = { code: string; severity: string; message: string };
 
-type NarratorInput = {
+export type NarratorInput = {
   aspect: string;
   flags: Flag[];
   notChecked: string[];
   signals: Record<string, unknown>;
 };
 
-type NarratorOutput = {
+export type NarratorOutput = {
   rationale: string;
   notCheckedNote: string;
 };
+
+// The narrator seam: assessSubject computes the verdict aspect from the rule
+// engine and only asks a NarrateVerdict for prose. The type is declared once
+// here so the injection point (assess.ts) and the production adapter (tools.ts)
+// cannot drift. The seam is real — a test injects a lying narrator to prove the
+// aspect is owned by scoreSubject, not by whatever prose a future LLM returns.
+export type NarrateVerdict = (input: NarratorInput) => Promise<NarratorOutput>;
 
 const CHECK_LABELS: Record<string, string> = {
   mintBurnEnabled: "the token's mint and burn setting",
@@ -30,14 +37,12 @@ const CHECK_LABELS: Record<string, string> = {
  * Explain a rule-engine result without changing or reinterpreting it.
  * The same facts always produce the same text.
  */
-export async function narrateVerdict(
-  input: NarratorInput
-): Promise<NarratorOutput> {
+export const narrateVerdict: NarrateVerdict = async (input) => {
   return {
     rationale: buildRationale(input),
     notCheckedNote: buildNotCheckedNote(input.notChecked)
   };
-}
+};
 
 function buildRationale(input: NarratorInput): string {
   if (input.flags.length > 0) {

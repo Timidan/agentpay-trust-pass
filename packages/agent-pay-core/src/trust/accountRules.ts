@@ -1,19 +1,20 @@
 import type { AccountSignals } from "./accountSignals.js";
 import type { Aspect, Flag, RuleResult, WireDecision } from "./rules.js";
 
-// One CSPR = 1e9 motes.
-const DUST_MOTES = 1_000_000_000n;
-const YOUNG_ACCOUNT_BLOCKS = 5_000;
+// One CSPR = 1e9 motes. Exported (with ACCOUNT_MANDATORY_SIGNALS, below) so the on-chain
+// account policy hash is derived from these exact constants in policy.ts.
+export const DUST_MOTES = 1_000_000_000n;
+export const YOUNG_ACCOUNT_BLOCKS = 5_000;
 
 // Facts a public node always returns for a live account. Their absence means
 // the lookup itself failed — surfaced as "not checked", never silently CLEAR.
-const MANDATORY: (keyof AccountSignals)[] = [
+export const ACCOUNT_MANDATORY_SIGNALS: readonly (keyof AccountSignals)[] = Object.freeze([
   "exists",
   "balanceMotes",
   "associatedKeyCount",
   "deploymentThreshold",
   "keyManagementThreshold"
-];
+]);
 
 /**
  * Score only the account facts AgentPay can prove from Casper RPC.
@@ -62,7 +63,7 @@ export function scoreAccount(s: AccountSignals): RuleResult {
     });
   }
 
-  const notChecked = MANDATORY
+  const notChecked = ACCOUNT_MANDATORY_SIGNALS
     .filter((key) => key === "balanceMotes" ? balanceMotes === null : s[key] == null)
     .map(String);
 

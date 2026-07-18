@@ -6,6 +6,7 @@ import {
   authorizationDigest,
   buildAuthorizationWindow,
   normalizePackageHash,
+  parseBaseUnitAmount,
   publicKeyToAccountAddress,
   transferWithAuthorizationDigest as coreTransferDigest,
   type AuthorizationIntent
@@ -180,18 +181,15 @@ export function enforceX402SpendPolicy(
 }
 
 function parseTransferAmount(value: string): bigint {
-  if (!/^[1-9][0-9]*$/.test(value)) {
+  const parsed = parseBaseUnitAmount(value);
+  if (!parsed.ok) {
     throw new Error(
-      "x402 spend policy refused to sign: payment requirement amount must be a positive integer in base units"
+      parsed.reason === "not_positive_integer"
+        ? "x402 spend policy refused to sign: payment requirement amount must be a positive integer in base units"
+        : "x402 spend policy refused to sign: payment requirement amount exceeds the U256 transfer limit"
     );
   }
-  const amount = BigInt(value);
-  if (amount > (1n << 256n) - 1n) {
-    throw new Error(
-      "x402 spend policy refused to sign: payment requirement amount exceeds the U256 transfer limit"
-    );
-  }
-  return amount;
+  return parsed.amount;
 }
 
 export function buildX402PaymentSignature(input: {

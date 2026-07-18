@@ -1,3 +1,5 @@
+import { normalizePackageHash, parseBaseUnitAmount } from "@agent-pay/core";
+
 const DEFAULT_WINDOW_MS = 60_000;
 const DEFAULT_REQUESTS_PER_WINDOW = 3;
 const DEFAULT_DAILY_LIMIT = 100;
@@ -243,18 +245,19 @@ function requiredEnv(env: NodeJS.ProcessEnv, name: string): string {
 }
 
 function normalizeAsset(value: string): string {
-  return value.toLowerCase().replace(/^hash-/, "");
+  return normalizePackageHash(value);
 }
 
 function positiveBaseUnits(value: string, name: string): bigint {
-  if (!/^[1-9][0-9]*$/.test(value)) {
-    throw new TypeError(`${name} must be a positive integer in token base units`);
+  const parsed = parseBaseUnitAmount(value);
+  if (!parsed.ok) {
+    throw new TypeError(
+      parsed.reason === "not_positive_integer"
+        ? `${name} must be a positive integer in token base units`
+        : `${name} exceeds the U256 token transfer limit`
+    );
   }
-  const parsed = BigInt(value);
-  if (parsed > (1n << 256n) - 1n) {
-    throw new TypeError(`${name} exceeds the U256 token transfer limit`);
-  }
-  return parsed;
+  return parsed.amount;
 }
 
 function envPositiveInteger(

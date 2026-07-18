@@ -18,6 +18,8 @@ export {
 export {
   evaluatePayment
 } from "./policy.js";
+export { parseBaseUnitAmount, U256_MAX } from "./amount.js";
+export type { BaseUnitAmount } from "./amount.js";
 export {
   compareSettlement,
   decodeCasperX402Transaction

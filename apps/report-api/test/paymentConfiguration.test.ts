@@ -78,6 +78,41 @@ describe("facilitator configuration", () => {
     expect(settleCalls).toBe(0);
   });
 
+  it("rejects an ambiguous settle body that omits an explicit success", async () => {
+    process.env.X402_FACILITATOR_URL = "https://facilitator.example";
+    // A settle body with a plausible transaction hash but no `success: true`
+    // must fail closed rather than releasing the report on the facilitator's word.
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>(async (rawUrl) => {
+      if (String(rawUrl).endsWith("/verify")) return Response.json({ valid: true });
+      return Response.json({ transaction: "1".repeat(64) });
+    }));
+    const requirement: PaymentRequirement = {
+      scheme: "exact",
+      network: "casper:casper-test",
+      asset: "9".repeat(64),
+      amount: "10000",
+      payTo: `00${"8".repeat(64)}`,
+      maxTimeoutSeconds: 300,
+      extra: { name: "Cep18x402", version: "1", symbol: "CSPR" }
+    };
+    const resource: PaymentResource = {
+      url: "https://agentpay.example/reports/buy/test-quote",
+      description: "AgentPay test report",
+      mimeType: "application/json"
+    };
+    const paymentPayload = buildX402PaymentSignature({
+      requirement,
+      resource,
+      signer: createCasperSigner("secp256k1", new Uint8Array(32).fill(7)),
+      now: Math.floor(Date.now() / 1_000),
+      nonce: new Uint8Array(32).fill(4)
+    }).paymentPayload;
+
+    await expect(settleX402Payment({ paymentPayload, requirement, resource })).rejects.toEqual(
+      expect.objectContaining<Partial<PaymentRejectedError>>({ name: "PaymentRejectedError" })
+    );
+  });
+
   it("requires HTTPS for remote facilitators", () => {
     process.env.X402_FACILITATOR_URL = "http://facilitator.example";
 

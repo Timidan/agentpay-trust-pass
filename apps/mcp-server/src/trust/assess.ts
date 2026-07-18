@@ -22,6 +22,7 @@ import {
   type SubjectRef,
 } from "@agent-pay/core";
 import { ToolInputError } from "../errors.js";
+import type { NarrateVerdict } from "./narrator.js";
 import type { EvidenceNetwork, ResolvedCsprName, ResolvedToken } from "../apiClient.js";
 
 export type Verdict = {
@@ -76,13 +77,8 @@ export type AssessSubjectDeps = {
     paymentReceiptHash: string;
     decision: string;
   }) => Promise<{ txHash: string; hashKind: "transaction" | "deploy" }>;
-  /** Narrate the verdict in human-readable prose. */
-  narrate: (args: {
-    aspect: string;
-    flags: { code: string; severity: string; message: string }[];
-    notChecked: string[];
-    signals: Record<string, unknown>;
-  }) => Promise<{ rationale: string; notCheckedNote: string }>;
+  /** Narrate the verdict in human-readable prose. Cannot change aspect/decision. */
+  narrate: NarrateVerdict;
 };
 
 export async function assessSubject(

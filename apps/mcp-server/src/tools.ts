@@ -490,12 +490,7 @@ export async function assessSubjectTool(input: {
         decision: args.decision as "approved" | "rejected" | "needs_review"
       }),
 
-    narrate: async (args: {
-      aspect: string;
-      flags: { code: string; severity: string; message: string }[];
-      notChecked: string[];
-      signals: Record<string, unknown>;
-    }) => narrateVerdict(args)
+    narrate: narrateVerdict
   });
   return withResolution(verdict, resolved);
 }
