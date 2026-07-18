@@ -97,6 +97,22 @@ function DialTimeline() {
           ))}
         </div>
       </div>
+      {/* Narrow screens hide the orbit wheel; this horizontal stepper carries
+          the same auto-advancing spotlight so the dial still animates. */}
+      <div className="tld-mobile" aria-hidden="true">
+        {PHASE_ICONS.map(({ key, Icon }, i) => (
+          <button
+            key={key}
+            type="button"
+            tabIndex={-1}
+            className="tld-mstation"
+            data-on={i === active ? "true" : "false"}
+            onClick={() => pick(i)}
+          >
+            <Icon size={26} />
+          </button>
+        ))}
+      </div>
       <div className="tld-copy">
         {PHASES.map((p, i) => (
           <div className="tld-pane" data-on={i === active ? "true" : "false"} key={p.name} aria-hidden={i !== active}>

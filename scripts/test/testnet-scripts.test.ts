@@ -273,6 +273,55 @@ describe("AgentPay Casper Testnet scripts", () => {
       await fixture.close();
     }
   });
+
+  it.each([
+    {
+      name: "registry deployment",
+      script: "contracts/agent-pay-registry/scripts/deploy-testnet.sh",
+      args: []
+    },
+    {
+      name: "decision recording",
+      script: "contracts/agent-pay-registry/scripts/record-decision-testnet.sh",
+      args: ["agent-pay-mainnet-refusal", "a".repeat(64), "b".repeat(64), "c".repeat(64), "approved"]
+    },
+    {
+      name: "receipt anchoring",
+      script: "contracts/agent-pay-registry/scripts/record-receipt-testnet.sh",
+      args: ["a".repeat(64), "b".repeat(64), "c".repeat(64), "settlement_matched"]
+    }
+  ])("refuses Mainnet configuration before invoking Casper for $name", async ({ script, args }) => {
+    const fixture = await createCasperClientFixture();
+    const ownerKeyPath = join(fixture.dir, "owner_secret_key.pem");
+    const recorderKeyPath = join(fixture.dir, "recorder_secret_key.pem");
+    const wasmPath = join(fixture.dir, "agent_pay_registry.wasm");
+    await writeFile(ownerKeyPath, "fixture owner key material");
+    await writeFile(recorderKeyPath, "fixture recorder key material");
+    await writeFile(wasmPath, "wasm-bytes");
+
+    try {
+      await expect(execFileAsync("bash", [script, ...args], {
+        cwd: repoRoot,
+        env: {
+          ...process.env,
+          CASPER_CLIENT_COMMAND: fixture.clientPath,
+          CASPER_NODE_ADDRESS: "https://node.mainnet.casper.network/rpc",
+          CASPER_CHAIN_NAME: "casper",
+          CASPER_SECRET_KEY_PATH: ownerKeyPath,
+          AGENT_PAY_REGISTRY_RECORDER_KEY_PATH: recorderKeyPath,
+          AGENT_PAY_REGISTRY_RECORDER_ACCOUNT_HASH: RECORDER_ACCOUNT_HASH,
+          AGENT_PAY_REGISTRY_PACKAGE_HASH: `hash-${"d".repeat(64)}`,
+          AGENT_PAY_REGISTRY_WASM: wasmPath
+        }
+      })).rejects.toMatchObject({
+        code: 2,
+        stderr: expect.stringContaining("AgentPay writes are restricted to Casper Testnet")
+      });
+      await expect(readFile(fixture.capturePath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    } finally {
+      await fixture.close();
+    }
+  });
 });
 
 async function createCasperClientFixture(): Promise<{

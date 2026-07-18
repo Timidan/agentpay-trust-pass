@@ -11,6 +11,11 @@ CASPER_NODE_ADDRESS="${CASPER_NODE_ADDRESS:-${CASPER_RPC_URL:-https://node.testn
 CASPER_CHAIN_NAME="${CASPER_CHAIN_NAME:-casper-test}"
 AGENT_PAY_RECEIPT_RECORD_PAYMENT_AMOUNT="${AGENT_PAY_RECEIPT_RECORD_PAYMENT_AMOUNT:-5000000000}"
 
+if [ "$CASPER_CHAIN_NAME" != "casper-test" ]; then
+  echo "AgentPay writes are restricted to Casper Testnet (casper-test)" >&2
+  exit 2
+fi
+
 if ! command -v "$CASPER_CLIENT_COMMAND" >/dev/null 2>&1; then
   echo "CASPER_CLIENT_COMMAND must point to casper-client" >&2
   exit 2

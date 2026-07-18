@@ -102,6 +102,34 @@ describe("AgentPay registry recorder", () => {
     }
   });
 
+  it("reports Mainnet write configuration as unavailable without querying the RPC", async () => {
+    const script = await createExecutableScript();
+    const secretKeyPath = await createSecretKeyFile();
+    process.env.AGENT_PAY_REGISTRY_PACKAGE_HASH = `hash-${"a".repeat(64)}`;
+    process.env.AGENT_PAY_RECORD_SCRIPT = script;
+    process.env.CASPER_SECRET_KEY_PATH = secretKeyPath;
+    process.env.CASPER_RPC_URL = "http://127.0.0.1:1";
+    process.env.CASPER_CHAIN_NAME = "casper";
+    process.env.CASPER_NETWORK = "casper-mainnet";
+
+    try {
+      await expect(getRegistryStatus()).resolves.toMatchObject({
+        status: "configuration_required",
+        reason: "casper_write_network_not_testnet",
+        checks: expect.arrayContaining([
+          {
+            name: "write_network",
+            status: "fail",
+            message: "AgentPay writes are restricted to Casper Testnet"
+          }
+        ])
+      });
+    } finally {
+      await rm(script, { force: true });
+      await rm(secretKeyPath, { force: true });
+    }
+  });
+
   it("rejects malformed registry package hashes before treating the registry path as ready", async () => {
     const rpc = await withRpcServer(async () => {
       throw new Error("Registry status should not query Casper RPC when the package hash is malformed");
@@ -158,6 +186,33 @@ describe("AgentPay registry recorder", () => {
       })).rejects.toThrow("AGENT_PAY_ALLOW_CUSTOM_RECORD_SCRIPTS=1");
     } finally {
       await rm(script, { force: true });
+      await rm(secretKeyPath, { force: true });
+    }
+  });
+
+  it("refuses Mainnet configuration before invoking the registry recorder", async () => {
+    const submitter = await createSubmitter(`TRANSACTION_HASH=${"7".repeat(64)}`);
+    const secretKeyPath = await createSecretKeyFile();
+    process.env.AGENT_PAY_REGISTRY_PACKAGE_HASH = `hash-${"d".repeat(64)}`;
+    process.env.AGENT_PAY_RECORD_SCRIPT = submitter.path;
+    process.env.CASPER_RPC_URL = "http://127.0.0.1:1";
+    process.env.CASPER_CHAIN_NAME = "casper";
+    process.env.CASPER_NETWORK = "casper-mainnet";
+    process.env.CASPER_SECRET_KEY_PATH = secretKeyPath;
+    process.env.CASPER_CONFIRMATION_ATTEMPTS = "1";
+    process.env.CASPER_CONFIRMATION_DELAY_MS = "0";
+
+    try {
+      await expect(recordAgentPayDecision({
+        datasetId: "agent-pay-mainnet-refusal",
+        datasetRoot: "a".repeat(64),
+        reportHash: "b".repeat(64),
+        paymentReceiptHash: "c".repeat(64),
+        decision: "approved"
+      })).rejects.toThrow("AgentPay writes are restricted to Casper Testnet");
+      await expect(readFile(submitter.capturePath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    } finally {
+      await submitter.close();
       await rm(secretKeyPath, { force: true });
     }
   });

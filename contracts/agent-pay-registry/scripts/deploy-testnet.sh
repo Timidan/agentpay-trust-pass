@@ -10,6 +10,11 @@ CASPER_CHAIN_NAME="${CASPER_CHAIN_NAME:-casper-test}"
 AGENT_PAY_INSTALL_PAYMENT_AMOUNT="${AGENT_PAY_INSTALL_PAYMENT_AMOUNT:-150000000000}"
 AGENT_PAY_REGISTRY_WASM="${AGENT_PAY_REGISTRY_WASM:-$REPO_ROOT/contracts/agent-pay-registry/target/wasm32-unknown-unknown/release/agent_pay_registry_contract.wasm}"
 
+if [ "$CASPER_CHAIN_NAME" != "casper-test" ]; then
+  echo "AgentPay writes are restricted to Casper Testnet (casper-test)" >&2
+  exit 2
+fi
+
 if ! command -v "$CASPER_CLIENT_COMMAND" >/dev/null 2>&1; then
   echo "CASPER_CLIENT_COMMAND must point to casper-client" >&2
   exit 2

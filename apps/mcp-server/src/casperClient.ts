@@ -15,6 +15,8 @@ const execFileAsync = promisify(execFile);
 const DEFAULT_RECORD_SCRIPT = "contracts/agent-pay-registry/scripts/record-decision-testnet.sh";
 const DEFAULT_RECEIPT_RECORD_SCRIPT = "contracts/agent-pay-registry/scripts/record-receipt-testnet.sh";
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
+const TESTNET_CHAIN_NAME = "casper-test";
+const TESTNET_NETWORK = "casper-testnet";
 
 export type RecordDecisionInput = {
   datasetId: string;
@@ -87,6 +89,18 @@ export async function getRegistryStatus(): Promise<RegistryStatus> {
   const scriptConfig = recordScriptConfiguration();
   const script = scriptConfig.path;
   const receiptAnchors = await getReceiptAnchorStatus();
+
+  checks.push(isTestnetWriteConfiguration(process.env)
+    ? {
+        name: "write_network",
+        status: "pass",
+        message: "Casper Testnet write boundary configured"
+      }
+    : {
+        name: "write_network",
+        status: "fail",
+        message: "AgentPay writes are restricted to Casper Testnet"
+      });
 
   if (!registryPackageHash) {
     checks.push({
@@ -207,6 +221,7 @@ export async function getRegistryStatus(): Promise<RegistryStatus> {
 
 export async function recordAgentPayDecision(input: RecordDecisionInput): Promise<RecordDecisionResult> {
   validateRecordDecisionInput(input);
+  requireTestnetWriteConfiguration(process.env);
   const registryPackageHash = process.env.AGENT_PAY_REGISTRY_PACKAGE_HASH;
   if (!registryPackageHash) {
     throw new ToolConfigError("AGENT_PAY_REGISTRY_PACKAGE_HASH is required to record an AgentPay decision");
@@ -239,6 +254,18 @@ export async function recordAgentPayDecision(input: RecordDecisionInput): Promis
     confirmation,
     input
   };
+}
+
+function requireTestnetWriteConfiguration(env: NodeJS.ProcessEnv): void {
+  if (!isTestnetWriteConfiguration(env)) {
+    throw new ToolConfigError("AgentPay writes are restricted to Casper Testnet");
+  }
+}
+
+function isTestnetWriteConfiguration(env: NodeJS.ProcessEnv): boolean {
+  const chainName = env.CASPER_CHAIN_NAME?.trim() || TESTNET_CHAIN_NAME;
+  const network = env.CASPER_NETWORK?.trim() || TESTNET_NETWORK;
+  return chainName === TESTNET_CHAIN_NAME && network === TESTNET_NETWORK;
 }
 
 async function submitRecordDecisionDeploy(input: RecordDecisionInput): Promise<SubmittedHash> {
@@ -338,6 +365,8 @@ function registryReason(check: RegistryStatusCheck | undefined): string {
   }
 
   switch (check?.name) {
+    case "write_network":
+      return "casper_write_network_not_testnet";
     case "registry_package":
       return "agent_pay_registry_package_hash_required";
     case "casper_rpc":

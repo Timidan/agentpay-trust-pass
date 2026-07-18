@@ -1048,6 +1048,11 @@
   .lp2-nav-cta {
     display: none;
   }
+  /* The centered nav links normally push the actions to the right; once they
+     collapse into the menu, the actions need their own right alignment. */
+  .lp2-nav-actions {
+    margin-left: auto;
+  }
   .lp2-mobile-menu {
     display: flex;
   }
@@ -1310,11 +1315,64 @@
   border-color: color-mix(in srgb, var(--lp-accent) 45%, var(--lp-line));
 }
 
+/* Mobile phase stepper: a horizontal row of the phase icons that carries the
+   auto-advancing spotlight where the orbit wheel is hidden. Desktop hides it. */
+.tld-mobile { display: none; }
+.tld-mstation {
+  position: relative;
+  z-index: 1;
+  appearance: none;
+  flex: 0 0 auto;
+  width: 54px;
+  height: 54px;
+  border-radius: 999px;
+  border: 1px solid var(--lp-line);
+  background: var(--lp-card);
+  display: grid;
+  place-items: center;
+  color: var(--lp-ink-3);
+  cursor: pointer;
+  transition:
+    color 0.4s ease,
+    border-color 0.4s ease,
+    box-shadow 0.4s ease,
+    transform 0.5s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+.tld-mstation .tl-stroke {
+  stroke-dashoffset: 0;
+  transition: none;
+}
+.tld-mstation[data-on="true"] {
+  color: var(--lp-ink);
+  border-color: color-mix(in srgb, var(--lp-accent) 55%, var(--lp-line));
+  box-shadow: 0 10px 30px -18px hsl(250 60% 40% / 0.45);
+  transform: scale(1.1);
+}
+
 /* --------------------------------------------------- narrow fallbacks */
 @media (max-width: 860px) {
   .tld { grid-template-columns: 1fr; min-height: 0; }
   .tld-wheel-well { display: none; }
-  .tld-copy { min-height: 300px; }
+  .tld-mobile {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    position: relative;
+    margin: 4px 0 26px;
+  }
+  /* a hairline rail linking the stations, behind them */
+  .tld-mobile::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 27px;
+    right: 27px;
+    height: 1px;
+    background: var(--lp-line);
+    z-index: 0;
+  }
+  .tld-copy { min-height: 260px; }
   .tl-rail { grid-template-columns: 1fr; row-gap: 26px; }
   .tl-rail .tl-station {
     display: grid;

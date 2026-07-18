@@ -195,6 +195,23 @@ describe("receipt anchor publisher", () => {
     expect(rpc.call).toHaveBeenCalledOnce();
   });
 
+  it("refuses Mainnet configuration at the receipt anchor command boundary", () => {
+    const rpc = { call: vi.fn() } as unknown as NodeRpcClient;
+
+    expect(() => new CommandReceiptAnchorTransport({
+      rpc,
+      rpcUrl: "https://node.mainnet.casper.network/rpc",
+      contractHash: "6".repeat(64),
+      script: "/unused",
+      clientCommand: "/unused",
+      env: {
+        CASPER_CHAIN_NAME: "casper",
+        CASPER_NETWORK: "casper-mainnet"
+      }
+    })).toThrow("AgentPay writes are restricted to Casper Testnet");
+    expect(rpc.call).not.toHaveBeenCalled();
+  });
+
   it("uses the Casper command boundary to submit, confirm, and read back a receipt", async () => {
     const receipt = receiptFixture();
     const dir = await mkdtemp(join(tmpdir(), "agentpay-receipt-anchor-"));

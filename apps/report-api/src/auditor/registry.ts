@@ -17,6 +17,8 @@ const DEFAULT_INTERVAL_MS = 15_000;
 const BATCH_SIZE = 20;
 const MAX_RETRY_MS = 5 * 60 * 1_000;
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
+const TESTNET_CHAIN_NAME = "casper-test";
+const TESTNET_NETWORK = "casper-testnet";
 
 export type ReceiptAnchorInput = {
   receiptHash: string;
@@ -313,6 +315,7 @@ export class CommandReceiptAnchorTransport implements ReceiptAnchorTransport {
   private readonly env: NodeJS.ProcessEnv;
 
   constructor(options: CommandReceiptAnchorTransportOptions) {
+    requireTestnetWriteConfiguration(options.env);
     this.rpc = options.rpc;
     this.rpcUrl = options.rpcUrl;
     this.contractHash = options.contractHash;
@@ -387,6 +390,14 @@ export class CommandReceiptAnchorTransport implements ReceiptAnchorTransport {
     } catch {
       throw new Error("Casper receipt anchor readback failed");
     }
+  }
+}
+
+function requireTestnetWriteConfiguration(env: NodeJS.ProcessEnv): void {
+  const chainName = env.CASPER_CHAIN_NAME?.trim() || TESTNET_CHAIN_NAME;
+  const network = env.CASPER_NETWORK?.trim() || TESTNET_NETWORK;
+  if (chainName !== TESTNET_CHAIN_NAME || network !== TESTNET_NETWORK) {
+    throw new TypeError("AgentPay writes are restricted to Casper Testnet");
   }
 }
 
