@@ -64,6 +64,9 @@ import {
 } from "./components/AgentPayUi";
 import IntegratePage from "./agents/IntegratePage";
 import AuditPage from "./audit/AuditPage";
+import EvidenceChamberPage from "./cinematic/evidence-chamber/EvidenceChamberPage";
+import ProofCorridorPage from "./cinematic/proof-corridor/ProofCorridorPage";
+import SignalFieldPage from "./cinematic/signal-field/SignalFieldPage";
 import { SiteFooter, SiteNav } from "./components/SiteChrome";
 import Landing2 from "./landing2/Landing";
 import { friendlyReason } from "./lib/friendly-errors";
@@ -119,8 +122,10 @@ function AppShell() {
   useEffect(() => {
     // The app-wide living field reads these: stronger on /agents, breathing
     // through the hero scrim on the landing.
+    const isCinematic = pathname.startsWith("/cinematic/");
     document.documentElement.classList.toggle("route-agents", pathname === "/agents");
     document.documentElement.classList.toggle("route-landing", pathname === "/");
+    document.documentElement.classList.toggle("route-cinematic", isCinematic);
     // The trust pages float glass over a faint field, so the blur has something to refract.
     document.documentElement.classList.toggle(
       "route-trust",
@@ -129,6 +134,7 @@ function AppShell() {
     return () => {
       document.documentElement.classList.remove("route-agents");
       document.documentElement.classList.remove("route-landing");
+      document.documentElement.classList.remove("route-cinematic");
       document.documentElement.classList.remove("route-trust");
     };
   }, [pathname]);
@@ -227,6 +233,9 @@ function AppShell() {
             </main>
           }
         />
+        <Route path="/cinematic/proof-corridor" element={<ProofCorridorPage />} />
+        <Route path="/cinematic/signal-field" element={<SignalFieldPage />} />
+        <Route path="/cinematic/evidence-chamber" element={<EvidenceChamberPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AgentPayTooltipProvider>
