@@ -8,11 +8,13 @@ type CinematicRailProps = {
 };
 
 const SWIPE_THRESHOLD = 48;
+const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 
 export function CinematicRail({ ariaLabel, items }: CinematicRailProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const cardRefs = useRef<Array<HTMLLIElement | null>>([]);
   const pointerStartX = useRef<number | null>(null);
+  const previousActiveIndex = useRef(activeIndex);
   const lastIndex = Math.max(0, items.length - 1);
 
   useEffect(() => {
@@ -20,8 +22,10 @@ export function CinematicRail({ ariaLabel, items }: CinematicRailProps) {
   }, [lastIndex]);
 
   useEffect(() => {
+    if (previousActiveIndex.current === activeIndex) return;
+    previousActiveIndex.current = activeIndex;
     cardRefs.current[activeIndex]?.scrollIntoView?.({
-      behavior: "smooth",
+      behavior: window.matchMedia(REDUCED_MOTION_QUERY).matches ? "auto" : "smooth",
       block: "nearest",
       inline: "center",
     });

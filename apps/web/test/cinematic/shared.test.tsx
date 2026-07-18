@@ -12,11 +12,17 @@ const items = [
   { id: "receipt", eyebrow: "02", title: "Receipt", body: "Verify the result.", href: "/app" },
 ];
 const cinematicCssPath = resolve(process.cwd(), "src/cinematic/cinematic-base.css");
+const originalScrollIntoView = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
 
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  if (originalScrollIntoView) {
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", originalScrollIntoView);
+  } else {
+    Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
+  }
 });
 
 function installAnimationFrameQueue() {
@@ -55,6 +61,16 @@ function matchMedia(matches: boolean) {
     removeListener: () => {},
     dispatchEvent: () => false,
   });
+}
+
+function installScrollIntoView() {
+  const scrollIntoView = vi.fn();
+  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+    configurable: true,
+    value: scrollIntoView,
+    writable: true,
+  });
+  return scrollIntoView;
 }
 
 function TimelineHarness({ smoothing = 1 }: { smoothing?: number }) {
@@ -121,6 +137,30 @@ describe("cinematic shared UI", () => {
     fireEvent(region, new MouseEvent("pointerup", { bubbles: true, clientX: 80 }));
     expect(screen.getByText("2 / 2")).toBeTruthy();
   });
+
+  it("does not scroll on mount and smoothly reveals later active items", () => {
+    const scrollIntoView = installScrollIntoView();
+    vi.stubGlobal("matchMedia", matchMedia(false));
+
+    render(<MemoryRouter><CinematicRail ariaLabel="Signal anatomy" items={items} /></MemoryRouter>);
+    expect(scrollIntoView).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Next item" }));
+    expect(scrollIntoView).toHaveBeenCalledOnce();
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "nearest", inline: "center" });
+  });
+
+  it("uses instant active-item scrolling when reduced motion is requested", () => {
+    const scrollIntoView = installScrollIntoView();
+    vi.stubGlobal("matchMedia", matchMedia(true));
+
+    render(<MemoryRouter><CinematicRail ariaLabel="Signal anatomy" items={items} /></MemoryRouter>);
+    expect(scrollIntoView).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Next item" }));
+    expect(scrollIntoView).toHaveBeenCalledOnce();
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "auto", block: "nearest", inline: "center" });
+  });
 });
 
 describe("cinematic timeline hook", () => {
@@ -179,6 +219,32 @@ describe("cinematic timeline hook", () => {
 });
 
 describe("cinematic base styles", () => {
+  it("reuses the canonical AgentPay lavender and verdict colors", () => {
+    const css = readFileSync(cinematicCssPath, "utf8");
+
+    expect(css).toContain("--cinematic-lavender: hsl(248 100% 74%)");
+    expect(css).toContain("--cinematic-violet: hsl(250 78% 62%)");
+    expect(css).toContain("--cinematic-positive: hsl(156 70% 28%)");
+    expect(css).toContain("--cinematic-warning: hsl(33 95% 51%)");
+    expect(css).toContain("--cinematic-negative: hsl(353 74% 44%)");
+  });
+
+  it("puts generic informational layers in flow and hides decorative layers for reduced motion", () => {
+    const css = readFileSync(cinematicCssPath, "utf8");
+    const reducedMotionCss = css.slice(css.indexOf("@media (prefers-reduced-motion: reduce)"));
+
+    expect(reducedMotionCss).toContain(
+      ".cinematic-page .cinematic-layer:not(.cinematic-world-layer):not([aria-hidden=\"true\"])",
+    );
+    expect(reducedMotionCss).toContain(
+      ".cinematic-page [data-cinematic-layer]:not(.cinematic-world-layer):not([aria-hidden=\"true\"])",
+    );
+    expect(reducedMotionCss).toMatch(/data-cinematic-layer[^\{]+\{\s*position: static;/);
+    expect(reducedMotionCss).toContain(".cinematic-page .cinematic-world-layer");
+    expect(reducedMotionCss).toContain(".cinematic-page [data-cinematic-layer][aria-hidden=\"true\"]");
+    expect(reducedMotionCss).toMatch(/data-cinematic-layer\]\[aria-hidden="true"\][^\{]*\{\s*display: none;/);
+  });
+
   it("defines the scoped scene, layer bands, responsive lengths, focus, and reduced-motion flow", () => {
     expect(existsSync(cinematicCssPath)).toBe(true);
     const css = readFileSync(cinematicCssPath, "utf8");
