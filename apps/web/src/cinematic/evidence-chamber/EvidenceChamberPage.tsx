@@ -87,7 +87,7 @@ const finalLinks = [
   },
 ] as const satisfies readonly CinematicRailItem[];
 
-const FINAL_RAIL_INTERACTIVE_PROGRESS = 0.9;
+const FINAL_RAIL_INTERACTIVE_PROGRESS = 0.95;
 
 export default function EvidenceChamberPage() {
   const { reducedMotion, sectionRef, stageRef } = useCinematicTimeline({ smoothing: 0.11 });

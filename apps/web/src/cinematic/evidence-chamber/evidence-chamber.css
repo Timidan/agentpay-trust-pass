@@ -25,7 +25,7 @@
   --ec-receipt-out: clamp(0, calc((0.9 - var(--cinematic-p)) * 14.2857), 1);
   --ec-stamp-in: clamp(0, calc((var(--cinematic-p) - 0.77) * 12.5), 1);
   --ec-stamp-out: clamp(0, calc((0.94 - var(--cinematic-p)) * 20), 1);
-  --ec-final-in: clamp(0, calc((var(--cinematic-p) - 0.9) * 10), 1);
+  --ec-final-in: clamp(0, calc((var(--cinematic-p) - 0.88) * 16.6667), 1);
   perspective: 1400px;
   background:
     radial-gradient(circle at 74% 40%, hsl(44 70% 99% / 94%), transparent 30%),
@@ -909,6 +909,8 @@
 
 @media (max-width: 640px) {
   .evidence-chamber .ec-stage {
+    --ec-mobile-panel-center: 31%;
+    --ec-mobile-evidence-center: 70%;
     perspective: 900px;
   }
 
@@ -921,7 +923,7 @@
   }
 
   .evidence-chamber .ec-panel {
-    top: 29%;
+    top: var(--ec-mobile-panel-center);
     right: 19px;
     left: 19px;
     width: auto;
@@ -1002,6 +1004,7 @@
   }
 
   .evidence-chamber .ec-evidence__layer {
+    top: var(--ec-mobile-evidence-center);
     left: 50%;
     width: min(173px, 46vw);
     min-height: 78px;
