@@ -58,7 +58,6 @@ const finalLinks = [
 ] as const satisfies readonly CinematicRailItem[];
 
 const FINAL_RAIL_INTERACTIVE_PROGRESS = 0.9;
-const PROGRESS_EPSILON = 0.0005;
 
 function useFinalRailInteractivity(stageRef: RefObject<HTMLElement | null>, reducedMotion: boolean) {
   const [interactive, setInteractive] = useState(reducedMotion);
@@ -69,38 +68,26 @@ function useFinalRailInteractivity(stageRef: RefObject<HTMLElement | null>, redu
       return;
     }
 
-    let frame: number | null = null;
-    let lastProgress = -1;
-    let stableFrames = 0;
+    const stage = stageRef.current;
+    if (!stage) {
+      setInteractive(false);
+      return;
+    }
 
-    const readProgress = () => {
-      frame = null;
-      const rawProgress = stageRef.current?.style.getPropertyValue("--cinematic-p") ?? "0";
+    const syncInteractivity = () => {
+      const rawProgress = stage.style.getPropertyValue("--cinematic-p") || "0";
       const parsedProgress = Number.parseFloat(rawProgress);
       const progress = Number.isFinite(parsedProgress) ? parsedProgress : 0;
       const nextInteractive = progress >= FINAL_RAIL_INTERACTIVE_PROGRESS;
 
       setInteractive((current) => current === nextInteractive ? current : nextInteractive);
-      stableFrames = Math.abs(progress - lastProgress) <= PROGRESS_EPSILON ? stableFrames + 1 : 0;
-      lastProgress = progress;
-
-      if (stableFrames < 2) frame = window.requestAnimationFrame(readProgress);
     };
 
-    const scheduleRead = () => {
-      stableFrames = 0;
-      if (frame === null) frame = window.requestAnimationFrame(readProgress);
-    };
+    syncInteractivity();
+    const observer = new MutationObserver(syncInteractivity);
+    observer.observe(stage, { attributeFilter: ["style"], attributes: true });
 
-    scheduleRead();
-    window.addEventListener("resize", scheduleRead, { passive: true });
-    window.addEventListener("scroll", scheduleRead, { passive: true });
-
-    return () => {
-      window.removeEventListener("resize", scheduleRead);
-      window.removeEventListener("scroll", scheduleRead);
-      if (frame !== null) window.cancelAnimationFrame(frame);
-    };
+    return () => observer.disconnect();
   }, [reducedMotion, stageRef]);
 
   return interactive;

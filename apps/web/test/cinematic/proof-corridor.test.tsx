@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -81,7 +81,7 @@ describe("Proof Corridor", () => {
     expect(screen.queryByRole("button", { name: /Enter the corridor/i })).toBeNull();
   });
 
-  it("keeps the final rail inert until it is visible", () => {
+  it("keeps the final rail inert until it is visible", async () => {
     const flushFrames = installAnimationFrameQueue();
     vi.stubGlobal("innerHeight", 900);
     vi.stubGlobal("scrollY", 0);
@@ -113,11 +113,29 @@ describe("Proof Corridor", () => {
     fireEvent.scroll(window);
     act(() => flushFrames());
 
-    expect(final.hasAttribute("inert")).toBe(false);
+    await waitFor(() => expect(final.hasAttribute("inert")).toBe(false));
     expect(screen.getByRole("link", { name: /Console/i }).getAttribute("href")).toBe("/app");
 
     const css = readFileSync(proofCorridorCssPath, "utf8");
     expect(css).toMatch(/\.pc-final\[inert\][^\{]*\{[^\}]*pointer-events: none;/s);
+  });
+
+  it("activates at exactly 0.90 and deactivates when progress reverses below it", async () => {
+    const flushFrames = installAnimationFrameQueue();
+    render(<MemoryRouter><ProofCorridorPage /></MemoryRouter>);
+    const stage = document.querySelector<HTMLElement>(".pc-stage");
+    const final = document.querySelector<HTMLElement>(".pc-final");
+    if (!stage || !final) throw new Error("Proof Corridor timeline is missing");
+    act(() => flushFrames());
+
+    stage.style.setProperty("--cinematic-p", "0.896");
+    expect(final.hasAttribute("inert")).toBe(true);
+
+    stage.style.setProperty("--cinematic-p", "0.90");
+    await waitFor(() => expect(final.hasAttribute("inert")).toBe(false));
+
+    stage.style.setProperty("--cinematic-p", "0.8999");
+    await waitFor(() => expect(final.hasAttribute("inert")).toBe(true));
   });
 
   it("keeps the final rail interactive immediately for reduced motion", () => {
