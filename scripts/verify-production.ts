@@ -79,7 +79,18 @@ export async function verifyProduction(
     if (supportedKind && "feePayer" in supportedKind) {
       throw new Error("public payment status exposes facilitator fee payer");
     }
-    checks.push("public payment status hides server-only facilitator details");
+    if (paymentStatus.status !== "ready") {
+      const reason = typeof paymentStatus.reason === "string" ? `: ${paymentStatus.reason}` : "";
+      throw new Error(`public payment status is not ready${reason}`);
+    }
+    if (
+      supportedKind?.x402Version !== 2 ||
+      supportedKind.scheme !== "exact" ||
+      supportedKind.network !== "casper:casper-test"
+    ) {
+      throw new Error("public payment status does not confirm x402 v2 exact Casper Testnet support");
+    }
+    checks.push("public payment status is ready and hides server-only facilitator details");
   });
 
   await captureFailure(failures, async () => {

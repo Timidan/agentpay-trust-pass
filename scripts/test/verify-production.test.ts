@@ -105,6 +105,37 @@ describe("production verification", () => {
     );
   });
 
+  it("rejects a public payment rail that is not ready", async () => {
+    const fetchImpl = fixtureFetch({
+      "/bridge/tools/payment_status": JSON.stringify({
+        status: "configuration_required",
+        reason: "x402_facilitator_auth_required",
+        supportedKind: null
+      })
+    });
+
+    await expect(verifyProduction({ origin: ORIGIN, fetchImpl })).rejects.toThrow(
+      "public payment status is not ready: x402_facilitator_auth_required"
+    );
+  });
+
+  it("rejects a ready payment rail that does not support exact Testnet settlement", async () => {
+    const fetchImpl = fixtureFetch({
+      "/bridge/tools/payment_status": JSON.stringify({
+        status: "ready",
+        supportedKind: {
+          x402Version: 2,
+          scheme: "exact",
+          network: "casper:casper-mainnet"
+        }
+      })
+    });
+
+    await expect(verifyProduction({ origin: ORIGIN, fetchImpl })).rejects.toThrow(
+      "public payment status does not confirm x402 v2 exact Casper Testnet support"
+    );
+  });
+
   it("rejects a public registry status that exposes server internals", async () => {
     const fetchImpl = fixtureFetch({
       "/bridge/tools/registry_status": JSON.stringify({

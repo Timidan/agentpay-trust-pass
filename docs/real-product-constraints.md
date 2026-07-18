@@ -1,6 +1,6 @@
 # AgentPay Real Product Constraints
 
-Date: 2026-07-17
+Date: 2026-07-18
 
 ## Product Rule
 
@@ -11,7 +11,7 @@ Current runtime source set:
 - Casper Node RPC: network status and latest finalized block from `CASPER_RPC_URL`.
 - Token-subject evidence: Casper RPC supplies latest height, CEP-18 supply controls, and total supply. Public CSPR.live APIs supply package metadata, version/install height, and FT ownership. CSPR.trade supplies Mainnet pair and priced-liquidity observations. Every source is independently nullable; custom authority models and LP-holder concentration remain not checked.
 - CSPR.trade MCP: DEX pair surface from `CSPR_TRADE_MCP_URL`.
-- x402 facilitator: payment verification and settlement through `X402_FACILITATOR_URL`, using `PAYMENT-REQUIRED`, `PAYMENT-SIGNATURE`, and `PAYMENT-RESPONSE` headers. The proven Testnet run used the self-hosted open-source `casper-x402` facilitator at `http://127.0.0.1:4022`; the hosted CSPR.cloud facilitator remains an optional drop-in path that has not been exercised end-to-end in this repo.
+- x402 facilitator: payment verification and settlement through `X402_FACILITATOR_URL`, using `PAYMENT-REQUIRED`, `PAYMENT-SIGNATURE`, and `PAYMENT-RESPONSE` headers. The hosted CSPR.cloud path is proven with official WCSPR package `hash-3d80df21ba4ee4d66a2a1f60c32570dd5685e4b279f6538162a5fd1314847c1e`; the self-hosted open-source facilitator remains a live-compatible operational fallback.
 - Payment auditor: authenticated `/v1/checks` evaluates normalized x402 terms before signing; the API stores no buyer key and cannot submit a buyer payment.
 - Settlement verifier: Casper `info_get_transaction` evidence is matched against the exact approved payer, payee, asset, amount, network, and authorization before one immutable receipt can be finalized.
 - AgentPayRegistry submitters: the qualified decision path uses an owner or recorder account; the purchase-receipt path uses only `AGENT_PAY_REGISTRY_RECORDER_KEY_PATH` and refuses reuse of `CASPER_SECRET_KEY_PATH`.
@@ -92,14 +92,16 @@ Current proven evidence:
 
 - Registry v2 install `2c53ec7d38757c7c252fa16acc4c099d1c53136c852f908821989ac42f0fa4e6` is confirmed executed at Testnet block 8,518,390.
 - Registry v2 package `hash-050b717617b9c79535983d9e0cc2ba21dd379ce3450498601dba64324a2dcd1a` and contract `hash-b5e129dca5548f1bbe225db73042d08ab5b35cc976c3ac955bf2fe2a8cd92ee3` expose the expected receipt, recorder, and legacy decision entrypoints.
-- Checked x402 settlement `2491e2cfc3fc2c299ebdfb25725a8c8a194918b813f8c7596eec13bce3cd7911` is confirmed executed through the self-hosted facilitator path.
+- Hosted paid-report settlement `31d7fb7fe45430d4af99c56e9dda536ce4c7306c0296f3d87fc0febd771adb86` is confirmed executed at Testnet block 8,548,043 with an exact `10000` WCSPR transfer.
+- Live desktop checked-call settlement `28048959f0e059dbc4b0b69f0d99d41bdcd19e05b72128fbbf0442ac3c185c98` and receipt anchor `ad6dfb831d4fb8273d8c54d41ea9e2ad48e1d94aea18b94006ee3b94a7470b87` are confirmed executed through the public UI.
+- Live mobile checked-call settlement `e5b5bd3cb72347246de27979f889ca62c66503696ab16e5cc3cc99cd89130b69` and receipt anchor `eb557178a60c5b06ecf10ea3efb5d8c4e0a236fec6c4a7f8da826d33c94fdb1d` are confirmed executed through the public UI.
 - Receipt anchor `eb30265877e0bbb549efa6f09dbd8beb29efc31191724ce082fca45b6dddddfc` is confirmed executed at block 8,518,465. Dictionary readback binds receipt `0f253ef7ce564e046d23abf42c8cabdad7b1deeab2fa4fafd2e3619f93cdf231` to policy `2c1941b0c6880bbd2b7622a66a88f4c2e48d24edc0609770b689d44b1b054571`, the exact settlement, and recorder `account-hash-0a6c747e7b07f063349ef66909a82c84e29095eaf7774df62428d09e49aa8b80`.
 - Qualification decision record `da99d2cd3f23fbd9e9369c57d9a7442219ea746812a143e29fdbd28b7b43216b` remains confirmed executed.
 
 Submission blockers remaining:
 
-- Publish the GitHub repository and attach a public walkthrough video to DoraHacks.
-- Do not claim hosted CSPR.cloud settlement as proven unless a separate hosted run is captured; it is currently only a drop-in configuration path.
+- Push the final WCSPR configuration and evidence update to the public repository and attach a public walkthrough video to DoraHacks.
+- Replace the shared documentation credential with a project-specific CSPR.cloud token before sustained public traffic.
 
 Local readiness command:
 
@@ -112,7 +114,6 @@ Current result: every local and Casper evidence gate passes; the command remains
 Deferred:
 
 - Multi-source policy engine.
-- Wallet UX for creating payment payloads.
 - Autonomous trading execution.
 - Persistent quote storage.
-- Public deployment and production monitoring; systemd/nginx templates are prepared under `deploy/agentpay` but are not themselves proof of a live deployment.
+- Production monitoring and alerting.

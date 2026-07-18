@@ -288,7 +288,7 @@ export default function Landing2({
     { name: "CSPR.trade", src: csprTradeLogo },
     { name: "CSPR.name" },
     { name: "CSPR.live" },
-    { name: "CSPR.cloud (optional)", src: csprCloudLogo },
+    { name: "CSPR.cloud", src: csprCloudLogo },
     { name: "x402", src: x402Logo },
     { name: "MCP", src: mcpLogo },
   ];

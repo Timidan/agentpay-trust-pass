@@ -66,7 +66,7 @@ export function ChargeTerms({ flow }: { flow: AuditFlow }) {
 
       {flow.liveService.status === "success" ? (
         <p className="audit-note" data-state="success">
-          Loaded a real AgentPay token-check charge for WCSPR. It uses CSPR.trade for the token and settles on Casper Testnet.
+          Loaded a real AgentPay token-check charge using official WCSPR. It settles on Casper Testnet.
         </p>
       ) : null}
       {flow.liveService.status === "error" ? (

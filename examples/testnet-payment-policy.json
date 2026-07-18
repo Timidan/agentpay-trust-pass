@@ -3,7 +3,7 @@
     "casper:casper-test"
   ],
   "assetDailyCaps": {
-    "a7888ddfbc31455396f3c57583547962a28bcb3b20e60d6be2dea3a8f2991d4d": "1000000"
+    "3d80df21ba4ee4d66a2a1f60c32570dd5685e4b279f6538162a5fd1314847c1e": "1000000"
   },
   "maximumAuthorizationWindowSeconds": 300,
   "maximumConcurrentReservations": 5,

@@ -61,6 +61,7 @@ describe("getHeroTokenList", () => {
 
 describe("fetchSubjectTokenState", () => {
   it("fills every required token fact from public CSPR.live and Casper RPC without an indexer token", async () => {
+    vi.stubEnv("CSPR_CLOUD_ACCESS_TOKEN", "discovery-only-token");
     const publicIndexerBase = "https://api.testnet.cspr.live.example";
     const publicRpc = "https://public-casper.test/rpc";
     const fetchImpl = vi.fn<typeof fetch>(async (rawUrl, init) => {
@@ -116,7 +117,6 @@ describe("fetchSubjectTokenState", () => {
 
     await expect(fetchSubjectTokenState(PACKAGE_HASH, {
       network: "casper-testnet",
-      accessToken: "",
       publicIndexerBase,
       casperRpcUrl: publicRpc,
       fetchImpl
@@ -154,6 +154,23 @@ describe("fetchSubjectTokenState", () => {
     });
 
     expect(fetchImpl).toHaveBeenCalled();
+  });
+
+  it("uses only the subject-specific credential for authenticated subject evidence", async () => {
+    vi.stubEnv("CSPR_CLOUD_ACCESS_TOKEN", "discovery-only-token");
+    vi.stubEnv("CSPR_CLOUD_SUBJECT_ACCESS_TOKEN", "subject-only-token");
+    const fetchImpl = sourceFetch({ mintBurnFlag: 0 });
+
+    const state = await fetchSubjectTokenState(PACKAGE_HASH, {
+      restBase: "https://api.testnet.example",
+      nodeRpcUrl: "https://node.testnet.example/rpc",
+      fetchImpl
+    });
+
+    expect(state.holderCount).toBe(10);
+    for (const [, init] of vi.mocked(fetchImpl).mock.calls) {
+      expect(new Headers(init?.headers).get("authorization")).toBe("subject-only-token");
+    }
   });
 
   it("reports enabled CEP-18 minting as mutable supply", async () => {

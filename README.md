@@ -201,7 +201,8 @@ Reading evidence and checking a captured 402 need no server-side buyer key. Buye
 | `CASPER_SECRET_KEY_PATH` | Buyer-side only: signs x402 payments and may submit the qualified legacy decision record. Never read by the payment-audit API. |
 | `X402_ASSET_PACKAGE_HASH` | The CEP-18 fee asset, as raw 64 hex chars. |
 | `PAYEE_ADDRESS` | The account that receives payment, in `00<64 hex>` form. |
-| `X402_FACILITATOR_URL` | The x402 facilitator. The proven path is the self-hosted open-source `casper-x402`; hosted CSPR.cloud is a drop-in option (add `CSPR_CLOUD_ACCESS_TOKEN` or `X402_FACILITATOR_AUTH_TOKEN`). |
+| `X402_FACILITATOR_URL` | The x402 facilitator. The proven hosted Testnet path uses `https://x402-facilitator.cspr.cloud` with official WCSPR and facilitator authorization. The self-hosted open-source `casper-x402` path can serve as an operational fallback. |
+| `X402_FACILITATOR_AUTH_TOKEN` | Dedicated hosted-facilitator credential. Prefer this over sharing the token-discovery credential. |
 | `AGENT_PAY_REGISTRY_PACKAGE_HASH` | The deployed AgentPayRegistry, as `hash-<64 hex>` or raw 64 hex chars. |
 | `AGENT_PAY_REGISTRY_CONTRACT_HASH` | The active registry contract hash used for receipt dictionary readback. |
 | `AGENT_PAY_REGISTRY_RECORDER_ACCOUNT_HASH` | Dedicated recorder account installed in the registry contract. Must differ from the owner/buyer account. |
@@ -216,7 +217,8 @@ Reading evidence and checking a captured 402 need no server-side buyer key. Buye
 | `VITE_AGENTPAY_SERVICE_URL` | Optional public HTTPS AgentPay service used by the payment checker's one-click WCSPR flow. Production uses `https://agentpay.timidan.xyz/api`. |
 | `CSPR_NAME_API_BASE_URL` | Public CSPR.name resolution API. Defaults to `https://api.cspr.name`; HTTPS is required outside localhost. |
 | `CSPR_LIVE_MAINNET_API_URL` / `CSPR_LIVE_TESTNET_API_URL` | Optional overrides for the public CSPR.live APIs used for holder, concentration, package-version, and install-height evidence. |
-| `CSPR_CLOUD_ACCESS_TOKEN` | Optional token for CSPR.cloud discovery and, when selected, hosted facilitator authorization. Subject checks do not require it. |
+| `CSPR_CLOUD_ACCESS_TOKEN` | Optional CSPR.cloud token-discovery access. It is only a fallback for facilitator auth when no dedicated facilitator token is set. |
+| `CSPR_CLOUD_SUBJECT_ACCESS_TOKEN` | Optional authenticated CSPR.cloud subject-evidence path. By default, subject checks use public CSPR.live plus native Casper RPC instead. |
 
 The CLI exposes the same non-custodial flow. It is published as
 [`@timidan/agentpay-cli`](https://www.npmjs.com/package/@timidan/agentpay-cli):
@@ -320,9 +322,12 @@ The original paid-evidence flow and the hardened payment-auditor flow were both 
 - Registry v2 install: `2c53ec7d38757c7c252fa16acc4c099d1c53136c852f908821989ac42f0fa4e6`
 - Registry v2 package: `hash-050b717617b9c79535983d9e0cc2ba21dd379ce3450498601dba64324a2dcd1a`
 - Registry v2 contract: `hash-b5e129dca5548f1bbe225db73042d08ab5b35cc976c3ac955bf2fe2a8cd92ee3`
-- Checked x402 settlement: `2491e2cfc3fc2c299ebdfb25725a8c8a194918b813f8c7596eec13bce3cd7911`
-- Purchase receipt hash: `0f253ef7ce564e046d23abf42c8cabdad7b1deeab2fa4fafd2e3619f93cdf231`
-- Receipt anchor transaction: `eb30265877e0bbb549efa6f09dbd8beb29efc31191724ce082fca45b6dddddfc`
+- Official Testnet WCSPR package: `hash-3d80df21ba4ee4d66a2a1f60c32570dd5685e4b279f6538162a5fd1314847c1e`
+- Hosted CSPR.cloud paid-report settlement: `31d7fb7fe45430d4af99c56e9dda536ce4c7306c0296f3d87fc0febd771adb86`
+- Live desktop checked-call settlement: `28048959f0e059dbc4b0b69f0d99d41bdcd19e05b72128fbbf0442ac3c185c98`
+- Live desktop receipt anchor: `ad6dfb831d4fb8273d8c54d41ea9e2ad48e1d94aea18b94006ee3b94a7470b87`
+- Live mobile checked-call settlement: `e5b5bd3cb72347246de27979f889ca62c66503696ab16e5cc3cc99cd89130b69`
+- Live mobile receipt anchor: `eb557178a60c5b06ecf10ea3efb5d8c4e0a236fec6c4a7f8da826d33c94fdb1d`
 - Qualification decision record: `da99d2cd3f23fbd9e9369c57d9a7442219ea746812a143e29fdbd28b7b43216b`
 
 ---
@@ -335,7 +340,7 @@ The maintained, authoritative list of what runs live today is [docs/live-capabil
 - **Live with configured Testnet credentials:** checked x402 calls, exact settlement verification, receipt finalization, readback-confirmed receipt anchoring, paid reports, and the qualification decision path.
 - **Account resolution:** `assess_account` accepts a `.cspr` name. AgentPay validates its active CSPR.name resolution, checks that any returned public key derives the returned account hash, and then reads the canonical account directly from Casper Mainnet.
 - **Token evidence:** Casper RPC reads CEP-18 supply controls and total supply. CSPR.live adds holder count, top-holder concentration, package versions, and install height. CSPR.trade adds exact Mainnet pair and priced-liquidity observations. Any unavailable or unsupported source remains *not checked*; custom authority models and LP-holder concentration are not claimed.
-- **Not claimed:** hosted CSPR.cloud settlement has not yet been exercised end to end, and AgentPay has no mainnet deployment.
+- **Not claimed:** AgentPay has no mainnet deployment or facilitator availability SLA. The hosted path is proven on Testnet; sustained public traffic should use a project-specific CSPR.cloud credential.
 
 The app ships no committed business-evidence rows and no invented payment or transaction receipts.
 

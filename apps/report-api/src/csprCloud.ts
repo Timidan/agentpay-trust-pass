@@ -258,15 +258,17 @@ export async function fetchSubjectTokenState(
     options.publicIndexerBase ?? csprLiveApiBase(network)
   );
   const nodeRpcUrl = options.nodeRpcUrl ?? endpoints.nodeRpcUrl;
+  const subjectAccessToken =
+    options.accessToken ?? process.env.CSPR_CLOUD_SUBJECT_ACCESS_TOKEN?.trim() ?? "";
   const state = emptySubjectTokenState(hash, restBase, nodeRpcUrl);
   const requestOptions = {
-    accessToken: options.accessToken,
+    accessToken: subjectAccessToken || undefined,
     fetchImpl: options.fetchImpl
   };
   if (!/^[0-9a-f]{64}$/i.test(hash)) {
     return state;
   }
-  if (!(options.accessToken ?? accessToken())) {
+  if (!subjectAccessToken) {
     const casperRpcUrl = options.casperRpcUrl ?? evidenceRpcUrl(network);
     state.holdersSourceUrl = `${publicIndexerBase}/contract-packages/${hash}/ft-token-ownership`;
     state.ageSourceUrl = `${publicIndexerBase}/contract-packages/${hash}/contracts`;
