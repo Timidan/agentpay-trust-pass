@@ -35,7 +35,9 @@ describe("agent integration display origins", () => {
     expect(codeBlocks).toContainEqual(expect.stringContaining("npm install --global @timidan/agentpay-cli"));
     expect(codeBlocks).toContainEqual(expect.stringContaining("agentpay agent-token issue"));
     expect(codeBlocks).toContainEqual(expect.stringContaining(`"name": "quote_report"`));
-    expect(codeBlocks).toContainEqual(expect.stringContaining(`"subject": "WCSPR"`));
+    expect(codeBlocks).toContainEqual(expect.stringContaining(
+      `"subject": "hash-3d80df21ba4ee4d66a2a1f60c32570dd5685e4b279f6538162a5fd1314847c1e"`
+    ));
     expect(codeBlocks).toContainEqual(expect.stringContaining(`export AGENT_PAY_MCP_URL=${BRIDGE_ORIGIN}`));
     expect(codeBlocks).toContainEqual(expect.stringContaining("Authorization: Bearer $AGENT_PAY_MCP_TOKEN"));
     expect(document.body.textContent).toContain("Use Node.js 22 or a later version.");

@@ -33,14 +33,15 @@ Call this public tool:
 {
   "name": "quote_report",
   "arguments": {
-    "subject": "WCSPR",
+    "subject": "hash-3d80df21ba4ee4d66a2a1f60c32570dd5685e4b279f6538162a5fd1314847c1e",
     "evidenceNetwork": "casper-testnet"
   }
 }
 ```
 
 The result contains a quote ID, x402 payment terms, and the payment-readiness
-state. This call does not sign or settle a payment.
+state. The subject is the official Testnet WCSPR package. This call does not
+sign or settle a payment.
 
 The package uses `https://agentpay.timidan.xyz/api` by default.
 

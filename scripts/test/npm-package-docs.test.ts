@@ -10,9 +10,9 @@ async function read(path: string): Promise<string> {
 
 describe("public npm package documentation", () => {
   it.each([
-    ["apps/mcp-server/.publish/package.json", "@timidan/agentpay-mcp"],
-    ["apps/cli/.publish/package.json", "@timidan/agentpay-cli"]
-  ])("keeps %s ready for the documented patch release", async (path, name) => {
+    ["apps/mcp-server/.publish/package.json", "@timidan/agentpay-mcp", "0.1.2"],
+    ["apps/cli/.publish/package.json", "@timidan/agentpay-cli", "0.1.1"]
+  ])("keeps %s ready for the documented patch release", async (path, name, version) => {
     const manifest = JSON.parse(await read(path)) as {
       name?: string;
       version?: string;
@@ -23,7 +23,7 @@ describe("public npm package documentation", () => {
 
     expect(manifest).toMatchObject({
       name,
-      version: "0.1.1",
+      version,
       engines: { node: ">=22" },
       homepage: "https://agentpay.timidan.xyz"
     });
@@ -35,7 +35,9 @@ describe("public npm package documentation", () => {
 
     expect(readme).toContain("https://www.npmjs.com/package/@timidan/agentpay-mcp");
     expect(readme).toContain('"name": "quote_report"');
-    expect(readme).toContain('"subject": "WCSPR"');
+    expect(readme).toContain(
+      '"subject": "hash-3d80df21ba4ee4d66a2a1f60c32570dd5685e4b279f6538162a5fd1314847c1e"'
+    );
     expect(readme).toContain("agentpay agent-token issue");
     expect(readme).toContain("settlements:write");
     expect(readme).toContain("observations:write");

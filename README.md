@@ -335,14 +335,15 @@ Call this tool to test the connection without a token or payment:
 {
   "name": "quote_report",
   "arguments": {
-    "subject": "WCSPR",
+    "subject": "hash-3d80df21ba4ee4d66a2a1f60c32570dd5685e4b279f6538162a5fd1314847c1e",
     "evidenceNetwork": "casper-testnet"
   }
 }
 ```
 
 A successful result contains `quoteId`, `paymentRequirements`, and
-`paymentReadiness`. This call does not sign or settle a payment.
+`paymentReadiness`. The subject is the official Testnet WCSPR package. This
+call does not sign or settle a payment.
 
 Public quote, payment-status, and proof-verification operations do not need an
 AgentPay token. A paid token or account check needs a local Testnet buyer key

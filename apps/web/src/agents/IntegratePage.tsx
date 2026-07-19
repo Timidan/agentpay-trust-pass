@@ -34,7 +34,7 @@ agentpay agent-token issue \\
 const MCP_TOOL_CALL = `{
   "name": "quote_report",
   "arguments": {
-    "subject": "WCSPR",
+    "subject": "hash-3d80df21ba4ee4d66a2a1f60c32570dd5685e4b279f6538162a5fd1314847c1e",
     "evidenceNetwork": "casper-testnet"
   }
 }`;
@@ -144,8 +144,9 @@ export default function IntegratePage({ onBack, onOpenAsk, navigate, theme, onTo
             <code>{MCP_TOOL_CALL}</code>
           </pre>
           <p className="ag-note">
-            A successful result contains a quote ID, Casper x402 payment terms, and payment readiness.
-            Use <code>check_x402_payment</code> before a wallet signs a real service charge.
+            This subject is the official Testnet WCSPR package. A successful result contains a quote
+            ID, Casper x402 payment terms, and payment readiness. Use <code>check_x402_payment</code>
+            before a wallet signs a real service charge.
           </p>
           <p className="ag-note">Over the HTTP bridge:</p>
           <pre className="ag-code">
