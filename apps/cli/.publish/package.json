@@ -4,7 +4,7 @@
   "description": "AgentPay CLI: check x402 charges before paying on Casper. Create operator sessions, issue scoped agent tokens, run payment checks, verify settlements, and fetch receipts.",
   "type": "module",
   "bin": {
-    "agentpay": "./main.js"
+    "agentpay": "main.js"
   },
   "files": [
     "main.js"

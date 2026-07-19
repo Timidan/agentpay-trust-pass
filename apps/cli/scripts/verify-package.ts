@@ -47,7 +47,7 @@ try {
   if (
     manifest.name !== "@timidan/agentpay-cli" ||
     manifest.version !== "0.1.1" ||
-    manifest.bin?.agentpay !== "./main.js"
+    manifest.bin?.agentpay !== "main.js"
   ) {
     throw new Error("Installed CLI package metadata is not ready for version 0.1.1");
   }
