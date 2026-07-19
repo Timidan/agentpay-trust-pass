@@ -1,6 +1,6 @@
 {
   "name": "@timidan/agentpay-cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "AgentPay CLI: check x402 charges before paying on Casper. Create operator sessions, issue scoped agent tokens, run payment checks, verify settlements, and fetch receipts.",
   "type": "module",
   "bin": {
@@ -19,6 +19,9 @@
     "directory": "apps/cli"
   },
   "homepage": "https://agentpay.timidan.xyz",
+  "bugs": {
+    "url": "https://github.com/Timidan/agentpay-trust-pass/issues"
+  },
   "keywords": [
     "casper",
     "x402",

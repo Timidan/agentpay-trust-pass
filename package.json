@@ -10,11 +10,12 @@
   "scripts": {
     "dev": "bash scripts/dev.sh",
     "test:scripts": "vitest run scripts/test/*.test.ts",
-    "test": "npm run test:scripts && npm run test --workspaces --if-present && npm run mcp:package-check && npm run build:contract && cargo test --manifest-path contracts/agent-pay-registry/Cargo.toml",
+    "test": "npm run test:scripts && npm run test --workspaces --if-present && npm run mcp:package-check && npm run cli:package-check && npm run build:contract && cargo test --manifest-path contracts/agent-pay-registry/Cargo.toml",
     "smoke": "bash scripts/smoke.sh",
     "auditor:ui-e2e": "node --import tsx scripts/e2e-auditor-ui.ts",
     "agent:cli-e2e": "node --import tsx scripts/e2e-agent-cli.ts",
     "mcp:package-check": "pnpm --filter @agent-pay/mcp-server package:check",
+    "cli:package-check": "pnpm --filter @agent-pay/cli package:check",
     "trust:ui-e2e": "node --import tsx scripts/e2e-trust-ui.ts",
     "production:check": "node --import tsx scripts/verify-production.ts",
     "submission:check": "tsx scripts/submission-readiness.ts",

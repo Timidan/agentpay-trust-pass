@@ -151,9 +151,43 @@
   border: 1px solid var(--border);
   color: var(--foreground);
 }
+.ag-note--lead {
+  margin: 0 0 12px;
+}
+.ag-code--spaced {
+  margin-top: 14px;
+}
 .ag-sep {
   margin: 0 8px;
   opacity: 0.5;
+}
+
+.ag-package-line {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 10px 0;
+  color: var(--muted-foreground);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+.ag-package-line a {
+  flex: 0 0 auto;
+  color: var(--brand-ink);
+  font-family: var(--font-data);
+  font-weight: 700;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+.ag-package-line code {
+  font-family: var(--font-data);
+}
+@media (max-width: 640px) {
+  .ag-package-line {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
+  }
 }
 
 /* Tools: a clean definition list, not cards. */

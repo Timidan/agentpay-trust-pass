@@ -24,13 +24,23 @@ describe("agent integration display origins", () => {
 
     expect(screen.getByText(`curl ${REPORT_API_ORIGIN}/skill.md`)).toBeTruthy();
     expect(screen.getByText(`POST ${BRIDGE_ORIGIN}/tools/<name>`)).toBeTruthy();
+    expect(screen.getByRole("link", { name: "@timidan/agentpay-mcp" }).getAttribute("href"))
+      .toBe("https://www.npmjs.com/package/@timidan/agentpay-mcp");
+    expect(screen.getByRole("link", { name: "@timidan/agentpay-cli" }).getAttribute("href"))
+      .toBe("https://www.npmjs.com/package/@timidan/agentpay-cli");
 
     const codeBlocks = Array.from(document.querySelectorAll("pre code"), (node) => node.textContent ?? "");
     expect(codeBlocks).toContainEqual(expect.stringContaining(`"command": "npx"`));
     expect(codeBlocks).toContainEqual(expect.stringContaining(`"args": ["--yes", "@timidan/agentpay-mcp"]`));
-    expect(codeBlocks).toContainEqual(expect.stringContaining(`"name": "payment_status", "arguments": {}`));
+    expect(codeBlocks).toContainEqual(expect.stringContaining("npm install --global @timidan/agentpay-cli"));
+    expect(codeBlocks).toContainEqual(expect.stringContaining("agentpay agent-token issue"));
+    expect(codeBlocks).toContainEqual(expect.stringContaining(`"name": "quote_report"`));
+    expect(codeBlocks).toContainEqual(expect.stringContaining(`"subject": "WCSPR"`));
     expect(codeBlocks).toContainEqual(expect.stringContaining(`export AGENT_PAY_MCP_URL=${BRIDGE_ORIGIN}`));
     expect(codeBlocks).toContainEqual(expect.stringContaining("Authorization: Bearer $AGENT_PAY_MCP_TOKEN"));
+    expect(document.body.textContent).toContain("Use Node.js 22 or a later version.");
+    expect(document.body.textContent).not.toContain("--scope checks:write");
+    expect(document.body.textContent).not.toContain("@agent-pay/client");
     expect(document.body.textContent).not.toContain("@agent-pay/mcp-server");
     expect(document.body.textContent).not.toContain("CASPER_SECRET_KEY_PATH");
     expect(document.body.textContent).not.toContain("127.0.0.1");

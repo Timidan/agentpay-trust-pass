@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { access, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
@@ -25,6 +25,7 @@ const expectedTools = [
 
 await access(packageManifest);
 const workspace = await mkdtemp(join(tmpdir(), "agentpay-mcp-package-"));
+const npmEnv = { ...process.env, NPM_CONFIG_CACHE: join(workspace, "npm-cache") };
 
 try {
   const packDirectory = join(workspace, "pack");
@@ -35,10 +36,10 @@ try {
   const { stdout } = await execFileAsync(
     "npm",
     ["pack", "--json", "--pack-destination", packDirectory],
-    { cwd: packageRoot, maxBuffer: 1024 * 1024 }
+    { cwd: packageRoot, env: npmEnv, maxBuffer: 1024 * 1024 }
   );
-  const packed = JSON.parse(stdout) as Array<{ filename?: string }>;
-  const filename = packed[0]?.filename;
+  const packed = stdout.trim() ? JSON.parse(stdout) as Array<{ filename?: string }> : [];
+  const filename = packed[0]?.filename ?? (await readdir(packDirectory)).find((entry) => entry.endsWith(".tgz"));
   if (!filename) throw new Error("npm pack did not return an AgentPay MCP archive");
   const tarball = join(packDirectory, filename);
 
@@ -53,7 +54,7 @@ try {
       "--no-fund",
       tarball
     ],
-    { maxBuffer: 1024 * 1024 }
+    { env: npmEnv, maxBuffer: 1024 * 1024 }
   );
 
   const installedManifestPath = join(

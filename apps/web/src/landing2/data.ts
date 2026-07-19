@@ -1,4 +1,6 @@
 export const EXPLORER = "https://testnet.cspr.live";
+export const MCP_NPM_URL = "https://www.npmjs.com/package/@timidan/agentpay-mcp";
+export const CLI_NPM_URL = "https://www.npmjs.com/package/@timidan/agentpay-cli";
 
 /** Middle-truncate a long hash so it fits 320px without overlap. */
 export function shortHash(value: string, head = 8, tail = 6): string {
@@ -8,19 +10,32 @@ export function shortHash(value: string, head = 8, tail = 6): string {
   return `${prefix}${bare.slice(0, head)}…${bare.slice(-tail)}`;
 }
 
-// The three real MCP tool names (apps/mcp-server/src/tools.ts) with the honest
-// backend-owned answers each one returns.
-// One entry per integration surface. Every tool, route, subcommand, and type
-// below exists in this repo (apps/mcp-server, apps/cli, packages/agent-pay-client).
+// One entry per public integration surface. The MCP and CLI packages are
+// published to npm. The HTTP bridge is hosted with the application.
 export const AGENT_SURFACES: ReadonlyArray<{ id: string; name: string; title: string; code: string }> = [
   {
     id: "mcp",
     name: "MCP",
-    title: "agentpay · MCP",
-    code: `# MCP tools an agent calls before it signs
+    title: "@timidan/agentpay-mcp",
+    code: `npx --yes @timidan/agentpay-mcp
+
+# MCP tools an agent calls before it signs
 check_x402_payment      -> PAY | REVIEW | BLOCK
 verify_x402_settlement  -> match | pending | mismatch | unverifiable
 get_payment_receipt     -> receipt body + anchor state`
+  },
+  {
+    id: "cli",
+    name: "CLI",
+    title: "@timidan/agentpay-cli",
+    code: `npm install --global @timidan/agentpay-cli
+
+# check a charge, then prove the settlement
+agentpay check              -> PAY | REVIEW | BLOCK
+agentpay verify-settlement  -> match | pending | mismatch | unverifiable
+agentpay receipt show|verify
+agentpay provider pin|deny
+agentpay policy show|set`
   },
   {
     id: "http",
@@ -33,33 +48,6 @@ POST /tools/get_payment_receipt
 
 # the hosted bridge uses its own bearer token
 Authorization: Bearer <bridge token>`
-  },
-  {
-    id: "cli",
-    name: "CLI",
-    title: "agentpay · CLI",
-    code: `# check a charge, then prove the settlement
-agentpay check              -> PAY | REVIEW | BLOCK
-agentpay verify-settlement  -> match | pending | mismatch | unverifiable
-agentpay receipt show|verify
-agentpay provider pin|deny
-agentpay policy show|set`
-  },
-  {
-    id: "ts",
-    name: "TypeScript",
-    title: "@agent-pay/client",
-    code: `import { AgentPayHttpClient, checkX402Payment } from "@agent-pay/client";
-
-const api = new AgentPayHttpClient({ baseUrl, token });
-
-const { check } = await checkX402Payment(api, {
-  request,
-  paymentRequired,     // the service's real 402 body
-  authorization: null, // returns REVIEW until payer details are prepared
-  idempotencyKey
-});
-check.decision; // "pay" | "review" | "block"`
   }
 ];
 

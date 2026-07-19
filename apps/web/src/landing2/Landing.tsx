@@ -30,7 +30,9 @@ import csprTradeLogo from "../assets/brand-logos/cspr-trade-mark.svg";
 import mcpLogo from "../assets/brand-logos/mcp.svg";
 import {
   AGENT_SURFACES,
+  CLI_NPM_URL,
   EXPLORER,
+  MCP_NPM_URL,
   shortHash,
 } from "./data";
 import { WorkflowTimeline } from "./Timeline";
@@ -149,7 +151,7 @@ function useLandingStatus(): LandingStatus {
 // ------------------------------------------------------------------ //
 
 // The agents-band code frame with a surface selector: pills cycle through the
-// four real integration surfaces (MCP, HTTP bridge, CLI, TypeScript client)
+// three public integration surfaces (MCP package, CLI package, HTTP bridge)
 // and their code samples. Auto-advances every few seconds until the viewer
 // interacts (click, hover, or focus), then stays under manual control.
 function AgentSurfaces() {
@@ -428,9 +430,15 @@ export default function Landing2({
               Made for agents that <em className="lp2-accent">pay</em>.
             </motion.h2>
             <motion.p className="lp2-lede" {...reveal(0.06)}>
-              Your agent calls AgentPay over MCP or HTTP before it signs. The CLI, TypeScript client,
-              and bridge use the same payment rules and return the same decisions. Signing stays in
-              the buyer's wallet.
+              Your agent calls AgentPay over MCP or HTTP before it signs. The published MCP and CLI
+              packages and the hosted bridge use the same payment rules. Signing stays in the
+              buyer's wallet.
+            </motion.p>
+
+            <motion.p className="lp2-package-links" {...reveal(0.09)}>
+              Published on npm: <a href={MCP_NPM_URL} target="_blank" rel="noreferrer">@timidan/agentpay-mcp</a>
+              <span aria-hidden="true"> / </span>
+              <a href={CLI_NPM_URL} target="_blank" rel="noreferrer">@timidan/agentpay-cli</a>
             </motion.p>
 
             <motion.div {...reveal(0.12)}>

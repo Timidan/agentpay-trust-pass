@@ -503,6 +503,25 @@
   justify-content: center;
 }
 
+.lp2-package-links {
+  margin: 18px 0 0;
+  color: var(--lp-muted);
+  font-family: var(--font-data);
+  font-size: 0.82rem;
+  line-height: 1.7;
+  text-align: center;
+}
+.lp2-package-links a {
+  color: var(--lp-accent-text);
+  font-weight: 650;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+.lp2-package-links span {
+  margin: 0 6px;
+  color: var(--lp-line-2);
+}
+
 /* ------------------------------------------------- tech strip */
 
 .lp2-tech {

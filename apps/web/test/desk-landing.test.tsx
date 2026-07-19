@@ -36,6 +36,11 @@ describe("Landing integration", () => {
   it("renders the current landing by default and opens the console", () => {
     render(<App />);
     expect(screen.getByText("From the charge to a receipt on Casper.")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "@timidan/agentpay-mcp" }).getAttribute("href"))
+      .toBe("https://www.npmjs.com/package/@timidan/agentpay-mcp");
+    expect(screen.getByRole("link", { name: "@timidan/agentpay-cli" }).getAttribute("href"))
+      .toBe("https://www.npmjs.com/package/@timidan/agentpay-cli");
+    expect(document.body.textContent).not.toContain("@agent-pay/client");
     fireEvent.click(screen.getAllByRole("button", { name: /open the console/i })[0]);
     expect(screen.getByText("Evidence console")).toBeTruthy();
   });
