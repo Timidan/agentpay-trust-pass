@@ -1,3 +1,5 @@
+import { Download } from "lucide-react";
+import type { PaymentReceiptRecord } from "../api";
 import type { AuditFlow } from "../useAuditFlow";
 import { HashValue, StepStatusLine, testnetDeployUrl } from "./primitives";
 
@@ -14,6 +16,28 @@ const ANCHOR_LABEL: Record<string, string> = {
   anchored: "recorded on Casper",
   failed: "failed"
 };
+
+export function serializeReceiptForDownload(receipt: PaymentReceiptRecord["receipt"]): string {
+  return `${JSON.stringify(receipt, null, 2)}\n`;
+}
+
+export function receiptDownloadName(receiptId: string): string {
+  const safeId = receiptId.replace(/[^a-zA-Z0-9._-]/g, "-");
+  return `agentpay-${safeId}.json`;
+}
+
+function downloadReceipt(receipt: PaymentReceiptRecord["receipt"]): void {
+  const url = URL.createObjectURL(
+    new Blob([serializeReceiptForDownload(receipt)], { type: "application/json" })
+  );
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = receiptDownloadName(receipt.receiptId);
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
 
 // The receipt body is immutable (it carries the receipt hash). The anchor state
 // is dynamic and rendered OUTSIDE that body, with its own poll status.
@@ -76,6 +100,18 @@ export function ReceiptView({ flow }: { flow: AuditFlow }) {
             <dt>created</dt>
             <dd className="audit-mono">{body.createdAt}</dd>
           </dl>
+
+          <div className="audit-actions">
+            <button
+              className="audit-button"
+              type="button"
+              title="Download the receipt JSON for offline verification"
+              onClick={() => downloadReceipt(body)}
+            >
+              <Download size={16} aria-hidden="true" />
+              Download receipt
+            </button>
+          </div>
 
           {/* Dynamic anchor state — outside the immutable body. */}
           <div className="audit-section" aria-label="Casper receipt record" data-anchor={anchor?.status ?? "unknown"}>

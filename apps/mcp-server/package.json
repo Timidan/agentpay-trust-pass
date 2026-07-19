@@ -7,6 +7,7 @@
     "start": "node --conditions=production dist/server.js",
     "stdio": "node --conditions=production dist/stdio.js",
     "stdio:dev": "tsx src/stdio.ts",
+    "demo:public": "node scripts/demo-public-package.mjs",
     "test": "vitest run",
     "build:package": "mkdir -p .publish/contracts/agent-pay-registry/scripts && esbuild src/public-stdio.ts --bundle --platform=node --target=node22 --format=esm --outfile=.publish/main.js && cp ../../docs/agents/SKILL.md .publish/SKILL.md && cp ../../LICENSE .publish/LICENSE && cp ../../contracts/agent-pay-registry/scripts/record-decision-testnet.sh ../../contracts/agent-pay-registry/scripts/record-receipt-testnet.sh .publish/contracts/agent-pay-registry/scripts/ && chmod +x .publish/contracts/agent-pay-registry/scripts/*.sh",
     "package:check": "npm run build:package && node --import tsx scripts/verify-package.ts",

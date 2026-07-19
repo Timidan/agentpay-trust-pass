@@ -2,12 +2,62 @@
 
 Production: [agentpay.timidan.xyz](https://agentpay.timidan.xyz)
 
-Spoken judge script: [live-demo-transcript.md](live-demo-transcript.md)
+Final-round two-minute script:
+[live-demo-transcript.md](live-demo-transcript.md)
 
 AgentPay checks an x402 charge before the buyer signs it. It checks the
 service, recipient, token, amount, authorization, and spending rules; returns
 PAY, REVIEW, or BLOCK; then verifies the Casper settlement and produces a
 receipt.
+
+## Final-round video
+
+The final-round video must show every product capability family without
+pretending that six end-to-end workflows completed inside two minutes. Record
+short production clips first, then use the timed proof tour in
+[`live-demo-transcript.md`](live-demo-transcript.md).
+
+The video performs one fresh payment decision on screen. It uses clearly
+labeled completed Testnet runs for settlement, token evidence, account
+evidence, public sharing, Merkle verification, and Casper anchoring. It also
+shows real terminal output for the published MCP and CLI packages. This keeps
+the video complete, reproducible, and honest.
+
+Required final cut:
+
+1. Production status and product claim.
+2. Token check, four evidence states, receipt, and shared result.
+3. Wallet check and receipt.
+4. Live x402 decision plus a completed WCSPR settlement and MATCH proof.
+5. Evidence-console Merkle success and tamper failure.
+6. npm CLI, npm MCP, HTTP bridge, and offline receipt verification.
+
+Do not replace this with a fast scroll through every page. Each clip must show
+an output that proves the capability named in the narration.
+
+### Prepare the terminal clip
+
+Run the public MCP package against the official Testnet WCSPR contract:
+
+```bash
+pnpm demo:mcp
+```
+
+The command starts `@timidan/agentpay-mcp` from npm, lists its tools, calls
+`quote_report` on the live deployment, and prints a short result. Record only a
+successful result with `paymentReadiness` set to `ready`.
+
+On the completed payment screen, click **Download receipt**. Install the public
+CLI and verify that downloaded file:
+
+```bash
+npm install --global @timidan/agentpay-cli
+agentpay receipt verify --file ~/Downloads/agentpay-<receipt-id>.json --json
+```
+
+Replace `<receipt-id>` with the downloaded file name before recording. The
+verification is local. It does not need an API token or send the receipt to
+AgentPay. Do not use a hand-written receipt.
 
 ## Preflight
 
