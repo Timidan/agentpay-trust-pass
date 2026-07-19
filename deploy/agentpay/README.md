@@ -24,6 +24,7 @@ AgentPay requires Node.js 22.13 or newer. The systemd units execute
 ```bash
 useradd --system --home /opt/agentpay --shell /usr/sbin/nologin agentpay
 install -d -o agentpay -g agentpay -m 0750 /opt/agentpay /var/lib/agentpay
+install -d -o root -g root -m 0755 /var/www/agentpay.timidan.xyz/releases
 install -o root -g agentpay -m 0640 deploy/agentpay/agentpay.env.example /etc/agentpay.env
 install -o root -g root -m 0644 deploy/agentpay/agentpay-report-api.service /etc/systemd/system/
 install -o root -g root -m 0644 deploy/agentpay/agentpay-mcp.service /etc/systemd/system/
@@ -75,22 +76,41 @@ identified separately in every quote.
 
 ## Build and activate
 
-Run from `/opt/agentpay` after checking out a reviewed commit:
+Run the full gate on the development machine before you push:
 
 ```bash
-set -a
-. /etc/agentpay.env
-set +a
-pnpm install --frozen-lockfile
 pnpm lint
 pnpm test
 pnpm build
-systemctl daemon-reload
-systemctl enable --now agentpay-report-api agentpay-mcp
-nginx -t
-systemctl reload nginx
-certbot --nginx -d agentpay.timidan.xyz
+git push origin main
 ```
+
+The production host does not need the Rust contract toolchain for a web and API
+release. Run these commands from `/opt/agentpay` after you pull a reviewed
+commit:
+
+```bash
+git pull --ff-only origin main
+pnpm install --frozen-lockfile
+set -a
+. /etc/agentpay.env
+set +a
+pnpm lint
+pnpm --filter @agent-pay/core build
+pnpm --filter @agent-pay/client build
+pnpm --filter @agent-pay/cli build
+pnpm --filter @agent-pay/mcp-server build
+pnpm --filter @agent-pay/report-api build
+pnpm --filter @agent-pay/web build
+systemctl restart agentpay-report-api agentpay-mcp
+systemctl is-active agentpay-report-api agentpay-mcp
+bash deploy/agentpay/activate-web-release.sh
+```
+
+The activation script copies the web build to a release directory named for the
+current commit. It then switches `/var/www/agentpay.timidan.xyz/current` with an
+atomic symlink update. It refuses to overwrite a release ID with different
+content. Run `certbot` only during the first host setup or a certificate change.
 
 The web bundle uses same-origin `/api` and `/bridge` routes by default. Do not set
 `VITE_*` URL variables for this nginx deployment. They are build-time overrides

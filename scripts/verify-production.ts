@@ -4,6 +4,10 @@ import { resolve } from "node:path";
 const DEFAULT_ORIGIN = "https://agentpay.timidan.xyz";
 const LOOPBACK_URL = /https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(?::\d+)?/gi;
 const CASPER_PACKAGE_HASH = /^(?:hash-)?[0-9a-f]{64}$/i;
+const MCP_NPM_PACKAGE = "https://www.npmjs.com/package/@timidan/agentpay-mcp";
+const CLI_NPM_PACKAGE = "https://www.npmjs.com/package/@timidan/agentpay-cli";
+const TESTNET_WCSPR_SUBJECT =
+  "hash-3d80df21ba4ee4d66a2a1f60c32570dd5685e4b279f6538162a5fd1314847c1e";
 
 export interface ProductionVerificationOptions {
   origin?: string;
@@ -36,11 +40,21 @@ export async function verifyProduction(
       if (applicationAssets.length === 0) {
         throw new Error("public HTML does not load a first-party application script");
       }
+      const applicationSources: string[] = [];
       for (const assetUrl of applicationAssets) {
         const source = await fetchText(fetchImpl, new URL(assetUrl), `application asset ${assetUrl}`);
         rejectLoopbackUrl(source, `application asset ${assetUrl}`);
+        applicationSources.push(source);
       }
-      checks.push("application bundle has no loopback URL");
+      const applicationSource = applicationSources.join("\n");
+      requireText(applicationSource, MCP_NPM_PACKAGE, "public application bundle is missing the MCP npm package");
+      requireText(applicationSource, CLI_NPM_PACKAGE, "public application bundle is missing the CLI npm package");
+      requireText(
+        applicationSource,
+        TESTNET_WCSPR_SUBJECT,
+        "public application bundle is missing the official Testnet WCSPR quickstart"
+      );
+      checks.push("current application bundle has no loopback URL and includes npm integration");
     });
 
     await captureFailure(failures, async () => {

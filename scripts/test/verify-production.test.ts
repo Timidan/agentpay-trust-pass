@@ -22,6 +22,16 @@ describe("production verification", () => {
     );
   });
 
+  it("rejects a stale application bundle without the public npm integration", async () => {
+    const fetchImpl = fixtureFetch({
+      "/assets/index-current.js": 'fetch("/api/health")'
+    });
+
+    await expect(verifyProduction({ origin: ORIGIN, fetchImpl })).rejects.toThrow(
+      "public application bundle is missing the MCP npm package"
+    );
+  });
+
   it("reports independent frontend and backend deployment leaks together", async () => {
     const fetchImpl = fixtureFetch({
       "/assets/index-current.js": [
@@ -174,7 +184,12 @@ describe("production verification", () => {
 function fixtureFetch(overrides: Record<string, string> = {}): typeof fetch {
   const bodies: Record<string, string> = {
     "/": `<!doctype html><title>AgentPay: check x402 charges before paying on Casper</title><script type="module" src="/assets/index-current.js"></script>`,
-    "/assets/index-current.js": 'fetch("/api/health")',
+    "/assets/index-current.js": [
+      'fetch("/api/health")',
+      'const mcp = "https://www.npmjs.com/package/@timidan/agentpay-mcp";',
+      'const cli = "https://www.npmjs.com/package/@timidan/agentpay-cli";',
+      'const subject = "hash-3d80df21ba4ee4d66a2a1f60c32570dd5685e4b279f6538162a5fd1314847c1e";'
+    ].join("\n"),
     "/api/health": '{"ok":true}',
     "/bridge/health": '{"ok":true}',
     "/bridge/tools/payment_status": JSON.stringify({
