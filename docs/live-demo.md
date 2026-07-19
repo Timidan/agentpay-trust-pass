@@ -2,6 +2,8 @@
 
 Production: [agentpay.timidan.xyz](https://agentpay.timidan.xyz)
 
+Spoken judge script: [live-demo-transcript.md](live-demo-transcript.md)
+
 AgentPay checks an x402 charge before the buyer signs it. It checks the
 service, recipient, token, amount, authorization, and spending rules; returns
 PAY, REVIEW, or BLOCK; then verifies the Casper settlement and produces a
