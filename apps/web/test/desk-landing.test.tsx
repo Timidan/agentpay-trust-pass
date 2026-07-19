@@ -35,6 +35,12 @@ describe("Landing integration", () => {
 
   it("renders the current landing by default and opens the console", () => {
     render(<App />);
+    expect(screen.getByRole("heading", { name: "Let AI agents pay Casper APIs without signing blind." })).toBeTruthy();
+    expect(
+      screen.getByText(
+        "AgentPay checks who gets paid, how much they asked for, and the buyer's rules before signing. After settlement, it checks the Casper transfer, records the service response, and creates a receipt tied to Casper."
+      )
+    ).toBeTruthy();
     expect(screen.getByText("From the charge to a receipt on Casper.")).toBeTruthy();
     expect(screen.getByRole("link", { name: "@timidan/agentpay-mcp" }).getAttribute("href"))
       .toBe("https://www.npmjs.com/package/@timidan/agentpay-mcp");
@@ -205,5 +211,21 @@ describe("Agent integration entry point", () => {
     render(<App />);
 
     expect(screen.getByRole("heading", { name: "How agents talk to AgentPay" })).toBeTruthy();
+  });
+});
+
+describe("Verdict vocabulary routes", () => {
+  it("explains charge decisions and evidence verdicts on the payment checker", () => {
+    window.history.pushState({}, "", "/audit");
+
+    render(<App />);
+
+    const vocabulary = screen.getByLabelText("Verdict vocabulary");
+    expect(vocabulary.textContent).toContain(
+      "Charge decisions: PAY / REVIEW / BLOCK tell you whether this exact x402 charge may be signed."
+    );
+    expect(vocabulary.textContent).toContain(
+      "Evidence verdicts: CLEAR / CAUTION / DANGER tell you what the paid Casper evidence says about this subject."
+    );
   });
 });

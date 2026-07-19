@@ -214,8 +214,13 @@ describe("AgentPay console", () => {
     vi.stubGlobal("fetch", fetchSpy);
 
     render(<App />);
-    // New landing: the product story reads plainly, and the console stays reachable.
-    expect(screen.getByText(/answers PAY, REVIEW, or BLOCK/i)).toBeTruthy();
+    // The approved landing copy is rendered exactly, and the console stays reachable.
+    expect(screen.getByRole("heading", { name: "Let AI agents pay Casper APIs without signing blind." })).toBeTruthy();
+    expect(
+      screen.getByText(
+        "AgentPay checks who gets paid, how much they asked for, and the buyer's rules before signing. After settlement, it checks the Casper transfer, records the service response, and creates a receipt tied to Casper."
+      )
+    ).toBeTruthy();
     expect(screen.getAllByRole("button", { name: /open the payment checker/i }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("button", { name: /open the console/i }).length).toBeGreaterThan(0);
     expect(screen.queryByLabelText("AgentPay settlement animation")).toBeNull();

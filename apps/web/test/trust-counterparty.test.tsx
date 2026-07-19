@@ -47,6 +47,13 @@ describe("Counterparty check", () => {
     render(<CounterpartyPage />);
 
     expect(screen.getByText(/reads the account directly from Casper, covers the Testnet service fee/i)).toBeTruthy();
+    const vocabulary = screen.getByLabelText("Verdict vocabulary");
+    expect(vocabulary.textContent).toContain(
+      "Charge decisions: PAY / REVIEW / BLOCK tell you whether this exact x402 charge may be signed."
+    );
+    expect(vocabulary.textContent).toContain(
+      "Evidence verdicts: CLEAR / CAUTION / DANGER tell you what the paid Casper evidence says about this subject."
+    );
     expect(screen.getAllByText("Wallet check").length).toBeGreaterThan(0);
     expect(document.body.textContent).not.toContain("Counterparty");
     expect(document.body.textContent).not.toContain("paid rail");

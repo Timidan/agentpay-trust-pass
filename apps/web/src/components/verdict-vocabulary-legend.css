@@ -1,0 +1,67 @@
+.verdict-vocabulary {
+  --verdict-vocabulary-ink: var(--muted-foreground);
+  --verdict-vocabulary-label: var(--foreground);
+  --verdict-vocabulary-border: var(--border);
+  --verdict-vocabulary-clear: var(--aspect-clear-ink);
+  --verdict-vocabulary-caution: var(--aspect-caution-ink);
+  --verdict-vocabulary-danger: var(--aspect-danger-ink);
+
+  display: grid;
+  gap: 6px;
+  margin: 0 0 22px;
+  padding: 10px 0;
+  border-block: 1px solid var(--verdict-vocabulary-border);
+  color: var(--verdict-vocabulary-ink);
+  font-family: inherit;
+  font-size: 0.82rem;
+  line-height: 1.7;
+}
+
+.verdict-vocabulary p {
+  margin: 0;
+}
+
+.verdict-vocabulary strong {
+  color: var(--verdict-vocabulary-label);
+  font-family: inherit;
+  font-weight: 650;
+}
+
+.verdict-vocabulary-term {
+  display: inline-block;
+  padding: 0 0.24em 0.05em;
+  border: 1px solid currentColor;
+  border-block-end-width: 2px;
+  border-radius: 2px;
+  font-family: inherit;
+  font-size: 0.92em;
+  font-weight: 750;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+.verdict-vocabulary-term.is-pay,
+.verdict-vocabulary-term.is-clear {
+  color: var(--verdict-vocabulary-clear);
+}
+
+.verdict-vocabulary-term.is-review,
+.verdict-vocabulary-term.is-caution {
+  color: var(--verdict-vocabulary-caution);
+}
+
+.verdict-vocabulary-term.is-block,
+.verdict-vocabulary-term.is-danger {
+  color: var(--verdict-vocabulary-danger);
+}
+
+.av-modern .verdict-vocabulary {
+  --verdict-vocabulary-ink: var(--av-ink-2);
+  --verdict-vocabulary-label: var(--av-ink);
+  --verdict-vocabulary-border: var(--av-border-2);
+  --verdict-vocabulary-clear: var(--av-pay);
+  --verdict-vocabulary-caution: var(--av-review);
+  --verdict-vocabulary-danger: var(--av-block);
+
+  margin-bottom: 0;
+}

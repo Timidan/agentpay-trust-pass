@@ -60,6 +60,13 @@ describe("Trust ASK page", () => {
     render(<AskPage />);
 
     expect(screen.getByText(/checks live Casper data, covers a small Testnet service fee/i)).toBeTruthy();
+    const vocabulary = screen.getByLabelText("Verdict vocabulary");
+    expect(vocabulary.textContent).toContain(
+      "Charge decisions: PAY / REVIEW / BLOCK tell you whether this exact x402 charge may be signed."
+    );
+    expect(vocabulary.textContent).toContain(
+      "Evidence verdicts: CLEAR / CAUTION / DANGER tell you what the paid Casper evidence says about this subject."
+    );
     expect(document.body.textContent).not.toContain("paid rail");
     expect(document.body.textContent).not.toContain("Merkle");
   });

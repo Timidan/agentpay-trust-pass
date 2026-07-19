@@ -385,13 +385,13 @@ export default function Landing2({
         <section className="lp2-band is-wash lp2-hero">
           <div className="lp2-inner lp2-hero-inner">
             <motion.h1 className="lp2-h1" {...reveal(0)}>
-              The charge, <em className="lp2-accent">checked</em> before you pay.
+              Let AI agents pay Casper APIs without signing blind.
             </motion.h1>
 
             <motion.p className="lp2-lede" {...reveal(0.06)}>
-              AgentPay reads a payment request before your agent signs it and answers PAY, REVIEW,
-              or BLOCK. After the money moves, it proves the settled payment matched the terms you
-              approved.
+              AgentPay checks who gets paid, how much they asked for, and the buyer's rules before
+              signing. After settlement, it checks the Casper transfer, records the service response,
+              and creates a receipt tied to Casper.
             </motion.p>
 
             <motion.div className="lp2-ctas" {...reveal(0.12)}>

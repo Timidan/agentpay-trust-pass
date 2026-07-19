@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { VerdictVocabularyLegend } from "../../../components/VerdictVocabularyLegend";
 import type { AuditFlow } from "../../useAuditFlow";
 import type { AuditVariantProps } from "../types";
 import {
@@ -267,6 +268,8 @@ export default function ModernVariant({ flow, theme }: AuditVariantProps) {
             service response match what was approved.
           </p>
         </header>
+
+        <VerdictVocabularyLegend />
 
         {/* Segmented progress track: one flush bar of eight segments that fill
             as steps complete (verdict tones where earned), and a single text

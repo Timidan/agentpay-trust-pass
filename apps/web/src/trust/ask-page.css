@@ -84,7 +84,8 @@
   .ask2-title { order: 2; }
   .ask2-lede { order: 3; margin-bottom: 22px; }
   .ask2-panel { order: 4; margin-bottom: 26px; }
-  .ask2-meanings { order: 5; }
+  .ask2-vocabulary { order: 5; }
+  .ask2-meanings { order: 6; }
 }
 
 .ask2-kicker {

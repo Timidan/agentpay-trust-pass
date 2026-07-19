@@ -9,6 +9,7 @@ import {
   type TokenEvidenceStatus
 } from "../api";
 import { SiteFooter, SiteNav } from "../components/SiteChrome";
+import { VerdictVocabularyLegend } from "../components/VerdictVocabularyLegend";
 import { useTrustCheck } from "./useTrustCheck";
 import { VerdictCard } from "./VerdictCard";
 import "./ask-page.css";
@@ -152,6 +153,7 @@ export default function AskPage({
                 Testnet service fee, and gives you a receipt that shows what passed, what failed, and
                 what was unavailable.
               </p>
+              <VerdictVocabularyLegend className="ask2-vocabulary" />
               <ul className="ask2-meanings">
                 {MEANINGS.map((m) => (
                   <li className={`ask2-meaning ask2-meaning--${m.aspect}`} key={m.aspect}>

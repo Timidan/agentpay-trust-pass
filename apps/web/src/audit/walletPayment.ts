@@ -327,7 +327,7 @@ async function sha256(value: Uint8Array): Promise<string> {
       "This browser cannot verify the payment request. Update it before paying."
     );
   }
-  const digest = await globalThis.crypto.subtle.digest("SHA-256", Uint8Array.from(value).buffer);
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", value as Uint8Array<ArrayBuffer>);
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
