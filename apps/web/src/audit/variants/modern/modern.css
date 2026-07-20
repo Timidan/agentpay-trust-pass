@@ -109,8 +109,9 @@
   position: relative;
   z-index: 1;
   width: 100%;
-  /* wide enough for two card columns; the page grows sideways, not down */
-  max-width: 68rem;
+  /* One focused column: the checker is a sequence, so hero, progress track,
+     decision, and steps all share a single readable width and read top-down. */
+  max-width: 46rem;
   margin: 0 auto;
   padding: clamp(1rem, 3vw, 2rem) clamp(0.85rem, 4vw, 1.75rem) 3.5rem;
   display: flex;
@@ -286,16 +287,15 @@
 
 /* ---- The workflow column ------------------------------------------- */
 
+/* The steps are a pipeline (charge → decision → your actions → settle →
+   receipt), so they read as one centered column top-to-bottom, mirroring the
+   progress track. A two-column grid row-aligned uneven-height cards and left
+   ragged gaps under the short ones; a single column can't strand a gap. */
 .av-modern .av-column {
   display: grid;
   grid-template-columns: 1fr;
   gap: clamp(0.9rem, 2vw, 1.25rem);
   align-items: start;
-}
-@media (min-width: 980px) {
-  .av-modern .av-column {
-    grid-template-columns: 1fr 1fr;
-  }
 }
 
 /* one honest line replaces the auth card once a token is loaded */
