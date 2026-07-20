@@ -182,11 +182,11 @@ describe("Ask/Feed entry points", () => {
 
     fireEvent.click(screen.getAllByRole("button", { name: "Check a token" })[0]);
     expect(screen.getByRole("heading", { name: "Check a token before you buy it." })).toBeTruthy();
-    fireEvent.click(screen.getByText("Overview"));
+    fireEvent.click(screen.getByRole("link", { name: "AgentPay overview" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Check a wallet" }));
     expect(screen.getByRole("heading", { name: "Check a Casper account before you send funds." })).toBeTruthy();
-    fireEvent.click(screen.getByText("Overview"));
+    fireEvent.click(screen.getByRole("link", { name: "AgentPay overview" }));
 
     const currentSharedResultsButtons = screen.getAllByRole("button", { name: "See shared results" });
     fireEvent.click(currentSharedResultsButtons[currentSharedResultsButtons.length - 1]);
@@ -227,5 +227,6 @@ describe("Verdict vocabulary routes", () => {
     expect(vocabulary.textContent).toContain(
       "Evidence verdicts: CLEAR / CAUTION / DANGER tell you what the paid Casper evidence says about this subject."
     );
+    expect(screen.queryByText("AgentPay on Casper")).toBeNull();
   });
 });

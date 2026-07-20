@@ -146,7 +146,6 @@ export default function AskPage({
         ) : (
           <div className="ask2-grid">
             <section className="ask2-copy">
-              <p className="ask2-kicker">Token check</p>
               <h1 className="ask2-title">Check a token before you buy it.</h1>
               <p className="ask2-lede">
                 Enter a token symbol or package hash. AgentPay checks live Casper data, covers a small

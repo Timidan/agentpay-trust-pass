@@ -11,15 +11,15 @@ export type SiteKey = "overview" | "audit" | "check" | "counterparty" | "feed" |
 
 type Navigate = (path: string) => void;
 
-const LINKS: ReadonlyArray<{ key: SiteKey; label: string; path: string }> = [
-  { key: "overview", label: "Overview", path: "/" },
+const PRIMARY_LINKS: ReadonlyArray<{ key: SiteKey; label: string; path: string }> = [
   { key: "audit", label: "Payment checker", path: "/audit" },
   { key: "check", label: "Token check", path: "/check" },
   { key: "counterparty", label: "Wallet check", path: "/counterparty" },
   { key: "feed", label: "Shared results", path: "/feed" },
-  { key: "agents", label: "Agents", path: "/agents" },
-  { key: "app", label: "Console", path: "/app" },
+  { key: "agents", label: "Agents", path: "/agents" }
 ];
+
+const CONSOLE_LINK = { key: "app", label: "Console", path: "/app" } as const;
 
 // Plain anchors so pages still render outside a router (tests, embeds); with a
 // navigate callback the click stays an SPA transition.
@@ -34,7 +34,7 @@ function linkClick(path: string, navigate?: Navigate) {
 export function SiteNavLinks({ current, navigate }: { current: SiteKey; navigate?: Navigate }) {
   return (
     <nav className="site-links" aria-label="AgentPay pages">
-      {LINKS.map((link) => (
+      {PRIMARY_LINKS.map((link) => (
         <a
           key={link.key}
           href={link.path}
@@ -105,7 +105,7 @@ export function SiteFooter({ current, navigate }: { current: SiteKey; navigate?:
           <span className="site-footer-line">Checks the charge before your agent signs it.</span>
         </div>
         <nav className="site-footer-links" aria-label="AgentPay pages, footer">
-          {LINKS.filter((link) => link.key !== "overview").map((link) => (
+          {[...PRIMARY_LINKS, CONSOLE_LINK].map((link) => (
             <a
               key={link.key}
               href={link.path}

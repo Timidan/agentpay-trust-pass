@@ -834,7 +834,7 @@ code {
   box-shadow: none;
 }
 
-/* ---- Glass frame -------------------------------------------------- */
+/* ---- Solid hero frame --------------------------------------------- */
 
 .hero-cin-frame {
   position: relative;
@@ -846,9 +846,7 @@ code {
   min-height: 640px;
   border: 1px solid hsla(275, 40%, 92%, 0.1);
   border-radius: clamp(16px, 2.5vw, 28px);
-  background: hsla(278, 44%, 8%, 0.55);
-  backdrop-filter: blur(20px) saturate(1.15);
-  -webkit-backdrop-filter: blur(20px) saturate(1.15);
+  background: var(--box);
   box-shadow:
     inset 0 1px 0 hsla(275, 40%, 92%, 0.08),
     0 0 0 1px hsla(275, 40%, 92%, 0.04),
@@ -856,7 +854,7 @@ code {
   overflow: hidden;
 }
 
-/* ---- Nav inside the glass ----------------------------------------- */
+/* ---- Nav inside the frame ----------------------------------------- */
 
 .hero-cin-frame .hero-nav {
   width: 100%;
@@ -867,12 +865,10 @@ code {
   animation: none;
 }
 
-/* Inside the dark frame, override nav pill background to be darker glass */
+/* Inside the dark frame, keep the nav controls on a solid darker surface. */
 .hero-cin-frame .hero-nav-links {
   border-color: hsla(275, 40%, 92%, 0.12);
-  background: hsla(278, 44%, 10%, 0.6);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: var(--box-2);
 }
 
 .hero-cin-frame .hero-nav-links a,
@@ -982,7 +978,7 @@ code {
   color: var(--aspect-clear);
 }
 
-/* ---- Floating dark glass token-check card (the booking card) ------ */
+/* ---- Floating token-check card (the booking card) ----------------- */
 
 .hero-cin-card {
   display: flex;
@@ -991,9 +987,7 @@ code {
   padding: clamp(18px, 2.5vw, 28px);
   border: 1px solid hsla(275, 40%, 92%, 0.12);
   border-radius: clamp(12px, 1.6vw, 20px);
-  background: hsla(278, 46%, 7%, 0.82);
-  backdrop-filter: blur(24px) saturate(1.1);
-  -webkit-backdrop-filter: blur(24px) saturate(1.1);
+  background: var(--box);
   box-shadow:
     inset 0 1px 0 hsla(275, 40%, 92%, 0.07),
     0 24px 64px -16px hsla(278, 60%, 4%, 0.65),
@@ -1205,9 +1199,7 @@ code {
   padding: 4px;
   border: 1px solid var(--line);
   border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--surface) 70%, transparent);
-  backdrop-filter: blur(12px) saturate(1.04);
-  -webkit-backdrop-filter: blur(12px) saturate(1.04);
+  background: var(--surface);
   box-shadow: var(--shadow-s);
 }
 
@@ -1632,9 +1624,7 @@ code {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   border-top: 1px solid var(--box-line);
-  background: hsla(278, 50%, 6%, 0.6);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: var(--box);
 }
 
 .hero-step-ledger > div {
@@ -4053,9 +4043,9 @@ code {
 }
 
 /* ============================================================
-   SHARED CINEMATIC-GLASS SYSTEM
+   SHARED SOLID SURFACE SYSTEM
    One visual language for every non-hero surface (ASK, Verdict,
-   Feed, Console). Dark teal fog -> one glass frame -> glass cards.
+   Feed, Console). Dark stage -> one solid frame -> solid cards.
    Color is meaning: the only saturated colors are the three signal
    aspects. Mono is data only. Added as new selectors; the hero's
    own hero-cin* rules are untouched.
@@ -4067,21 +4057,19 @@ code {
 [data-theme="dark"].page-fog::before,.dark .page-fog::before{content:"";position:absolute;inset:0;z-index:-2;background:radial-gradient(120% 90% at 72% 18%, hsl(278 38% 12%) 0%, hsl(278 40% 7%) 48%, hsl(278 42% 5%) 100%);pointer-events:none}
 .page-fog::after{content:"";position:absolute;inset:-10% -20%;z-index:-1;pointer-events:none}
 
-/* Light frame is a plain card; the glass treatment belongs to the dark stage. */
+/* Both themes use their opaque card surface while preserving the existing edge and elevation. */
 .glass-frame{position:relative;margin:clamp(12px,2vw,24px);border:1px solid var(--line);border-radius:12px;background:var(--surface);box-shadow:var(--shadow-m)}
-[data-theme="dark"] .glass-frame,.dark .glass-frame{border-color:hsla(275 40% 92% / .1);background:hsla(278 44% 8% / .55);backdrop-filter:blur(20px) saturate(1.15);-webkit-backdrop-filter:blur(20px) saturate(1.15);box-shadow:inset 0 1px 0 hsla(275 40% 92% / .08),0 40px 100px -32px hsla(278 60% 3% / .7)}
+[data-theme="dark"] .glass-frame,.dark .glass-frame{border-color:hsla(275 40% 92% / .1);background:var(--surface);box-shadow:inset 0 1px 0 hsla(275 40% 92% / .08),0 40px 100px -32px hsla(278 60% 3% / .7)}
 
-.glass-card{border:1px solid var(--box-line);border-radius:10px;background:hsla(278 46% 7% / .82);backdrop-filter:blur(24px) saturate(1.1);-webkit-backdrop-filter:blur(24px) saturate(1.1);box-shadow:inset 0 1px 0 hsla(275 40% 92% / .07),0 24px 64px -16px hsla(278 60% 4% / .65),0 4px 16px -4px hsla(278 60% 4% / .45);color:var(--box-ink)}
+.glass-card{border:1px solid var(--box-line);border-radius:10px;background:var(--box);box-shadow:inset 0 1px 0 hsla(275 40% 92% / .07),0 24px 64px -16px hsla(278 60% 4% / .65),0 4px 16px -4px hsla(278 60% 4% / .45);color:var(--box-ink)}
 /* The VerdictCard is the primary result surface on the theme-aware /check and
-   /counterparty pages. On the light theme, relight the glass card and remap its
+   /counterparty pages. On the light theme, relight the solid card and remap its
    box-/aspect- tokens to readable light values so it belongs to the page instead
    of slamming in a near-black panel. (Scoped to .verdict-card — the console's
    own always-dark chrome uses these tokens and is untouched.) */
 .agent-pay-app[data-theme="light"] .verdict-card.glass-card{
-  background:var(--glass-bg-strong);border-color:var(--glass-border);
+  background:var(--surface);border-color:var(--glass-border);
   box-shadow:var(--glass-shadow);
-  backdrop-filter:blur(var(--glass-blur)) saturate(1.4);
-  -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(1.4);
 }
 .agent-pay-app[data-theme="light"] .verdict-card{
   --box-ink:var(--ink);--box-ink-2:var(--ink-2);--box-line:var(--line);--box-brass:var(--brass);
@@ -4161,9 +4149,7 @@ code {
 
 .ask-frame-links {
   border-color: hsla(275, 40%, 92%, 0.12);
-  background: hsla(278, 44%, 10%, 0.6);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: var(--box-2);
 }
 
 .ask-frame-links a {
@@ -4810,9 +4796,7 @@ code {
   padding: 4px;
   border: 1px solid hsla(275, 40%, 92%, 0.12);
   border-radius: var(--radius-pill);
-  background: hsla(278, 44%, 10%, 0.6);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: var(--box-2);
 }
 
 .agents-frame-links button {
@@ -5314,7 +5298,6 @@ code {
   display: block !important;
   padding: 0 !important; background: transparent !important;
   border: none !important; box-shadow: none !important;
-  backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
 }
 .hero-cin-swapcard .hero-swap-scene { width: 100%; max-width: 420px; }
 
@@ -5492,9 +5475,7 @@ code {
   gap: clamp(12px, 2.5vw, 26px);
   min-height: 60px;
   padding: 9px clamp(16px, 4vw, 48px);
-  background: var(--glass-bg-strong);
-  backdrop-filter: blur(var(--glass-blur)) saturate(1.05);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.05);
+  background: var(--surface);
   border-bottom: 1px solid var(--line);
 }
 

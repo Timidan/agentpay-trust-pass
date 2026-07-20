@@ -101,7 +101,6 @@ export default function CounterpartyPage({
         ) : (
           <div className="ask2-grid">
             <section className="ask2-copy">
-              <p className="ask2-kicker">Wallet check</p>
               <h1 className="ask2-title">Check a Casper account before you send funds.</h1>
               <p className="ask2-lede">
                 Enter a CSPR.name, account hash, or public key. AgentPay resolves the name, reads the

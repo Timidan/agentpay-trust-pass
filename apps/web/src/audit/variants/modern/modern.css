@@ -133,16 +133,6 @@
   min-width: 0;
 }
 
-.av-modern .av-hero-kicker {
-  margin: 0 0 0.5rem;
-  font-family: var(--av-mono);
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--av-accent-text);
-}
-
 .av-modern .av-hero-title {
   margin: 0;
   font-size: clamp(1.9rem, 5vw, 2.8rem);
@@ -257,16 +247,6 @@
 .av-modern .av-decision[data-tone]:not([data-tone="awaiting"]) {
   box-shadow: var(--av-shadow-lift);
   border-color: var(--av-border-2);
-}
-
-.av-modern .av-decision-kicker {
-  margin: 0;
-  font-family: var(--av-mono);
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--av-ink-3);
 }
 
 .av-modern .av-decision-head {

@@ -54,7 +54,6 @@ export default function FeedPage({
       {/* div, not <main>: App already wraps this page in a <main> landmark. */}
       <div className="ask2-main">
         <div className="ask2-feed">
-          <p className="ask2-kicker">Shared results</p>
           <h1 className="ask2-title">Checks people chose to share</h1>
           <p className="ask2-feed-note">
             Only results their owners opted to publish appear here — this is not a full history of

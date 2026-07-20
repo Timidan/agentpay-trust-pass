@@ -62,7 +62,6 @@ export default function IntegratePage({ onBack, onOpenAsk, navigate, theme, onTo
 
       <div className="ag-doc">
         <header className="ag-head">
-          <p className="ag-kicker">MCP server</p>
           <h1>How agents talk to AgentPay</h1>
           <p className="ag-lede">
             AgentPay publishes MCP and CLI packages. It also exposes the same payment checks through

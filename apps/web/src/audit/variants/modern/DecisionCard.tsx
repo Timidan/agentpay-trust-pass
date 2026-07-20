@@ -50,8 +50,6 @@ export function DecisionCard({ flow }: { flow: AuditFlow }) {
       animate={{ opacity: 1, y: 0, filter: "blur(0px)", scale: 1, transitionEnd: { filter: "none" } }}
       transition={reduce ? { duration: 0 } : { duration: 0.7, ease: MODERN_EASE }}
     >
-      <p className="av-decision-kicker">Payment decision</p>
-
       <div className="av-decision-head">
         <span className="av-decision-word" data-decision={verdict ?? "none"}>
           {verdict ? FACE[verdict].word : "AWAITING"}

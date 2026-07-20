@@ -260,7 +260,6 @@ export default function ModernVariant({ flow, theme }: AuditVariantProps) {
         {/* Left-aligned hero strip: heading left, one muted tagline right. */}
         <header className="av-hero">
           <div className="av-hero-lead">
-            <p className="av-hero-kicker">AgentPay on Casper</p>
             <h1 className="av-hero-title">Payment checker</h1>
           </div>
           <p className="av-hero-tagline">

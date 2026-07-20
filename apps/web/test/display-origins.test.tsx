@@ -41,6 +41,7 @@ describe("agent integration display origins", () => {
     expect(codeBlocks).toContainEqual(expect.stringContaining(`export AGENT_PAY_MCP_URL=${BRIDGE_ORIGIN}`));
     expect(codeBlocks).toContainEqual(expect.stringContaining("Authorization: Bearer $AGENT_PAY_MCP_TOKEN"));
     expect(document.body.textContent).toContain("Use Node.js 22 or a later version.");
+    expect(screen.queryByText("MCP server")).toBeNull();
     expect(document.body.textContent).not.toContain("--scope checks:write");
     expect(document.body.textContent).not.toContain("@agent-pay/client");
     expect(document.body.textContent).not.toContain("@agent-pay/mcp-server");

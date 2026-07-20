@@ -54,7 +54,8 @@ describe("Counterparty check", () => {
     expect(vocabulary.textContent).toContain(
       "Evidence verdicts: CLEAR / CAUTION / DANGER tell you what the paid Casper evidence says about this subject."
     );
-    expect(screen.getAllByText("Wallet check").length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: "Check a Casper account before you send funds." })).toBeTruthy();
+    expect(screen.queryByText("Wallet check", { selector: "p" })).toBeNull();
     expect(document.body.textContent).not.toContain("Counterparty");
     expect(document.body.textContent).not.toContain("paid rail");
     expect(document.body.textContent).not.toContain("Merkle");

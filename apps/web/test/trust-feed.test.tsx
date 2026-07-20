@@ -37,6 +37,8 @@ describe("Shared results", () => {
 
     render(<FeedPage />);
 
+    expect(screen.getByRole("heading", { name: "Checks people chose to share" })).toBeTruthy();
+    expect(screen.queryByText("Shared results", { selector: "p" })).toBeNull();
     // Scope to the results list: the shared site nav and footer add their own links.
     const list = await screen.findByRole("list", { name: "Shared check results" });
     expect(within(list).getAllByRole("link")).toHaveLength(2);

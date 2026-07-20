@@ -89,8 +89,6 @@
   top: 0;
   z-index: 40;
   padding: 10px var(--lp-gutter) 0;
-  backdrop-filter: blur(14px) saturate(1.1);
-  -webkit-backdrop-filter: blur(14px) saturate(1.1);
 }
 
 .lp2-nav-inner {
@@ -101,13 +99,13 @@
   gap: 18px;
   padding: 10px 16px;
   border-radius: 8px;
-  background: hsl(276 40% 100% / 0.72);
+  background: var(--lp-card);
   border: 1px solid var(--lp-line-2);
   box-shadow: 0 1px 2px hsl(275 30% 14% / 0.05);
 }
 
 .dark .lp2-nav-inner {
-  background: hsl(278 30% 9% / 0.7);
+  background: var(--lp-card);
   border-color: var(--lp-dark-line);
 }
 
@@ -247,8 +245,6 @@
   cursor: pointer;
   text-decoration: none;
   overflow: hidden;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
   transition: transform 0.2s cubic-bezier(0.22, 0.61, 0.36, 1), box-shadow 0.2s ease, background 0.2s ease;
 }
 .lp2-pill::before {
@@ -1282,8 +1278,6 @@
   appearance: none;
   border: 1px solid var(--lp-line);
   background: var(--lp-card);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
   box-shadow: none;
   color: var(--lp-ink-2);
   font: 500 0.78rem var(--lp-sans);

@@ -67,6 +67,8 @@ describe("Trust ASK page", () => {
     expect(vocabulary.textContent).toContain(
       "Evidence verdicts: CLEAR / CAUTION / DANGER tell you what the paid Casper evidence says about this subject."
     );
+    expect(screen.getByRole("heading", { name: "Check a token before you buy it." })).toBeTruthy();
+    expect(screen.queryByText("Token check", { selector: "p" })).toBeNull();
     expect(document.body.textContent).not.toContain("paid rail");
     expect(document.body.textContent).not.toContain("Merkle");
   });

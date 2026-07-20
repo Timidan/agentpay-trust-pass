@@ -88,6 +88,7 @@ describe("payment decision presentation", () => {
 
     expect(screen.getByText(reason.message)).toBeTruthy();
     expect(screen.queryByText(/provider_unapproved/i)).toBeNull();
+    expect(screen.queryByText("Payment decision")).toBeNull();
     expect(screen.getByText(/Pause here\. Approve the provider/i)).toBeTruthy();
   });
 
