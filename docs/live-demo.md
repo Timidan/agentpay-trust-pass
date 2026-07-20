@@ -2,40 +2,102 @@
 
 Production: [agentpay.timidan.xyz](https://agentpay.timidan.xyz)
 
-Final-round two-minute script:
-[live-demo-transcript.md](live-demo-transcript.md)
+The final-round two-minute script is included below. The standalone recording
+copy is [live-demo-transcript.md](live-demo-transcript.md).
 
 AgentPay checks an x402 charge before the buyer signs it. It checks the
 service, recipient, token, amount, authorization, and spending rules; returns
 PAY, REVIEW, or BLOCK; then verifies the Casper settlement and produces a
 receipt.
 
-## Final-round video
+## Final-round one-take recording
 
-The final-round video must show every product capability family without
-pretending that six end-to-end workflows completed inside two minutes. Record
-short production clips first, then use the timed proof tour in
-[`live-demo-transcript.md`](live-demo-transcript.md).
+Record one continuous take and speak while using the product. Do not stop the
+recording or add a voice-over. You may prepare real production results in tabs
+before you press Record. Do not use screenshots or prerecorded video.
 
-The video performs one fresh payment decision on screen. It uses clearly
-labeled completed Testnet runs for settlement, token evidence, account
-evidence, public sharing, Merkle verification, and Casper anchoring. It also
-shows real terminal output for the published MCP and CLI packages. This keeps
-the video complete, reproducible, and honest.
+Immediately before preparing the tabs, run:
 
-Required final cut:
+```bash
+pnpm production:check
+pnpm demo:inputs
+```
 
-1. Production status and product claim.
-2. Token check, four evidence states, receipt, and shared result.
-3. Wallet check and receipt.
-4. Live x402 decision plus a completed WCSPR settlement and MATCH proof.
-5. Evidence-console Merkle success and tamper failure.
-6. npm CLI, npm MCP, HTTP bridge, and offline receipt verification.
+`pnpm demo:inputs` prints the exact `WCSPR` token input, public Testnet account,
+and a fresh x402 purchase URL. It also verifies that the URL returns HTTP 402
+with a `PAYMENT-REQUIRED` header. Paste that URL into **Payment checker**, use
+`POST`, and use `{}` as the request body. It is a real production endpoint of
+this form:
 
-Do not replace this with a fast scroll through every page. Each clip must show
-an output that proves the capability named in the narration.
+```text
+https://agentpay.timidan.xyz/api/reports/buy/<fresh-quote-id>
+```
 
-### Prepare the terminal clip
+The URL expires after five minutes. Generate it again when you restart a
+rehearsal. The fixed input list, package hashes, tab setup, and freshness rules
+are in [the standalone transcript](live-demo-transcript.md#exact-live-inputs).
+
+### Two-minute transcript
+
+The text in quotes is spoken live. The text in brackets is a screen action.
+
+**0:00 - Live product**
+
+[Start on the production status row and point to each ready state.]
+
+> This is AgentPay on Casper. Before a wallet signs, it checks the x402 service,
+> recipient, token, amount, expiry, and rules. Live status shows the payment
+> path, registry, data, and agent bridge are ready.
+
+**0:16 - Token, sharing, and wallet**
+
+[Show the completed `WCSPR` evidence and receipt, the opt-in shared result, and
+the completed public Testnet account check.]
+
+> My real token input is WCSPR. AgentPay buys current Casper evidence over x402,
+> labels passed, flagged, and missing facts, and creates a shareable receipt.
+> This result was shared by choice. This wallet result checks AgentPay's public
+> Testnet account for existence, funding, and key control.
+
+**0:43 - Check before payment**
+
+[Show the complete fresh HTTPS endpoint, `POST`, `0.00001 WCSPR`, recipient,
+provider approval, and daily limit. Click **Run check**.]
+
+> This fresh HTTPS endpoint asks for 0.00001 WCSPR on Casper Testnet. AgentPay
+> compares the exact charge with my approval and daily limit. REVIEW asks me to
+> decide. BLOCK prevents signing. PAY permits the wallet step.
+
+**1:08 - Verify the completed payment**
+
+[Move to an earlier completed Testnet run. Show **MATCH**, service response,
+settlement link, receipt, and Casper record.]
+
+> This is a completed Testnet run, not a simulation. The buyer signed locally,
+> CSPR.cloud settled WCSPR, and MATCH proves the transfer matched approval. The
+> receipt binds the request, decision, payment, response, and Casper record.
+
+**1:30 - Break the proof**
+
+[Show the valid Merkle proof. Click **Tamper one fact**.]
+
+> The evidence console verifies the Merkle proof. I change one fact, and the
+> proof fails.
+
+**1:40 - Agents and developers**
+
+[Show `/agents`, the published npm packages, MCP output, the public HTTP status
+call, and offline CLI receipt verification.]
+
+> People use the web app; developers use the CLI; agents use the npm MCP server
+> or HTTP. This live bridge call returns ready, and the CLI verifies the receipt
+> offline. Private keys stayed local.
+
+**1:56 - Close**
+
+> AgentPay checks before signing, then proves what happened.
+
+### Prepare the terminal window
 
 Run the public MCP package against the official Testnet WCSPR contract:
 
@@ -44,20 +106,22 @@ pnpm demo:mcp
 ```
 
 The command starts `@timidan/agentpay-mcp` from npm, lists its tools, calls
-`quote_report` on the live deployment, and prints a short result. Record only a
-successful result with `paymentReadiness` set to `ready`.
+`quote_report` on the live deployment, and prints a short result. Leave a
+successful result with `paymentReadiness` set to `ready` visible in the
+terminal before recording.
 
 On the completed payment screen, click **Download receipt**. Install the public
 CLI and verify that downloaded file:
 
 ```bash
 npm install --global @timidan/agentpay-cli
-agentpay receipt verify --file ~/Downloads/agentpay-<receipt-id>.json --json
+RECEIPT=$(ls -t "$HOME"/Downloads/agentpay-*.json | head -n 1)
+agentpay receipt verify --file "$RECEIPT" --json
 ```
 
-Replace `<receipt-id>` with the downloaded file name before recording. The
-verification is local. It does not need an API token or send the receipt to
-AgentPay. Do not use a hand-written receipt.
+The command selects the newest real AgentPay receipt in Downloads. Verification
+is local. It does not need an API token or send the receipt to AgentPay. Do not
+use a hand-written receipt.
 
 ## Preflight
 

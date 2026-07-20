@@ -14,6 +14,7 @@
     "smoke": "bash scripts/smoke.sh",
     "auditor:ui-e2e": "node --import tsx scripts/e2e-auditor-ui.ts",
     "agent:cli-e2e": "node --import tsx scripts/e2e-agent-cli.ts",
+    "demo:inputs": "node --import tsx scripts/demo-inputs.ts",
     "demo:mcp": "pnpm --filter @agent-pay/mcp-server demo:public",
     "mcp:package-check": "pnpm --filter @agent-pay/mcp-server package:check",
     "cli:package-check": "pnpm --filter @agent-pay/cli package:check",
