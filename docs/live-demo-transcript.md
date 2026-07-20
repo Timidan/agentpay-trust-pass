@@ -17,24 +17,24 @@ pnpm production:check
 pnpm demo:inputs
 ```
 
-`pnpm demo:inputs` calls production, verifies that the fresh endpoint returns
-HTTP 402 with a `PAYMENT-REQUIRED` header, and prints the complete values to
-use. It does not print placeholders. Copy its `URL` into **Payment checker**,
-select `POST`, and use `{}` as the request body. The URL is a real x402 purchase
-endpoint under:
+`pnpm demo:inputs` checks AgentPay production and calls a paid endpoint from
+Tab402, another Casper Buildathon project. It verifies HTTP 402, decodes the
+`PAYMENT-REQUIRED` header, and prints the exact values to use. Copy its `URL`
+into **Payment checker**, select `POST`, and use the printed JSON body.
 
 ```text
-https://agentpay.timidan.xyz/api/reports/buy/<fresh-quote-id>
+https://tab402.fly.dev/v1/speak
 ```
 
-The quote ID is generated live and expires after five minutes. Generate it
-again if the page says the charge expired. Do not put an old quote URL in the
-recording.
+This service is not operated by AgentPay. Its public source is
+[Eienel/tab402](https://github.com/Eienel/tab402), and its live dashboard links
+settlements to Casper Testnet. Run `pnpm demo:inputs` immediately before the
+recording so an offline or changed external service stops the rehearsal.
 
-The helper obtains that URL from this public production request:
+Use this exact request:
 
-```text
-GET https://agentpay.timidan.xyz/api/reports/quote?subject=hash-8df5d26790e18cf0404502c62ce5dc9025800ad6975c97466e20506c39c505b6&network=casper-mainnet
+```json
+{"text":"AgentPay live final demo"}
 ```
 
 Use these fixed inputs:
@@ -44,16 +44,24 @@ Use these fixed inputs:
 | Token check | `WCSPR` |
 | Current mainnet WCSPR package resolved by AgentPay | `hash-8df5d26790e18cf0404502c62ce5dc9025800ad6975c97466e20506c39c505b6` |
 | Wallet check | `account-hash-731349cf6f3c4756e74066db530e56ae67cfe70f770575e786fad0572ad20785` |
+| External x402 service | Tab402 text-to-speech |
+| Payment URL | `https://tab402.fly.dev/v1/speak` |
 | Payment method | `POST` |
-| Payment body | `{}` |
-| x402 charge | `0.00001 WCSPR` (`10000` base units) |
+| Payment body | `{"text":"AgentPay live final demo"}` |
+| Current x402 charge | `0.1 X402` (`100000000` base units) |
 | Payment network | `casper:casper-test` |
-| Testnet WCSPR payment package | `hash-3d80df21ba4ee4d66a2a1f60c32570dd5685e4b279f6538162a5fd1314847c1e` |
+| Tab402 Testnet token package | `hash-50ec5690bde5e72f5152cb5154119eb706961e376b19050534a95a13ead8baaf` |
 
-The token check and the payment asset are intentionally different network
-uses. The token screen checks the live mainnet WCSPR listing. The x402 fee is
-paid with the official Testnet WCSPR package, so the demo does not spend real
-mainnet funds.
+The token screen checks the live mainnet WCSPR listing. The payment screen
+checks Tab402's separate Testnet token and does not spend mainnet funds. The
+earlier completed settlement tab still shows AgentPay's own WCSPR settlement;
+do not claim that it is the Tab402 payment.
+
+At the time of this guide, Tab402 is reached over HTTPS but declares an HTTP
+resource URL inside its challenge. AgentPay should show this as a scheme
+mismatch that needs review. This is useful real evidence from another service,
+not a scripted warning. If Tab402 fixes it, describe the current verdict and
+reasons shown on screen.
 
 Use this exact public HTTP bridge call in the terminal. It needs no secret:
 
@@ -74,10 +82,9 @@ Open these tabs in this order. Preparation is not part of the recording.
 2. `/check` with a fresh completed `WCSPR` result at its evidence rows.
 3. `/feed` with the result you just shared visible.
 4. `/counterparty` with a fresh completed check for the account above.
-5. `/audit` with Casper Wallet connected, the fresh x402 URL read, provider
-   approval and daily limit saved, and payment details prepared. Stop before
-   the final **Run check**.
-6. A second `/audit` tab holding a completed Testnet payment with **PAY**,
+5. `/audit` with Casper Wallet connected and the live Tab402 charge read. Stop
+   before **Run check** so the current decision appears during the recording.
+6. A second `/audit` tab holding an earlier AgentPay WCSPR payment with **PAY**,
    **MATCH**, service response, settlement link, receipt, and Casper record.
 7. `/app` with a completed evidence run and an untampered Merkle proof.
 8. `/agents` at the npm packages and tool examples.
@@ -117,20 +124,21 @@ open the first viewport briefly.]
 the four evidence rows, and receipt links visible. Move to **Shared results**,
 then to the completed wallet result.]
 
-> My real token input is WCSPR. AgentPay buys current Casper evidence over x402,
-> labels passed, flagged, and missing facts, and creates a shareable receipt.
+> My real token input is WCSPR. AgentPay buys Casper evidence over x402, labels
+> passed, flagged, and missing facts, and makes a shareable receipt.
 > This result was shared by choice. This wallet result checks AgentPay's public
 > Testnet account for existence, funding, and key control.
 
 ### 0:43 - Check before payment
 
-[Move to the prepared payment tab. Point to the full HTTPS endpoint, `POST`,
-`0.00001 WCSPR`, Testnet, the recipient, provider approval, and daily limit.
-Click **Run check** and show the decision and reasons.]
+[Move to the prepared payment tab. Point to Tab402's full HTTPS endpoint,
+`POST`, the JSON body, `0.1 X402`, Testnet, and the recipient. Click **Run
+check** and show the decision and exact reasons.]
 
-> This fresh HTTPS endpoint asks for 0.00001 WCSPR on Casper Testnet. AgentPay
-> compares the exact charge with my approval and daily limit. REVIEW asks me to
-> decide. BLOCK prevents signing. PAY permits the wallet step.
+> Tab402 is a Casper project. Its text-to-speech API asks for 0.1 X402 on
+> Testnet. AgentPay reads the charge and finds that its HTTPS request
+> declares an HTTP resource, so REVIEW stops payment. Every PAY, REVIEW, or
+> BLOCK decision shows why.
 
 ### 1:08 - Verify the completed payment
 
@@ -138,9 +146,9 @@ Click **Run check** and show the decision and reasons.]
 recording. Show **MATCH**, the service response, settlement explorer link,
 receipt, and Casper record.]
 
-> This is a completed Testnet run, not a simulation. The buyer signed locally,
-> CSPR.cloud settled WCSPR, and MATCH proves the transfer matched approval. The
-> receipt binds the request, decision, payment, response, and Casper record.
+> This is a completed Testnet run, not a simulation. The buyer signed.
+> CSPR.cloud settled WCSPR, and MATCH proves it matched approval. The receipt
+> binds the request, decision, service response, and Casper record.
 
 ### 1:30 - Break the proof
 
@@ -174,7 +182,8 @@ offline receipt verification result.]
 | Token intelligence | Real `WCSPR` input, four evidence states, verdict, and receipt |
 | Counterparty intelligence | Real Testnet account input, existence, funding, key control, and receipt |
 | Public verification | Opt-in shared result |
-| Pre-payment policy | Fresh x402 endpoint, exact terms, limits, and PAY, REVIEW, or BLOCK |
+| External interoperability | Live Tab402 endpoint and decoded Casper Testnet charge |
+| Pre-payment policy | Exact terms and a reasoned PAY, REVIEW, or BLOCK decision |
 | Settlement | Completed WCSPR transfer and MATCH |
 | Delivery proof | Paid service response, receipt, and Casper record |
 | Evidence integrity | Valid Merkle proof followed by **Tamper one fact** failure |
@@ -184,8 +193,10 @@ offline receipt verification result.]
 
 ## Recovery line
 
-If the fresh decision is not PAY, do not send a payment. Keep the reason on
-screen, move to the completed Testnet tab, and say:
+The Tab402 check is expected to stop at REVIEW while its declared scheme does
+not match the request. Do not bypass AgentPay or imply that the next tab is the
+same purchase. Keep the reason on screen, move to the completed Testnet tab,
+and say:
 
 > AgentPay has not approved this charge, so I will not bypass it. This completed
-> Testnet run shows the settlement path after a valid PAY decision.
+> Testnet run shows the separate settlement path after a valid PAY decision.

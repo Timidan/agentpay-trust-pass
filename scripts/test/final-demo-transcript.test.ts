@@ -62,19 +62,21 @@ describe("final-round demo transcript", () => {
     expect(transcript).not.toContain("Now the wallet signs");
   });
 
-  it("contains current real inputs and their freshness rule", async () => {
+  it("contains current third-party inputs and their liveness rule", async () => {
     const transcript = await readTranscript();
 
     for (const required of [
       "pnpm demo:inputs",
-      "https://agentpay.timidan.xyz/api/reports/buy/<fresh-quote-id>",
+      "https://tab402.fly.dev/v1/speak",
+      "https://github.com/Eienel/tab402",
       "hash-8df5d26790e18cf0404502c62ce5dc9025800ad6975c97466e20506c39c505b6",
-      "hash-3d80df21ba4ee4d66a2a1f60c32570dd5685e4b279f6538162a5fd1314847c1e",
+      "hash-50ec5690bde5e72f5152cb5154119eb706961e376b19050534a95a13ead8baaf",
       "account-hash-731349cf6f3c4756e74066db530e56ae67cfe70f770575e786fad0572ad20785",
-      "0.00001 WCSPR",
+      "0.1 X402",
+      "AgentPay live final demo",
       "casper:casper-test",
       "POST",
-      "five minutes",
+      "offline or changed external service stops the rehearsal",
       "https://agentpay.timidan.xyz/bridge/tools/payment_status"
     ]) {
       expect(transcript).toContain(required);
@@ -122,7 +124,7 @@ describe("final-round demo transcript", () => {
     expect(mcpHelper).toContain(
       "hash-3d80df21ba4ee4d66a2a1f60c32570dd5685e4b279f6538162a5fd1314847c1e"
     );
-    expect(inputHelper).toContain("/api/reports/buy/");
-    expect(inputHelper).toContain("fresh x402 quote is already expired");
+    expect(inputHelper).toContain("https://tab402.fly.dev/v1/speak");
+    expect(inputHelper).toContain("not operated by AgentPay");
   });
 });

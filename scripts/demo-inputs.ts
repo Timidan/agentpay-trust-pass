@@ -4,9 +4,15 @@ import { fileURLToPath } from "node:url";
 const DEFAULT_ORIGIN = "https://agentpay.timidan.xyz";
 const TOKEN_INPUT = "WCSPR";
 const TOKEN_EVIDENCE_NETWORK = "casper-mainnet";
+const PAYMENT_SERVICE = "Tab402";
+const PAYMENT_ENDPOINT = "https://tab402.fly.dev/v1/speak";
+const PAYMENT_SOURCE_REPOSITORY = "https://github.com/Eienel/tab402";
+const PAYMENT_BODY = { text: "AgentPay live final demo" } as const;
 const WALLET_INPUT =
   "account-hash-731349cf6f3c4756e74066db530e56ae67cfe70f770575e786fad0572ad20785";
 const CASPER_PACKAGE_HASH = /^(?:hash-)?[0-9a-f]{64}$/i;
+const CASPER_ACCOUNT_ADDRESS = /^00[0-9a-f]{64}$/i;
+const POSITIVE_INTEGER = /^[1-9][0-9]*$/;
 
 export type DemoInputs = {
   generatedAt: string;
@@ -19,11 +25,14 @@ export type DemoInputs = {
     input: string;
   };
   payment: {
+    service: string;
+    sourceRepository: string;
     endpoint: string;
     challengeStatus: 402;
     method: "POST";
-    body: Record<string, never>;
-    expiresAt: string;
+    body: { text: string };
+    declaredResource: string;
+    description: string;
     amount: string;
     amountDisplay: string;
     asset: string;
@@ -56,33 +65,50 @@ export async function getDemoInputs(options: {
     throw new Error(`WCSPR resolution returned ${String(resolution.network)} instead of ${TOKEN_EVIDENCE_NETWORK}`);
   }
 
-  const quoteUrl = new URL("/api/reports/quote", origin);
-  quoteUrl.searchParams.set("subject", packageHash);
-  quoteUrl.searchParams.set("network", TOKEN_EVIDENCE_NETWORK);
-  const quote = await fetchObject(fetchImpl, quoteUrl, "fresh x402 quote");
-  const paymentResource = requireObject(quote.paymentResource, "payment resource");
-  const paymentRequirements = Array.isArray(quote.paymentRequirements) ? quote.paymentRequirements : [];
-  const requirement = requireObject(paymentRequirements[0], "payment requirement");
-  const endpoint = new URL(requireString(paymentResource.url, "payment resource URL"));
-  const expiresAt = new Date(requireString(quote.expiresAt, "quote expiry"));
-
-  if (endpoint.protocol !== "https:" || endpoint.origin !== origin || !endpoint.pathname.startsWith("/api/reports/buy/")) {
-    throw new Error("fresh x402 endpoint is not an AgentPay HTTPS purchase URL");
-  }
-  if (!Number.isFinite(expiresAt.getTime()) || expiresAt.getTime() <= now.getTime()) {
-    throw new Error("fresh x402 quote is already expired");
-  }
-  if (requireObject(quote.paymentReadiness, "payment readiness").status !== "ready") {
-    throw new Error("AgentPay x402 payment path is not ready");
-  }
+  const endpoint = new URL(PAYMENT_ENDPOINT);
   const challenge = await fetchImpl(endpoint, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: "{}"
+    body: JSON.stringify(PAYMENT_BODY)
   });
-  if (challenge.status !== 402 || !challenge.headers.get("payment-required")) {
-    throw new Error(`fresh x402 endpoint returned HTTP ${challenge.status} without a PAYMENT-REQUIRED header`);
+  const encodedPaymentRequired = challenge.headers.get("payment-required");
+  if (challenge.status !== 402 || !encodedPaymentRequired) {
+    throw new Error(
+      `${PAYMENT_SERVICE} returned HTTP ${challenge.status} without a PAYMENT-REQUIRED header`
+    );
   }
+
+  const paymentRequired = decodePaymentRequired(encodedPaymentRequired);
+  if (paymentRequired.x402Version !== 2) {
+    throw new Error(`${PAYMENT_SERVICE} does not advertise x402 version 2`);
+  }
+  const acceptances = Array.isArray(paymentRequired.accepts) ? paymentRequired.accepts : [];
+  const compatible = acceptances.filter((value) => {
+    const candidate = requireObject(value, "payment acceptance");
+    return candidate.scheme === "exact" && candidate.network === "casper:casper-test";
+  });
+  if (compatible.length !== 1) {
+    throw new Error(`${PAYMENT_SERVICE} must offer exactly one Casper Testnet exact payment`);
+  }
+
+  const requirement = requireObject(compatible[0], "payment requirement");
+  const paymentResource = requireObject(paymentRequired.resource, "payment resource");
+  const declaredResource = new URL(requireString(paymentResource.url, "payment resource URL"));
+  if (declaredResource.host !== endpoint.host || declaredResource.pathname !== endpoint.pathname) {
+    throw new Error(`${PAYMENT_SERVICE} declared a different paid resource`);
+  }
+  const amount = requirePositiveInteger(requirement.amount, "payment amount");
+  const assetPackageHash = requireString(requirement.asset, "payment asset package hash").replace(/^hash-/, "");
+  if (!CASPER_PACKAGE_HASH.test(assetPackageHash)) {
+    throw new Error(`${PAYMENT_SERVICE} returned an invalid Casper payment asset package hash`);
+  }
+  const payTo = requireString(requirement.payTo, "payment recipient");
+  if (!CASPER_ACCOUNT_ADDRESS.test(payTo)) {
+    throw new Error(`${PAYMENT_SERVICE} returned an invalid Casper payment recipient`);
+  }
+  const extra = requireObject(requirement.extra, "payment asset metadata");
+  const decimals = requireDecimals(extra.decimals);
+  const asset = requireString(extra.symbol, "payment asset symbol");
 
   return {
     generatedAt: now.toISOString(),
@@ -93,17 +119,20 @@ export async function getDemoInputs(options: {
     },
     wallet: { input: WALLET_INPUT },
     payment: {
+      service: PAYMENT_SERVICE,
+      sourceRepository: PAYMENT_SOURCE_REPOSITORY,
       endpoint: endpoint.toString(),
       challengeStatus: 402,
       method: "POST",
-      body: {},
-      expiresAt: expiresAt.toISOString(),
-      amount: requireString(requirement.amount, "payment amount"),
-      amountDisplay: requireString(quote.amountDisplay, "display amount"),
-      asset: requireString(quote.asset, "payment asset"),
-      assetPackageHash: requireString(quote.assetPackageHash, "payment asset package hash"),
+      body: { ...PAYMENT_BODY },
+      declaredResource: declaredResource.toString(),
+      description: requireString(paymentResource.description, "payment resource description"),
+      amount,
+      amountDisplay: formatAtomicAmount(amount, decimals),
+      asset,
+      assetPackageHash,
       network: requireString(requirement.network, "payment network"),
-      payTo: requireString(requirement.payTo, "payment recipient")
+      payTo
     },
     bridgeStatusEndpoint: new URL("/bridge/tools/payment_status", origin).toString()
   };
@@ -114,12 +143,15 @@ export function formatDemoInputs(inputs: DemoInputs): string {
     "AgentPay one-take demo inputs",
     `Generated: ${inputs.generatedAt}`,
     "",
-    "PAYMENT CHECKER",
+    "PAYMENT CHECKER - THIRD-PARTY CASPER SERVICE",
+    `Service: ${inputs.payment.service} (not operated by AgentPay)`,
+    `Source: ${inputs.payment.sourceRepository}`,
     `URL: ${inputs.payment.endpoint}`,
     `Challenge: HTTP ${inputs.payment.challengeStatus} verified`,
     `Method: ${inputs.payment.method}`,
     `Body: ${JSON.stringify(inputs.payment.body)}`,
-    `Expires: ${inputs.payment.expiresAt}`,
+    `Declared resource: ${inputs.payment.declaredResource}`,
+    `Description: ${inputs.payment.description}`,
     `Charge: ${inputs.payment.amountDisplay} ${inputs.payment.asset} (${inputs.payment.amount} base units)`,
     `Network: ${inputs.payment.network}`,
     `Payment token: hash-${inputs.payment.assetPackageHash.replace(/^hash-/, "")}`,
@@ -162,6 +194,39 @@ function requireObject(value: unknown, label: string): Record<string, unknown> {
 function requireString(value: unknown, label: string): string {
   if (typeof value !== "string" || !value.trim()) throw new Error(`${label} is missing`);
   return value;
+}
+
+function requirePositiveInteger(value: unknown, label: string): string {
+  const parsed = requireString(value, label);
+  if (!POSITIVE_INTEGER.test(parsed)) throw new Error(`${label} must be a positive integer string`);
+  return parsed;
+}
+
+function requireDecimals(value: unknown): number {
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > 255) {
+    throw new Error("payment asset decimals must be an integer from 0 to 255");
+  }
+  return parsed;
+}
+
+function formatAtomicAmount(amount: string, decimals: number): string {
+  if (decimals === 0) return amount;
+  const padded = amount.padStart(decimals + 1, "0");
+  const whole = padded.slice(0, -decimals);
+  const fraction = padded.slice(-decimals).replace(/0+$/, "");
+  return fraction ? `${whole}.${fraction}` : whole;
+}
+
+function decodePaymentRequired(encoded: string): Record<string, unknown> {
+  if (!encoded.trim() || !/^[A-Za-z0-9+/]*={0,2}$/.test(encoded.trim())) {
+    throw new Error(`${PAYMENT_SERVICE} returned a malformed PAYMENT-REQUIRED header`);
+  }
+  try {
+    return requireObject(JSON.parse(Buffer.from(encoded, "base64").toString("utf8")), "PAYMENT-REQUIRED");
+  } catch {
+    throw new Error(`${PAYMENT_SERVICE} returned a malformed PAYMENT-REQUIRED header`);
+  }
 }
 
 async function main(): Promise<void> {

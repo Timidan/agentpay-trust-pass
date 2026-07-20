@@ -24,18 +24,18 @@ pnpm demo:inputs
 ```
 
 `pnpm demo:inputs` prints the exact `WCSPR` token input, public Testnet account,
-and a fresh x402 purchase URL. It also verifies that the URL returns HTTP 402
-with a `PAYMENT-REQUIRED` header. Paste that URL into **Payment checker**, use
-`POST`, and use `{}` as the request body. It is a real production endpoint of
-this form:
+and Tab402 payment request. It calls that external service and verifies a real
+HTTP 402 with a `PAYMENT-REQUIRED` header. Paste the URL into **Payment
+checker**, use `POST`, and paste the printed JSON body:
 
 ```text
-https://agentpay.timidan.xyz/api/reports/buy/<fresh-quote-id>
+https://tab402.fly.dev/v1/speak
 ```
 
-The URL expires after five minutes. Generate it again when you restart a
-rehearsal. The fixed input list, package hashes, tab setup, and freshness rules
-are in [the standalone transcript](live-demo-transcript.md#exact-live-inputs).
+Tab402 is a separate Casper Buildathon project, not an AgentPay endpoint. Run
+the helper again when you restart a rehearsal because the external service or
+its terms can change. The exact body, current charge, package hash, tab setup,
+and verification rules are in [the standalone transcript](live-demo-transcript.md#exact-live-inputs).
 
 ### Two-minute transcript
 
@@ -54,28 +54,29 @@ The text in quotes is spoken live. The text in brackets is a screen action.
 [Show the completed `WCSPR` evidence and receipt, the opt-in shared result, and
 the completed public Testnet account check.]
 
-> My real token input is WCSPR. AgentPay buys current Casper evidence over x402,
-> labels passed, flagged, and missing facts, and creates a shareable receipt.
+> My real token input is WCSPR. AgentPay buys Casper evidence over x402, labels
+> passed, flagged, and missing facts, and makes a shareable receipt.
 > This result was shared by choice. This wallet result checks AgentPay's public
 > Testnet account for existence, funding, and key control.
 
 **0:43 - Check before payment**
 
-[Show the complete fresh HTTPS endpoint, `POST`, `0.00001 WCSPR`, recipient,
-provider approval, and daily limit. Click **Run check**.]
+[Show Tab402's full HTTPS endpoint, `POST`, JSON body, `0.1 X402`, recipient,
+and Testnet network. Click **Run check**.]
 
-> This fresh HTTPS endpoint asks for 0.00001 WCSPR on Casper Testnet. AgentPay
-> compares the exact charge with my approval and daily limit. REVIEW asks me to
-> decide. BLOCK prevents signing. PAY permits the wallet step.
+> Tab402 is a Casper project. Its text-to-speech API asks for 0.1 X402 on
+> Testnet. AgentPay reads the charge and finds that its HTTPS request
+> declares an HTTP resource, so REVIEW stops payment. Every PAY, REVIEW, or
+> BLOCK decision shows why.
 
 **1:08 - Verify the completed payment**
 
 [Move to an earlier completed Testnet run. Show **MATCH**, service response,
 settlement link, receipt, and Casper record.]
 
-> This is a completed Testnet run, not a simulation. The buyer signed locally,
-> CSPR.cloud settled WCSPR, and MATCH proves the transfer matched approval. The
-> receipt binds the request, decision, payment, response, and Casper record.
+> This is a completed Testnet run, not a simulation. The buyer signed.
+> CSPR.cloud settled WCSPR, and MATCH proves it matched approval. The receipt
+> binds the request, decision, service response, and Casper record.
 
 **1:30 - Break the proof**
 
